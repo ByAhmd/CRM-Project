@@ -2,3 +2,139 @@
 
 @source '../../../../app/Filament/**/*';
 @source '../../../../resources/views/filament/**/*';
+@source '../../../../vendor/bezhansalleh/filament-language-switch/resources/views/**/*';
+
+/*
+ | CRM theme (decision A-9).
+ |
+ | Tailwind 4 is CSS-first: shape and type tokens live in @theme, semantic
+ | surface/text tokens in :root, and dark mode redefines the same tokens under
+ | .dark so components never branch on theme themselves. Colour ramps come from
+ | the panel provider (Color::hex) — nothing here hard-codes a brand hex outside
+ | the token blocks.
+ |
+ | Direction: the panel sets <html dir> from the locale. Every rule below uses
+ | logical properties, so nothing needs a [dir] override.
+ */
+
+@theme {
+    /* Tajawal carries both Arabic and Latin; registered by the panel provider. */
+    --font-sans: 'Tajawal', ui-sans-serif, system-ui, sans-serif;
+
+    --radius-crm: 12px;
+    --radius-crm-sm: 8px;
+
+    --shadow-crm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 20px rgba(15, 23, 42, 0.06);
+}
+
+:root {
+    --crm-bg: #f4f6f9;
+    --crm-card: #ffffff;
+    --crm-text: #172033;
+    --crm-text-2: #3d4b5f;
+    --crm-muted: #6b7a8c;
+    --crm-border: #e1e7ee;
+    --crm-border-2: #c9d3de;
+
+    /* Sidebar surface: deep navy in both themes. */
+    --crm-sidebar: #16284a;
+    --crm-sidebar-2: #1d3461;
+    --crm-sidebar-hover: #24407a;
+    --crm-on-sidebar: #e8eef8;
+}
+
+.dark {
+    --crm-bg: #0f151c;
+    --crm-card: #161e27;
+    --crm-text: #e6ecf1;
+    --crm-text-2: #c2ccd6;
+    --crm-muted: #8e9ba8;
+    --crm-border: #27313c;
+    --crm-border-2: #34404b;
+
+    --crm-sidebar: #0f1a30;
+    --crm-sidebar-2: #162542;
+    --crm-sidebar-hover: #1e315a;
+    --crm-on-sidebar: #dbe4f2;
+}
+
+/* Filament's gray ramp re-anchored for the dark ground so cards separate from the page. */
+html.dark {
+    --gray-950: 15 21 28;
+    --gray-900: 22 30 39;
+    --gray-800: 39 49 60;
+    --gray-700: 52 64 75;
+}
+
+/* ---------------------------------------------------------------------------
+ | Sidebar
+ * ------------------------------------------------------------------------- */
+
+.fi-sidebar,
+.fi-sidebar-header {
+    background-color: var(--crm-sidebar);
+    border-color: var(--crm-sidebar-2);
+}
+
+.fi-sidebar-item-label,
+.fi-sidebar-item-icon,
+.fi-sidebar .fi-logo {
+    color: var(--crm-on-sidebar);
+}
+
+.fi-sidebar-group-label,
+.fi-sidebar-group-collapse-btn,
+.fi-sidebar-group-btn {
+    color: color-mix(in oklab, var(--crm-on-sidebar) 70%, transparent);
+    letter-spacing: 0.02em;
+}
+
+.fi-sidebar-item-btn {
+    border-radius: var(--radius-crm-sm);
+}
+
+.fi-sidebar-item-btn:hover {
+    background-color: var(--crm-sidebar-hover);
+}
+
+.fi-sidebar-item.fi-active .fi-sidebar-item-btn,
+.fi-sidebar-item-btn[aria-current='page'] {
+    background-color: var(--crm-sidebar-2);
+    box-shadow: inset 3px 0 0 0 var(--color-primary-400);
+}
+
+/* ---------------------------------------------------------------------------
+ | Surfaces
+ * ------------------------------------------------------------------------- */
+
+.fi-body {
+    background-color: var(--crm-bg);
+    color: var(--crm-text);
+}
+
+.fi-ta-ctn,
+.fi-section,
+.fi-wi-stats-overview-stat,
+.fi-fo-component-ctn {
+    border-radius: var(--radius-crm);
+    box-shadow: var(--shadow-crm);
+}
+
+/* Solid primary buttons use the 700 shade: the 600 default fails AA on white text. */
+.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
+    background-color: var(--color-700);
+}
+
+/* Latin-only values (emails, phone numbers, URLs, codes) keep their own direction inside RTL text. */
+.crm-ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+}
+
+/* Tabular figures wherever numbers line up. */
+.fi-ta-cell,
+.fi-wi-stats-overview-stat-value,
+.crm-tabular {
+    font-variant-numeric: tabular-nums;
+}

@@ -1,6 +1,6 @@
 <?php
 
-use Spatie\Activitylog\Models\Activity;
+use App\Models\ActivityLog;
 
 return [
 
@@ -13,7 +13,10 @@ return [
      * When the clean-command is executed, all recording activities older than
      * the number of days specified here will be deleted.
      */
-    'delete_records_older_than_days' => 365,
+    // D-13: 730 days. The weekly `activitylog:clean` in routes/console.php passes
+    // config('crm.audit.retention_days') explicitly; this default only matters
+    // when the command is run by hand without --days.
+    'delete_records_older_than_days' => 730,
 
     /*
      * If no log name is passed to the activity() helper
@@ -30,14 +33,15 @@ return [
     /*
      * If set to true, the subject returns soft deleted models.
      */
-    'subject_returns_soft_deleted_models' => false,
+    // Audit rows must keep naming soft-deleted subjects (users, teams, records).
+    'subject_returns_soft_deleted_models' => true,
 
     /*
      * This model will be used to log activity.
      * It should implement the Spatie\Activitylog\Contracts\Activity interface
      * and extend Illuminate\Database\Eloquent\Model.
      */
-    'activity_model' => Activity::class,
+    'activity_model' => ActivityLog::class,
 
     /*
      * This is the name of the table that will be created by the migration and
