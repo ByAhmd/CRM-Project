@@ -42,3 +42,4 @@ New decisions are appended; superseded ones are struck through with a pointer to
 | A-13 | Tests: PHPUnit 12 on MySQL `crm_testing`; PHPStan level 5 with `checkModelProperties`, no baseline; Pint default preset; `composer check` = lint + analyse + test, also in CI. |
 | A-14 | Documentation and git conventions mirror Stockflow: README, CLAUDE.md, CONTRIBUTING.md, `docs/`, conventional commits, `master` (production) / `develop` (integration). |
 | A-15 | Out of scope for v1 unless decided later: mailbox sync, WhatsApp/SMS, telephony, AI features, public web-to-lead forms, quotes/invoices, multi-currency, API/Sanctum. |
+| A-16 | Module language files gain a fixed `options` sub-key for translated option lists that are neither enum labels nor field labels (first use: `activity_types.options.icons.*`, the curated Heroicon names offered in the icon select). The sub-key vocabulary in CLAUDE.md section 3 is extended accordingly. |

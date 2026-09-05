@@ -53,20 +53,25 @@ final readonly class RecordVisibilityResolver
     }
 
     /**
-     * Constrain a query to the records the user may read.
+     * Constrain a query to the records the user may read. The query's model
+     * must implement OwnedRecord.
      *
-     * @template TModel of Model&OwnedRecord
+     * @template TModel of Model
      *
      * @param  Builder<TModel>  $query
      * @return Builder<TModel>
      */
     public function visible(User $user, Builder $query): Builder
     {
-        /** @var class-string<TModel> $model */
-        $model = $query->getModel()::class;
-        $column = $query->qualifyColumn($model::ownerColumn());
+        $instance = $query->getModel();
 
-        return match ($this->levelFor($user, $model)) {
+        if (! $instance instanceof OwnedRecord) {
+            throw new \InvalidArgumentException(sprintf('%s does not implement %s.', $instance::class, OwnedRecord::class));
+        }
+
+        $column = $query->qualifyColumn($instance::ownerColumn());
+
+        return match ($this->levelFor($user, $instance::class)) {
             VisibilityLevel::All => $query,
             VisibilityLevel::Team => $query->where(function (Builder $nested) use ($user, $column): void {
                 $nested->whereIn($column, $this->teamMemberIds($user))
