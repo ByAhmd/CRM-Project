@@ -10,11 +10,27 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
 | 1 — Discovery (CRM project, Stockflow reference, environment) | ✅ done 2026-09-04 |
 | 2 — Architecture plan | ✅ delivered 2026-09-04 — see `docs/` |
 | 3 — Critical questions | ✅ answered 2026-09-05 — [docs/DECISIONS.md](docs/DECISIONS.md) |
-| 4 — Foundation (scaffold, auth, roles, lang, theme, audit, tests) | 🔨 in progress |
-| 5+ — Modules, integration, quality pass, production readiness | not started |
+| 4 — Foundation (scaffold, auth, roles, lang, theme, audit, tests) | ✅ done 2026-09-05 |
+| 5 — Modules (lookups → accounts/contacts → leads → deals → conversion → activities → notifications → search/import → dashboard/reports → custom fields) | 🔨 in progress |
+| 6+ — Integration, quality pass, production readiness | not started |
 
-No application code exists yet. The Laravel application will be scaffolded at the repository root once the
-open decisions are answered.
+## Local setup
+
+```bash
+composer install            # through Laravel Herd's PHP 8.4
+npm install && npm run build
+cp .env.example .env && php artisan key:generate
+php artisan migrate
+php artisan app:onboard     # seeds roles, permissions, settings; creates the first super admin
+herd link crm               # http://crm.test/admin
+```
+
+Databases `crm` and `crm_testing` must exist on the local MySQL 8.4 (user `crm` / `crm`). Tests run on
+`crm_testing` and rebuild it on every run:
+
+```bash
+composer check              # pint --test, phpstan, phpunit — must be green before every commit
+```
 
 ## Documents
 

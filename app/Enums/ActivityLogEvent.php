@@ -44,8 +44,12 @@ enum ActivityLogEvent: string implements HasLabel
     case TeamDeleted = 'team.deleted';
     case TeamRestored = 'team.restored';
 
-    // Settings
+    // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';
+    case LookupCreated = 'settings.lookup_created';
+    case LookupUpdated = 'settings.lookup_updated';
+    case LookupDeleted = 'settings.lookup_deleted';
+    case LookupRestored = 'settings.lookup_restored';
 
     public function getLabel(): string
     {
