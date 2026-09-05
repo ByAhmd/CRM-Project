@@ -6,9 +6,11 @@ namespace App\Filament\Resources\Leads\Schemas;
 
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Contacts\ContactResource;
+use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\AddressSchema;
 use App\Models\Account;
 use App\Models\Contact;
+use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\LeadStatusLog;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -66,6 +68,10 @@ final class LeadInfolist
                                 ->label(__('leads.fields.converted_contact'))
                                 ->state(fn (Lead $record): ?string => $record->convertedContact?->full_name)
                                 ->url(fn (Lead $record): ?string => $record->convertedContact instanceof Contact ? ContactResource::getUrl('view', ['record' => $record->convertedContact]) : null)
+                                ->placeholder(__('common.placeholders.empty')),
+                            TextEntry::make('convertedDeal.title')
+                                ->label(__('leads.fields.converted_deal'))
+                                ->url(fn (Lead $record): ?string => $record->convertedDeal instanceof Deal ? DealResource::getUrl('view', ['record' => $record->convertedDeal]) : null)
                                 ->placeholder(__('common.placeholders.empty')),
                         ]),
                     ])

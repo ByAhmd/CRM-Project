@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Leads\Tables;
 use App\Enums\LeadPriority;
 use App\Filament\Resources\Leads\Schemas\LeadInfolist;
 use App\Filament\Support\LeadActions;
+use App\Filament\Support\LeadConversionActions;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\TagsSelect;
 use App\Models\Lead;
@@ -135,6 +136,7 @@ final class LeadsTable
                 ViewAction::make(),
                 EditAction::make(),
                 LeadActions::changeStatus(),
+                LeadConversionActions::convert(),
                 OwnershipActions::assign(Lead::permissionGroup()),
             ])
             ->toolbarActions([

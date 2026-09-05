@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Leads\Pages;
 
 use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Support\LeadActions;
+use App\Filament\Support\LeadConversionActions;
 use App\Filament\Support\OwnershipActions;
 use App\Models\Lead;
 use Filament\Actions\DeleteAction;
@@ -19,6 +20,7 @@ final class ViewLead extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            LeadConversionActions::convert(),
             LeadActions::changeStatus(),
             OwnershipActions::assign(Lead::permissionGroup()),
             EditAction::make(),
