@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -122,6 +124,29 @@ final class Contact extends Model implements HasLocalePreference, OwnedRecord
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    /**
+     * Deals this contact takes part in, with their role (D-6).
+     *
+     * @return BelongsToMany<Deal, $this, DealContact>
+     */
+    public function deals(): BelongsToMany
+    {
+        return $this->belongsToMany(Deal::class, 'deal_contacts')
+            ->using(DealContact::class)
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Deals where this contact is the primary contact.
+     *
+     * @return HasMany<Deal, $this>
+     */
+    public function primaryDeals(): HasMany
+    {
+        return $this->hasMany(Deal::class, 'contact_id');
     }
 
     /** Outbound mail to this contact is rendered in their language (D-5, D-10). */

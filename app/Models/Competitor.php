@@ -9,6 +9,7 @@ use Database\Factories\CompetitorFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -48,5 +49,16 @@ final class Competitor extends Model
     public static function auditedAttributes(): array
     {
         return ['name', 'website', 'notes', 'is_active'];
+    }
+
+    /**
+     * @return BelongsToMany<Deal, $this, DealCompetitor>
+     */
+    public function deals(): BelongsToMany
+    {
+        return $this->belongsToMany(Deal::class, 'deal_competitors')
+            ->using(DealCompetitor::class)
+            ->withPivot('is_winner', 'notes')
+            ->withTimestamps();
     }
 }

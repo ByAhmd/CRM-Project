@@ -145,7 +145,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `status` | enum(`open`,`won`,`lost`) CHECK | I; derived from stage kind by the workflow |
 | `amount` | DECIMAL(14,2) | computed from `deal_products` lines; manual when there are no lines (D-8) |
 | `currency` | CHAR(3) | default `SAR` from settings (D-8) |
-| `probability` | TINYINT UNSIGNED N | override; effective = override ?? stage probability |
+| `probability` | TINYINT UNSIGNED N | override; effective = override ?? stage probability; CHECK NULL or 0–100 (`deals_probability_check`) |
 | `expected_close_date` | DATE N | I |
 | `forecast_category` | enum(`pipeline`,`best_case`,`commit`,`omitted`) CHECK | I |
 | `lead_source_id` | FK→lead_sources N RESTRICT | |
@@ -173,7 +173,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 ### `deal_products` (D-8)
 
-`deal_id` FK→deals CASCADE (I), `product_id` FK→products RESTRICT (I), `description` VARCHAR(255) N, `quantity` DECIMAL(12,2), `unit_price` DECIMAL(14,2), `discount_percent` DECIMAL(5,2), `line_total` DECIMAL(14,2), `sort` SMALLINT, timestamps.
+`deal_id` FK→deals CASCADE (I), `product_id` FK→products RESTRICT (I), `description` VARCHAR(255) N, `quantity` DECIMAL(12,2), `unit_price` DECIMAL(14,2), `discount_percent` DECIMAL(5,2) CHECK 0–100 (`deal_products_discount_percent_check`), `line_total` DECIMAL(14,2), `sort` SMALLINT, timestamps.
 
 ## 4. Activity, tasks, notes, attachments
 
@@ -257,7 +257,8 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 - Lead status / deal stage changes only through workflows (observer rejects direct writes).
 - Exactly one default lead status, one default pipeline, one default stage per pipeline, one won and one lost stage per pipeline.
-- `deals.status` always matches `stage.kind`; `close_reason_id` required on won/lost; `won_at`/`lost_at` set by the workflow only.
+- `deals.status` always matches `stage.kind`; `close_reason_id` required on won/lost; `won_at`/`lost_at` set by the workflow only. A deal is created only in an Open stage of its own pipeline (`DealObserver`); closed deals change only through `reopen()`.
+- Line items recalculate `deals.amount` through a normal `save()` so the amount change is audited as `deal.updated` (D-8); a deal without lines keeps its manual amount.
 - Lead conversion is one transaction: create/link account, create/link contact, optionally create deal, set `converted_*`, move status to the `converted` kind, write status log, audit and timeline entries.
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
 - Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`), max size from `config('crm.attachments.max_kb')`, file deleted with the row.

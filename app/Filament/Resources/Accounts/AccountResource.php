@@ -11,6 +11,7 @@ use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Filament\Resources\Accounts\Pages\ViewAccount;
 use App\Filament\Resources\Accounts\RelationManagers\ContactsRelationManager;
+use App\Filament\Resources\Accounts\RelationManagers\DealsRelationManager;
 use App\Filament\Resources\Accounts\Schemas\AccountForm;
 use App\Filament\Resources\Accounts\Schemas\AccountInfolist;
 use App\Filament\Resources\Accounts\Tables\AccountsTable;
@@ -91,6 +92,7 @@ final class AccountResource extends Resource
     {
         return [
             ContactsRelationManager::class,
+            DealsRelationManager::class,
         ];
     }
 

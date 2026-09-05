@@ -70,7 +70,7 @@ final class Lead extends Model implements OwnedRecord
     {
         return [
             'lead_status_id', 'qualified_at', 'qualified_by',
-            'converted_at', 'converted_by', 'converted_account_id', 'converted_contact_id',
+            'converted_at', 'converted_by', 'converted_account_id', 'converted_contact_id', 'converted_deal_id',
         ];
     }
 
@@ -180,6 +180,14 @@ final class Lead extends Model implements OwnedRecord
     public function convertedContact(): BelongsTo
     {
         return $this->belongsTo(Contact::class, 'converted_contact_id');
+    }
+
+    /**
+     * @return BelongsTo<Deal, $this>
+     */
+    public function convertedDeal(): BelongsTo
+    {
+        return $this->belongsTo(Deal::class, 'converted_deal_id');
     }
 
     /**

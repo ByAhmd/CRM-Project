@@ -71,6 +71,17 @@ enum ActivityLogEvent: string implements HasLabel
     case ContactAssigned = 'contact.assigned';
     case ContactMerged = 'contact.merged';
 
+    // Deals
+    case DealCreated = 'deal.created';
+    case DealUpdated = 'deal.updated';
+    case DealDeleted = 'deal.deleted';
+    case DealRestored = 'deal.restored';
+    case DealAssigned = 'deal.assigned';
+    case DealStageChanged = 'deal.stage_changed';
+    case DealWon = 'deal.won';
+    case DealLost = 'deal.lost';
+    case DealReopened = 'deal.reopened';
+
     // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';
     case LookupCreated = 'settings.lookup_created';

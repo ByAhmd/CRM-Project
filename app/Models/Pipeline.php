@@ -76,6 +76,14 @@ final class Pipeline extends Model
     }
 
     /**
+     * @return HasMany<Deal, $this>
+     */
+    public function deals(): HasMany
+    {
+        return $this->hasMany(Deal::class);
+    }
+
+    /**
      * @return HasOne<PipelineStage, $this>
      */
     public function defaultStage(): HasOne
