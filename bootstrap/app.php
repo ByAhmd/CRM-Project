@@ -1,5 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Guests hitting an authenticated route land on the panel's login page,
         // not Laravel's default `login` route name (which does not exist here).
         $middleware->redirectGuestsTo(fn (): string => route('filament.admin.auth.login'));
+
+        $middleware->web(append: [SecurityHeaders::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
