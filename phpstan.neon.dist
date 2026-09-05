@@ -1,0 +1,30 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    # Level 5 is the inherited baseline (Stockflow). Raise it deliberately, one level at a
+    # time, fixing what each new level surfaces - never by adding ignoreErrors entries.
+    level: 5
+
+    # Production runs PHP 8.3 (D-1); local Herd is 8.4. Analyse at the floor so 8.4-only
+    # syntax cannot slip in.
+    phpVersion: 80300
+
+    paths:
+        - app
+        - config
+        - database
+        - routes
+        - tests
+
+    # Larastan resolves model properties, relations and container bindings by booting the
+    # application. Without this every Eloquent magic property is reported as undefined.
+    bootstrapFiles:
+        - vendor/autoload.php
+
+    # Model attributes are checked against the database schema. Enum/date/decimal casts are
+    # invisible to the schema, so every cast needs a @property docblock on the model.
+    checkModelProperties: true
+
+    # No baseline and no inline ignores. A genuine false positive is documented with the vendor
+    # line that proves it in docs/Static_Analysis_Known_False_Positives.md.

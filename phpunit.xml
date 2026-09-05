@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <!--
+          artisan test spawns vendor/bin/phpunit as a child process, so a parent-only
+          `php -d memory_limit=1G` does not apply. Pin the limit here so CI and local runs match.
+        -->
+        <ini name="memory_limit" value="1G"/>
+        <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_URL" value="http://crm.test"/>
+        <env name="APP_LOCALE" value="ar"/>
+        <env name="APP_FALLBACK_LOCALE" value="en"/>
+        <env name="APP_TIMEZONE" value="Asia/Riyadh"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <!--
+          Tests run against MySQL 8, never SQLite (docs/DECISIONS.md A-13): SQLite would leave
+          constraint enforcement, CHECK constraints, decimal handling and collation behaviour
+          unexercised. The crm_testing database lives on the same local MySQL instance and is
+          rebuilt by RefreshDatabase on every run.
+        -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="crm_testing"/>
+        <env name="DB_USERNAME" value="crm"/>
+        <env name="DB_PASSWORD" value="crm"/>
+        <env name="DB_URL" value=""/>
+        <env name="FILESYSTEM_DISK" value="local"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>
