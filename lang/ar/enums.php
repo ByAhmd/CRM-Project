@@ -27,4 +27,42 @@ return [
         'all' => 'كل السجلات',
     ],
 
+    'lead_status_kind' => [
+        'new' => 'جديد',
+        'working' => 'قيد المتابعة',
+        'qualified' => 'مؤهل',
+        'unqualified' => 'غير مؤهل',
+        'converted' => 'محوّل',
+    ],
+
+    'stage_kind' => [
+        'open' => 'مفتوحة',
+        'won' => 'مكسوبة',
+        'lost' => 'خاسرة',
+    ],
+
+    'activity_kind' => [
+        'call' => 'مكالمة',
+        'meeting' => 'اجتماع',
+        'email' => 'بريد إلكتروني',
+        'note' => 'ملاحظة',
+        'task' => 'مهمة',
+        'system' => 'النظام',
+        'other' => 'أخرى',
+    ],
+
+    'close_reason_kind' => [
+        'won' => 'سبب الربح',
+        'lost' => 'سبب الخسارة',
+    ],
+
+    'badge_color' => [
+        'primary' => 'أزرق',
+        'gray' => 'رمادي',
+        'success' => 'أخضر',
+        'warning' => 'برتقالي',
+        'danger' => 'أحمر',
+        'info' => 'سماوي',
+    ],
+
 ];

@@ -27,4 +27,42 @@ return [
         'all' => 'All records',
     ],
 
+    'lead_status_kind' => [
+        'new' => 'New',
+        'working' => 'Working',
+        'qualified' => 'Qualified',
+        'unqualified' => 'Unqualified',
+        'converted' => 'Converted',
+    ],
+
+    'stage_kind' => [
+        'open' => 'Open',
+        'won' => 'Won',
+        'lost' => 'Lost',
+    ],
+
+    'activity_kind' => [
+        'call' => 'Call',
+        'meeting' => 'Meeting',
+        'email' => 'Email',
+        'note' => 'Note',
+        'task' => 'Task',
+        'system' => 'System',
+        'other' => 'Other',
+    ],
+
+    'close_reason_kind' => [
+        'won' => 'Win reason',
+        'lost' => 'Loss reason',
+    ],
+
+    'badge_color' => [
+        'primary' => 'Blue',
+        'gray' => 'Gray',
+        'success' => 'Green',
+        'warning' => 'Orange',
+        'danger' => 'Red',
+        'info' => 'Sky',
+    ],
+
 ];
