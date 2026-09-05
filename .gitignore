@@ -1,8 +1,8 @@
+!.env.example
 *.log
 .DS_Store
 .env
 .env.*
-!.env.example
 .env.backup
 .env.production
 .phpactor.json
@@ -18,14 +18,15 @@
 /auth.json
 /node_modules
 /public/build
+/public/fonts-manifest.dev.json
 /public/hot
 /public/storage
 /storage/*.key
 /storage/pail
 /vendor
-_ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+_ide_helper.php
 npm-debug.log
 yarn-error.log
