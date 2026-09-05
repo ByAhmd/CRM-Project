@@ -1,7 +1,6 @@
 # CRM — Database Design (v1 proposal)
 
-Status: proposal, 2026-09-04. Becomes `docs/DATABASE.md` (as-built) once migrations exist.
-Items marked **(Qn)** depend on an answer in [OPEN_DECISIONS.md](OPEN_DECISIONS.md).
+Status: approved design, 2026-09-05 (decisions D-1 … D-13 applied). Becomes `docs/DATABASE.md` (as-built) once migrations exist.
 
 ## Conventions
 
@@ -29,10 +28,10 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 | Table | Notes |
 |---|---|
-| `users` | Laravel base + `phone` N, `locale` VARCHAR(5) N, `timezone` VARCHAR(64) N, `status` enum(`pending`,`active`,`disabled`) CHECK default `pending`, `team_id` FK→teams N SET NULL (I), `last_login_at` N, `avatar_path` N, MFA columns (`app_authentication_secret` text N, `app_authentication_recovery_codes` text N, `has_email_authentication` bool) **(Q11)**, `password` N (set through invitation), `remember_token`, SD. `email` U. |
+| `users` | Laravel base + `phone` N, `locale` VARCHAR(5) N, `timezone` VARCHAR(64) N, `status` enum(`pending`,`active`,`disabled`) CHECK default `pending`, `team_id` FK→teams N SET NULL (I), `last_login_at` N, `avatar_path` N, MFA columns (`app_authentication_secret` text N, `app_authentication_recovery_codes` text N, `has_email_authentication` bool) (D-11), `password` N (set through invitation), `remember_token`, SD. `email` U. |
 | `password_reset_tokens`, `sessions`, `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs` | Laravel defaults |
 | `notifications` | Laravel/Filament database notifications (`php artisan make:notifications-table`) |
-| `roles`, `permissions`, `model_has_roles`, `model_has_permissions`, `role_has_permissions` | spatie/laravel-permission defaults; `teams` feature off **(unless Q2 = multi-tenant)** |
+| `roles`, `permissions`, `model_has_roles`, `model_has_permissions`, `role_has_permissions` | spatie/laravel-permission defaults; `teams` feature off (D-2) |
 | `activity_log` | spatie/laravel-activitylog default + extra migration adding I `(subject_type, subject_id, created_at)`, I `(causer_type, causer_id, created_at)`, I `(log_name, created_at)`, I `event` |
 | `imports`, `failed_import_rows`, `exports` | Filament actions migrations (`vendor:publish --tag=filament-actions-migrations`) |
 | `settings` | `key` VARCHAR(100) U, `value` JSON N, `group` VARCHAR(50) I, timestamps. Typed access through `SettingsRepository`; audited. |
@@ -53,19 +52,21 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `deal_close_reasons` | `kind` enum(`won`,`lost`) CHECK (I), `name_ar`, `name_en`, `is_active`, `sort`, timestamps. U (`kind`,`name_en`), U (`kind`,`name_ar`). |
 | `competitors` | `name` VARCHAR(150) U, `website` N, `notes` TEXT N, `is_active`, timestamps, SD. |
 | `tags` | `name_ar`, `name_en`, `color`, `is_active`, timestamps. U names. |
+| `lead_scoring_rules` (D-7) | `kind` enum(`source`,`status`,`field_filled`,`activity_recency`) CHECK (I), `reference_id` BIGINT N (source/status id), `field` VARCHAR(50) N (for `field_filled`), `within_days` SMALLINT N (for `activity_recency`), `points` SMALLINT, `is_active`, `sort`, timestamps. U (`kind`,`reference_id`,`field`,`within_days`). |
+| `email_templates` (D-10) | `name_ar`, `name_en`, `subject_ar`, `subject_en`, `body_ar` TEXT, `body_en` TEXT (merge tags `{{contact.first_name}}` …), `entity` VARCHAR(50) N (lead/contact/account/deal), `is_active`, `sort`, timestamps, SD. U names. |
 | `taggables` | `tag_id` FK→tags CASCADE, `taggable_type` VARCHAR(100), `taggable_id` BIGINT. PK (`tag_id`,`taggable_type`,`taggable_id`); I (`taggable_type`,`taggable_id`). Keyless. |
-| `products` **(Q8 = B/C)** | `code` VARCHAR(50) U N, `name_ar`, `name_en`, `unit_price` DECIMAL(14,2), `is_active`, timestamps, SD. |
-| `custom_fields` **(Q9)** | `entity` VARCHAR(50) (CHECK: lead/contact/account/deal) (I), `key` VARCHAR(50), `label_ar`, `label_en`, `type` enum(`text`,`textarea`,`number`,`decimal`,`date`,`datetime`,`boolean`,`select`,`multiselect`,`url`,`email`) CHECK, `options` JSON N (select options, bilingual), `is_required` bool, `is_filterable` bool, `is_listed` bool, `is_active`, `sort`, `validation` JSON N, timestamps. U (`entity`,`key`). |
-| `custom_field_values` **(Q9)** | `custom_field_id` FK→custom_fields CASCADE, `entity_type` VARCHAR(100), `entity_id` BIGINT, typed columns `value_string` VARCHAR(500) N, `value_text` TEXT N, `value_integer` BIGINT N, `value_decimal` DECIMAL(18,4) N, `value_date` DATE N, `value_datetime` DATETIME N, `value_boolean` bool N, `value_json` JSON N (multiselect only), timestamps. U (`custom_field_id`,`entity_type`,`entity_id`); I (`entity_type`,`entity_id`); I (`custom_field_id`,`value_string`); I (`custom_field_id`,`value_integer`); I (`custom_field_id`,`value_date`). |
+| `products` (D-8) | `code` VARCHAR(50) U N, `name_ar`, `name_en`, `unit_price` DECIMAL(14,2), `is_active`, timestamps, SD. |
+| `custom_fields` (D-9) | `entity` VARCHAR(50) (CHECK: lead/contact/account/deal) (I), `key` VARCHAR(50), `label_ar`, `label_en`, `type` enum(`text`,`textarea`,`number`,`decimal`,`date`,`datetime`,`boolean`,`select`,`multiselect`,`url`,`email`) CHECK, `options` JSON N (select options, bilingual), `is_required` bool, `is_filterable` bool, `is_listed` bool, `is_active`, `sort`, `validation` JSON N, timestamps. U (`entity`,`key`). |
+| `custom_field_values` (D-9) | `custom_field_id` FK→custom_fields CASCADE, `entity_type` VARCHAR(100), `entity_id` BIGINT, typed columns `value_string` VARCHAR(500) N, `value_text` TEXT N, `value_integer` BIGINT N, `value_decimal` DECIMAL(18,4) N, `value_date` DATE N, `value_datetime` DATETIME N, `value_boolean` bool N, `value_json` JSON N (multiselect only), timestamps. U (`custom_field_id`,`entity_type`,`entity_id`); I (`entity_type`,`entity_id`); I (`custom_field_id`,`value_string`); I (`custom_field_id`,`value_integer`); I (`custom_field_id`,`value_date`). |
 
 ## 3. Core entities
 
-### `accounts` (companies / customers — **Q6**)
+### `accounts` (companies and customers are one entity — D-6)
 
 | Column | Type | Notes |
 |---|---|---|
 | `name` | VARCHAR(150) | I; not unique (duplicate warning instead) |
-| `type` | enum(`prospect`,`customer`,`partner`,`other`) CHECK | I; lifecycle rule per Q6 |
+| `type` | enum(`prospect`,`customer`,`partner`,`other`) CHECK | I; a prospect becomes `customer` on its first won deal (D-6) |
 | `industry_id` | FK→industries RESTRICT N | I |
 | `size` | enum(`1_10`,`11_50`,`51_200`,`201_500`,`501_1000`,`1000_plus`) CHECK N | |
 | `website`, `email`, `phone` | VARCHAR N | `email_normalized` I, `phone_normalized` I |
@@ -111,7 +112,9 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `lead_status_id` | FK→lead_statuses RESTRICT | I; workflow-guarded |
 | `owner_id` | FK→users N SET NULL | I; composite I (`owner_id`,`lead_status_id`) |
 | `priority` | enum(`low`,`medium`,`high`) CHECK | I |
-| `score` | SMALLINT UNSIGNED | default 0 **(Q7)**; `score_manual` SMALLINT N if B |
+| `score` | SMALLINT UNSIGNED | default 0; computed by `LeadScoringService` from `lead_scoring_rules` (D-7) |
+| `score_override` | SMALLINT UNSIGNED N | manual override; effective score = override ?? score (D-7) |
+| `scored_at` | DATETIME N | last recalculation |
 | `qualified_at` | DATETIME N | set by workflow |
 | `qualified_by` | FK→users N SET NULL | |
 | `converted_at` | DATETIME N | I |
@@ -140,8 +143,8 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `stage_id` | FK→pipeline_stages RESTRICT | I; workflow-guarded; composite I (`pipeline_id`,`stage_id`) |
 | `owner_id` | FK→users N SET NULL | I; composite I (`owner_id`,`status`) |
 | `status` | enum(`open`,`won`,`lost`) CHECK | I; derived from stage kind by the workflow |
-| `amount` | DECIMAL(14,2) | **(Q8)** manual or computed from `deal_products` |
-| `currency` | CHAR(3) | default from settings **(Q8)** |
+| `amount` | DECIMAL(14,2) | computed from `deal_products` lines; manual when there are no lines (D-8) |
+| `currency` | CHAR(3) | default `SAR` from settings (D-8) |
 | `probability` | TINYINT UNSIGNED N | override; effective = override ?? stage probability |
 | `expected_close_date` | DATE N | I |
 | `forecast_category` | enum(`pipeline`,`best_case`,`commit`,`omitted`) CHECK | I |
@@ -168,7 +171,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 `deal_id` FK→deals CASCADE, `competitor_id` FK→competitors RESTRICT, `is_winner` bool, `notes` TEXT N, timestamps. U (`deal_id`,`competitor_id`).
 
-### `deal_products` **(Q8 = B/C)**
+### `deal_products` (D-8)
 
 `deal_id` FK→deals CASCADE (I), `product_id` FK→products RESTRICT (I), `description` VARCHAR(255) N, `quantity` DECIMAL(12,2), `unit_price` DECIMAL(14,2), `discount_percent` DECIMAL(5,2), `line_total` DECIMAL(14,2), `sort` SMALLINT, timestamps.
 
@@ -258,6 +261,8 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 - Lead conversion is one transaction: create/link account, create/link contact, optionally create deal, set `converted_*`, move status to the `converted` kind, write status log, audit and timeline entries.
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
 - Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`), max size from `config('crm.attachments.max_kb')`, file deleted with the row.
+- Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
+- Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).
 - Normalised email/phone recomputed on save; duplicate warning surfaces on create/import when an exact normalised match exists in the same entity.
 - Last super admin cannot be demoted or disabled.
 - Lookups referenced by rows cannot be deleted (RESTRICT) — they are deactivated instead.

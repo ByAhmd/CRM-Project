@@ -1,7 +1,6 @@
 # CRM — Architecture and Implementation Plan
 
-Status: **Phase 2 (architecture plan) delivered 2026-09-04. Implementation has not started.**
-Implementation begins only after the questions in [OPEN_DECISIONS.md](OPEN_DECISIONS.md) are answered.
+Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13). Implementation in progress from step 0.**
 
 Companion documents:
 
@@ -9,7 +8,8 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The critical questions the owner must answer before implementation |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-15 |
+| [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
 
 ---
 
@@ -58,12 +58,12 @@ comparison in [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md).
 | spatie/laravel-permission | `^8.0` (8.3.0) | |
 | spatie/laravel-activitylog | `^4.12` — **not** 5.x | 5.x requires PHP `^8.4`, which breaks the PHP 8.3 production floor |
 | bezhansalleh/filament-language-switch | `^5.0` | |
-| bezhansalleh/filament-shield | `^4.3` — **only if** the owner picks the Shield UI option in Q3 | |
+| bezhansalleh/filament-shield | — | **Not installed** (D-3: own Roles resource on spatie tables) |
 | larastan/larastan | `^3.10` | |
 | laravel/pint | `^1.27` | |
 | phpunit/phpunit | `^12.5` — **not** 13.x | 13.x requires PHP 8.4.1 |
-| guava/calendar | `^3.2` (MIT, requires `filament/filament ^5.0`) | candidate for the calendar (Q12) |
-| relaticle/flowforge | `^4.1` (MIT, requires `filament/* ^5.0`) | candidate for the pipeline kanban (Q12) |
+| guava/calendar | `^3.2` (MIT, requires `filament/filament ^5.0`) | evaluated; **not used** (D-12: custom calendar page) |
+| relaticle/flowforge | `^4.1` (MIT, requires `filament/* ^5.0`) | evaluated; **not used** (D-12: custom kanban page) |
 | mokhosh/filament-kanban | — | Filament 3 only; **rejected** |
 | saade/filament-fullcalendar | 4.0.0-beta | beta only; **rejected** for production |
 | eightynine/filament-reports | — | Filament 4 only; **rejected** |
@@ -72,7 +72,7 @@ comparison in [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md).
 
 ## 2. Product scope
 
-A single-organisation (pending Q2) sales CRM operated from one Filament admin panel.
+A single-organisation (D-2) sales CRM operated from one Filament admin panel.
 
 | # | Module | Delivered capability |
 |---|---|---|
@@ -80,8 +80,8 @@ A single-organisation (pending Q2) sales CRM operated from one Filament admin pa
 | 2 | Leads | CRUD, status (configurable), source (configurable), owner, priority, score, qualification (status kind + qualified_at/by + history + notes), duplicate detection on email/phone, tags, notes, activities, tasks, attachments, timeline, bulk assign/status/tag/delete, import/export, conversion to Account + Contact + Deal |
 | 3 | Lead sources / statuses | Configurable bilingual lookup tables with ordering, colours and behavioural `kind` |
 | 4 | Contacts | CRUD, account link, job title, department, emails/phones, preferred locale, social link, owner, tags, notes, activities, tasks, attachments, timeline, related deals, duplicate detection, merge |
-| 5 | Accounts (Companies / Customers) | One entity with a lifecycle `type` (pending Q6): profile, industry (lookup), size, website, address, phone, email, owner, contacts, deals, activities, notes, attachments, timeline, tags, segmentation via tags + type + industry |
-| 6 | Deals (Opportunities) | CRUD, account, contacts (with roles), owner, pipeline, stage, probability (stage default + override), amount/currency (pending Q8), expected close date, source, products (pending Q8), forecast category, status open/won/lost, win/loss reason (configurable), competitors, stage history, activities, tasks, attachments, timeline, kanban board |
+| 5 | Accounts (Companies / Customers) | One entity with a lifecycle `type` (D-6: prospect becomes customer on the first won deal): profile, industry (lookup), size, website, address, phone, email, owner, contacts, deals, activities, notes, attachments, timeline, tags, segmentation via tags + type + industry |
+| 6 | Deals (Opportunities) | CRUD, account, contacts (with roles), owner, pipeline, stage, probability (stage default + override), amount computed from product line items in SAR (D-8), expected close date, source, product line items (D-8), forecast category, status open/won/lost, win/loss reason (configurable), competitors, stage history, activities, tasks, attachments, timeline, kanban board |
 | 7 | Pipelines & stages | Configurable pipelines, ordered stages, probability, kind (open/won/lost), default stage, default pipeline, active flag |
 | 8 | Activities | Calls, meetings, emails (logged), other; configurable activity types; owner, links to lead/contact/account/deal, occurred_at, duration, outcome, attachments, timeline |
 | 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views |
@@ -90,13 +90,13 @@ A single-organisation (pending Q2) sales CRM operated from one Filament admin pa
 | 12 | Timeline | Chronological, per record: activities, notes, tasks, stage/status changes, ownership changes, attachments, conversion, audit events |
 | 13 | Attachments | Private-disk uploads with MIME/size validation, metadata, authorised download, deletion rules, audit |
 | 14 | Tags | Reusable bilingual tags across leads, contacts, accounts, deals; filtering by tag |
-| 15 | Custom fields | Typed engine (pending Q9): field definitions per entity, typed values, forms, tables, filters, import/export |
+| 15 | Custom fields | Typed engine on Leads, Contacts, Accounts and Deals (D-9): field definitions per entity, typed values, forms, tables, filters, import/export |
 | 16 | Search | Filament global search (⌘K) across leads, contacts, accounts, deals, tasks, scoped by visibility; per-table search and filters |
 | 17 | Filtering & saved views | Advanced filters (incl. query builder), per-user saved views with optional sharing, persisted table state |
 | 18 | Import / Export | CSV import with column mapping, validation, duplicate handling, failed-rows report, history; CSV/XLSX export of tables and reports; permission-gated |
 | 19 | Notifications | In-app bell (database notifications): assignment, task reminders, overdue, deal stage changes, mentions, import/export completion; mail channel only when a mailer is configured and the user opted in |
 | 20 | Roles & permissions | spatie roles/permissions, six default roles, permission keys per verb (view/create/update/delete/export/import/assign/convert/change stage/manage settings/reports/audit/admin), policies enforced server-side |
-| 21 | Teams & ownership | Teams, record owner, assignment with history, visibility own/team/all (pending Q4) |
+| 21 | Teams & ownership | Teams, record owner, assignment with history, visibility own/team/all driven by permissions (D-4); reps cannot reassign |
 | 22 | Audit logs | spatie activitylog ledger: create/update/delete diffs, ownership, status/stage, permission and settings changes, login events; read-only UI; retention policy |
 | 23 | Reports | Lead, conversion/funnel, pipeline, sales performance, activity, source performance, win/loss, forecast, task performance; export from every report |
 | 24 | Settings | Lead statuses, sources, industries, pipelines/stages, activity types, close reasons, competitors, tags, custom fields, teams, general settings, notification preferences, user preferences (locale, theme) |
@@ -144,7 +144,7 @@ multi-currency.
 
 ### 3.2 Database architecture
 
-MySQL 8.4 locally and in CI; production engine confirmed before the first migration (Q1).
+MySQL 8.4 locally and in CI; production engine confirmed in writing before the first production migration (D-1).
 Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 
 - One table per migration, docblock stating purpose and decision reference, reversible `down()`.
@@ -172,14 +172,14 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   `users.manage`, `roles.manage`, `saved_view.share`).
 - Default role→permission sets live in `App\Support\Access\RolePermissionMatrix` and are seeded by
   `RolesAndPermissionsSeeder` (idempotent, `syncPermissions`, cache flushed). A drift test asserts
-  the seeded tables equal the matrix; runtime edits (if Q3 = B) are audited.
+  the seeded tables equal the matrix; runtime edits through the Roles resource are audited (D-3).
 - `super_admin` is granted through `Gate::before`. Roles: `super_admin`, `admin`, `sales_manager`,
   `sales_rep`, `support`, `read_only`.
 - Policies: one per model, `Policies\Concerns\ChecksPermissions` gives `viewAny/create/update/delete/
   restore/forceDelete` plus explicit `deleteAny/restoreAny/forceDeleteAny` (Filament grants a missing
   policy method, so they are always defined) and `forceDelete = false`. Record-level checks combine the
   permission with `RecordVisibilityResolver::canRead/canWrite(User, Model)`.
-- Visibility (pending Q4): `RecordVisibilityResolver::visible(User, Builder)` applies Own / Team / All
+- Visibility (D-4): `RecordVisibilityResolver::visible(User, Builder)` applies Own / Team / All
   from the user's permissions; applied in every resource `getEloquentQuery()`, global search query,
   exporters, widgets and statistics services. Filters never widen scope.
 - Filament enforcement: resource `can*` methods (policy-backed), `->authorize()` on actions,
@@ -187,7 +187,7 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   `Importer`/`Exporter` policies. `->strictAuthorization()` on the panel.
 - Authentication: Filament login (rate-limited), invitation-only user creation (password set through a
   signed reset link, status `pending → active`), status gating in `canAccessPanel()`, profile page,
-  MFA available (Filament app + email providers; policy pending Q11), no self-registration, no API.
+  MFA available to all users and optional (D-11), password policy per D-11, no self-registration, no API.
 
 ### 3.4 UI architecture
 
@@ -212,7 +212,7 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   only in `enums.php`, Laravel `auth/passwords/validation/pagination` in both locales.
 - No hardcoded user-facing string in any language (guard tests: parity, Arabic-script-in-English,
   unused keys, literal `->label('…')` scanner).
-- Default locale pending Q5; fallback is the other locale (must differ). `users.locale` persisted from
+- Arabic is the default locale, English the fallback (D-5). `users.locale` persisted from
   the language switch; `contacts.preferred_locale` for outbound mail; notifications rendered in the
   recipient's locale.
 - RTL/LTR from Filament's direction handling; theme uses logical properties; no `[dir='ltr']` exceptions;
@@ -232,7 +232,7 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   user's `notification_preferences` row enables it. No paid provider.
 - Queue: `QUEUE_CONNECTION=database`, drained by the scheduler every minute
   (`queue:work --stop-when-empty --max-time=50`, `withoutOverlapping(10)`, `onOneServer()`), `sync` in
-  tests. Revisited only if Q1 selects a host with a persistent worker.
+  tests. Fixed by D-1 (shared hosting, no persistent worker).
 - Scheduler (`routes/console.php`): queue drain, `tasks:remind` (every 5 minutes, idempotent via
   `reminder_sent_at`), `tasks:flag-overdue`/`leads:flag-stale` (daily), `activitylog:clean`,
   `queue:prune-failed`, `model:prune` (imports/exports).
@@ -321,14 +321,14 @@ Each step is designed → implemented → validated → authorised → tested (P
 | 1 | **Foundation**: panel provider (dark mode, theme switcher, database notifications, global search, SPA, font), Tailwind 4 theme + tokens + dark tokens, `lang/{ar,en}` base files + guard tests, `NavigationGroup`, User model (status, locale, team), invitation flow, login/profile/MFA wiring, spatie permission + `Permission` enum + matrix + seeder + drift test, teams, `RecordVisibilityResolver`, `ChecksPermissions` policy trait, activitylog config + `ActivityLog` model + append-only observer + auth listeners, `EnumCheck` helper, `settings` table + service, `app:onboard`, `app:preflight`, fixtures trait, base structural tests | Users resource, Roles resource, Teams resource, Settings page and Audit log page working in both locales/directions/themes with tests |
 | 2 | **Lookups**: lead statuses, lead sources, industries, pipelines + stages (reorderable), activity types, close reasons, competitors, tags; default seeders | Settings navigation complete, all CRUD authorised and tested |
 | 3 | **Accounts & Contacts**: models, resources, 360 view pages, relation managers, duplicate detection + merge, tags, owner/assign, audit instrumentation | Feature + policy + visibility + audit tests |
-| 4 | **Leads**: model, resource, status workflow + history, qualification, scoring (per Q7), duplicate detection, bulk actions, tags, assignment notifications | Tests incl. transitions and scoring |
-| 5 | **Deals & pipelines**: model, resource, stage workflow + `deal_stage_logs`, won/lost with reasons, competitors, contacts with roles, products (per Q8), kanban board, forecast fields | Tests incl. transition matrix, kanban moves, guard observer |
+| 4 | **Leads**: model, resource, status workflow + history, qualification, rule-based scoring with manual override (D-7), duplicate detection, bulk actions, tags, assignment notifications | Tests incl. transitions and scoring |
+| 5 | **Deals & pipelines**: model, resource, stage workflow + `deal_stage_logs`, won/lost with reasons, competitors, contacts with roles, product line items (D-8), kanban board, forecast fields | Tests incl. transition matrix, kanban moves, guard observer |
 | 6 | **Lead conversion**: `LeadConversionWorkflow` (account/contact/deal creation or linking, transactional), conversion UI, audit + timeline entries, notifications | Conversion tests incl. rollback |
 | 7 | **Activities, notes, tasks, attachments, timeline**: models, relation managers on every subject, `ActivityRecorder`, `TimelineReader` + timeline component, tasks with recurrence + reminders + overdue, `AttachmentStorage` + download route, calendar page | Tests incl. reminders with `travelTo`, download authorisation, recurrence |
 | 8 | **Notifications & scheduler**: notification classes, preferences, mail gating, bell actions, `routes/console.php` schedule, production-wiring tests | Notification tests (`Notification::fake`) |
 | 9 | **Search, saved views, import/export**: global search config, saved views, Filament importers/exporters, import/export history resources, prune schedule | Scope tests, importer tests with fixture CSVs |
 | 10 | **Dashboard & reports**: statistics services, widgets, charts, nine report pages with export | Report query tests against seeded data, permission tests |
-| 11 | **Custom fields** (per Q9): definitions, typed values, dynamic form/table/filter components, import/export columns | Tests per field type |
+| 11 | **Custom fields** (D-9, all four entities): definitions, typed values, dynamic form/table/filter components, import/export columns | Tests per field type |
 | 12 | **Quality pass**: security, performance (N+1 with `preventLazyLoading` in tests, indexes, query counts), RTL/LTR walk, dark/light walk, translation audit, DB review, authorisation matrix walk, test review | Checklist in `docs/GoLive_Checklist.md` complete |
 | 13 | **Production readiness**: clean install from scratch, migrations fresh + seed, CI green, `filament:optimize`, deployment runbook, `.env` documentation, demo data command | Acceptance criteria in the master prompt §24 |
 
@@ -373,7 +373,7 @@ Each step is designed → implemented → validated → authorised → tested (P
 
 | Area | Measure |
 |---|---|
-| Authentication | Filament login with rate limiting; invitation-only accounts; status gating; `Password::defaults()` (min 12, mixed case, numbers, uncompromised — pending Q11); MFA providers wired (policy pending Q11); session lifetime/secure cookie in production; login/logout/failed events audited; `last_login_at` |
+| Authentication | Filament login with rate limiting; invitation-only accounts; status gating; `Password::defaults()` (min 12, mixed case, numbers, uncompromised — D-11); MFA providers wired, optional for all users (D-11); session lifetime/secure cookie in production; login/logout/failed events audited; `last_login_at` |
 | Authorization | Policies for every model incl. lookups and settings; permission keys enumerated; `Gate::before` only for `super_admin`; `->strictAuthorization()`; bulk `authorizeIndividualRecords`; visibility resolver in every query path; importers/exporters/widgets/pages gated |
 | Record ownership | `owner_id` on leads/contacts/accounts/deals/tasks; assignment permission; ownership changes audited and notified |
 | Mass assignment | `#[Fillable]` whitelists; workflow columns guarded by observers; `Model::shouldBeStrict()` outside production |
@@ -405,7 +405,7 @@ Each step is designed → implemented → validated → authorised → tested (P
 
 ## 9. Deployment readiness
 
-- Target host pending Q1. If Hostinger shared hosting (Stockflow's host): GitHub Actions builds assets
+- Target host is Hostinger shared hosting (D-1): GitHub Actions builds assets
   and ships `public/build`, deploys over SSH with `scripts/deploy-production.sh` (maintenance mode,
   `composer install --no-dev`, `migrate --force`, caches, `filament:optimize`, `app:preflight`, `up`),
   one cron running `schedule:run` every minute, storage symlink created once by hand, `.env` set on the
@@ -451,10 +451,9 @@ CRM_Project/
 │   ├── Listeners/                 ActivateInvitedUser, RecordAuthActivity, PersistUserLocale, RecordLastLogin
 │   ├── Models/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
-│   │   ├── Scopes/                (none unless Q2 = multi-tenant)
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
-│   │                              DealContact, DealCloseReason, Competitor, Product (Q8), DealProduct (Q8), Pipeline, PipelineStage, ActivityType,
-│   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue (Q9), SavedView, NotificationPreference, ActivityLog
+│   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
+│   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, SavedView, NotificationPreference, ActivityLog
 │   ├── Notifications/             LeadAssignedNotification, DealAssignedNotification, TaskAssignedNotification, TaskDueNotification,
 │   │                              TaskOverdueNotification, DealStageChangedNotification, DealClosedNotification, LeadConvertedNotification,
 │   │                              MentionedInNoteNotification, UserInvitationNotification
@@ -468,9 +467,9 @@ CRM_Project/
 │   │   ├── Activities/            ActivityRecorder, TimelineReader, TimelineEntry
 │   │   ├── Attachments/           AttachmentStorage, AttachmentService
 │   │   ├── Audit/                 ActivityLogQuery, ActivityLogPresenter, LeadActivityLogger, DealActivityLogger, AccessActivityLogger, SettingsActivityLogger
-│   │   ├── CustomFields/          CustomFieldSchemaBuilder, CustomFieldValueWriter (Q9)
-│   │   ├── Deals/                 DealStageWorkflow, DealCloseService, DealAmountCalculator (Q8), ForecastReader
-│   │   ├── Leads/                 LeadStatusWorkflow, LeadConversionWorkflow, LeadAssignmentService, LeadScoringService (Q7)
+│   │   ├── CustomFields/          CustomFieldSchemaBuilder, CustomFieldValueWriter
+│   │   ├── Deals/                 DealStageWorkflow, DealCloseService, DealAmountCalculator, ForecastReader
+│   │   ├── Leads/                 LeadStatusWorkflow, LeadConversionWorkflow, LeadAssignmentService, LeadScoringService
 │   │   ├── Notifications/         NotificationDispatcher, ChannelResolver
 │   │   ├── Settings/              SettingsRepository, LookupOrderingService, PipelineService
 │   │   ├── Statistics/            DashboardMetrics, LeadFunnelMetrics, DealAnalytics, ActivityAnalytics, TaskAnalytics, SourceAnalytics, ForecastAnalytics
@@ -481,7 +480,7 @@ CRM_Project/
 │       ├── Access/                RolePermissionMatrix
 │       ├── Database/              EnumCheck
 │       ├── Filament/              FilamentLanguageMenuItems
-│       ├── Money.php              (only if Q8 requires PHP-side sums)
+│       ├── Money.php              deal line totals (D-8)
 │       └── PhoneNumber.php        normalisation
 ├── bootstrap/                     app.php, providers.php
 ├── config/                        admin.php, brand-colors.php (generated), crm.php, activitylog.php, permission.php, filament.php
@@ -512,11 +511,11 @@ CRM_Project/
 
 | Risk | Mitigation |
 |---|---|
-| Production DB engine differs from MySQL 8 (Stockflow's host runs MariaDB) | Q1 answered before migration 1; `EnumCheck` engine-aware; no MySQL-only JSON functions |
+| Production DB engine differs from MySQL 8 (Stockflow's host runs MariaDB) | D-1: engine confirmed before the first production migration; `EnumCheck` engine-aware; no MySQL-only JSON functions |
 | Shared hosting queue latency (≤ 60 s) | Documented; reminders/notifications tolerate it; imports chunked |
 | Git Bash resolves the wrong PHP | All scripts through Herd `composer`; README warning; CI on PHP 8.3 |
 | Filament Arabic translation gaps | `lang/vendor` patches + vendor fallback test |
-| Custom kanban/calendar RTL and dark-mode fidelity | Server-provided direction/labels; visual tests in both modes; packages evaluated in Q12 |
+| Custom kanban/calendar RTL and dark-mode fidelity | Server-provided direction/labels; visual tests in both modes; custom pages per D-12 |
 | Permission drift if roles are runtime-editable | Drift test pins seeded defaults; runtime edits audited; `super_admin` cannot be removed from the last super admin |
 | Scope creep beyond v1 | Out-of-scope list in §2 enforced; new external services need a decision |
 
@@ -532,11 +531,11 @@ CRM_Project/
 | A2 | Single Filament panel at `/admin`; no multi-panel layer, no launcher, no platform tier |
 | A3 | Resource composition and naming exactly as Stockflow (Schemas/Tables/Pages/RelationManagers), `final` + `strict_types`, attribute-based model config |
 | A4 | Configurable business data as bilingual lookup rows; code enums only for behaviour; `EnumCheck` DB constraints on code-enum columns |
-| A5 | spatie/laravel-permission as the permission store with typed `Permission` keys, seeded from a code matrix with a drift test; own bilingual Roles resource (Shield UI only if chosen in Q3) |
+| A5 | spatie/laravel-permission as the permission store with typed `Permission` keys, seeded from a code matrix with a drift test; own bilingual Roles resource (D-3) |
 | A6 | spatie/laravel-activitylog as the audit ledger with append-only observer, separate `deal_stage_logs`/`lead_status_logs` history tables, and a composed timeline reader |
 | A7 | Own `attachments` table on a private disk with an authorised download route (no media-library package) |
 | A8 | Filament built-in Import/Export actions with importers/exporters, private disk, prunable history resources |
-| A9 | Database queue drained by the scheduler (Stockflow's production pattern) unless Q1 changes the host |
+| A9 | Database queue drained by the scheduler (Stockflow's production pattern; D-1) |
 | A10 | Filament global search + own `saved_views` table + persisted table state |
 | A11 | One Tailwind 4 theme file with CRM tokens and a generated colour ramp; light/dark/system via Filament |
 | A12 | Testing: PHPUnit 12 on MySQL; PHPStan level 5 with `checkModelProperties`, no baseline; Pint default; CI runs lint + analyse + test |
@@ -544,6 +543,6 @@ CRM_Project/
 | A14 | Duplicate detection = normalised email/phone exact match (warn, not block) + a merge action; no fuzzy matching in v1 |
 | A15 | Documentation and git conventions mirror Stockflow (README, CLAUDE.md, docs/, conventional commits, `master`/`develop` branches) with a written CONTRIBUTING.md |
 
-### 12.2 Awaiting the owner
+### 12.2 Owner decisions
 
-See [OPEN_DECISIONS.md](OPEN_DECISIONS.md) — Q1 to Q13.
+All thirteen questions were answered on 2026-09-05 — see [DECISIONS.md](DECISIONS.md) D-1 … D-13.
