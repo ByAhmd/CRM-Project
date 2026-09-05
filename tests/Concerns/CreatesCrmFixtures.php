@@ -7,6 +7,12 @@ namespace Tests\Concerns;
 use App\Enums\CrmRole;
 use App\Models\Team;
 use App\Models\User;
+use Database\Seeders\ActivityTypeSeeder;
+use Database\Seeders\DealCloseReasonSeeder;
+use Database\Seeders\IndustrySeeder;
+use Database\Seeders\LeadSourceSeeder;
+use Database\Seeders\LeadStatusSeeder;
+use Database\Seeders\PipelineSeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\SettingsSeeder;
 use Filament\Facades\Filament;
@@ -28,6 +34,19 @@ trait CreatesCrmFixtures
         $this->seed(SettingsSeeder::class);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    /** The production lookup defaults (statuses, sources, pipeline, …). */
+    protected function seedLookups(): void
+    {
+        $this->seed([
+            LeadSourceSeeder::class,
+            LeadStatusSeeder::class,
+            IndustrySeeder::class,
+            PipelineSeeder::class,
+            ActivityTypeSeeder::class,
+            DealCloseReasonSeeder::class,
+        ]);
     }
 
     protected function usePanel(): void

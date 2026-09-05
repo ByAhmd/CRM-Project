@@ -44,6 +44,33 @@ enum ActivityLogEvent: string implements HasLabel
     case TeamDeleted = 'team.deleted';
     case TeamRestored = 'team.restored';
 
+    // Leads
+    case LeadCreated = 'lead.created';
+    case LeadUpdated = 'lead.updated';
+    case LeadDeleted = 'lead.deleted';
+    case LeadRestored = 'lead.restored';
+    case LeadAssigned = 'lead.assigned';
+    case LeadStatusChanged = 'lead.status_changed';
+    case LeadQualified = 'lead.qualified';
+    case LeadConverted = 'lead.converted';
+
+    // Accounts
+    case AccountCreated = 'account.created';
+    case AccountUpdated = 'account.updated';
+    case AccountDeleted = 'account.deleted';
+    case AccountRestored = 'account.restored';
+    case AccountAssigned = 'account.assigned';
+    case AccountMerged = 'account.merged';
+    case AccountBecameCustomer = 'account.became_customer';
+
+    // Contacts
+    case ContactCreated = 'contact.created';
+    case ContactUpdated = 'contact.updated';
+    case ContactDeleted = 'contact.deleted';
+    case ContactRestored = 'contact.restored';
+    case ContactAssigned = 'contact.assigned';
+    case ContactMerged = 'contact.merged';
+
     // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';
     case LookupCreated = 'settings.lookup_created';

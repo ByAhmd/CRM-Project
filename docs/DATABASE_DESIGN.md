@@ -43,19 +43,19 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 | Table | Columns |
 |---|---|
-| `lead_sources` | `name_ar`, `name_en`, `is_active` bool, `sort` SMALLINT, timestamps. U (`name_en`), U (`name_ar`). |
-| `lead_statuses` | `name_ar`, `name_en`, `kind` enum(`new`,`working`,`qualified`,`unqualified`,`converted`) CHECK (I), `color` VARCHAR(20), `is_default` bool, `is_active` bool, `sort`, timestamps. U names. Exactly one `is_default`; exactly one `converted` kind row (seeder + observer). |
+| `lead_sources` | `name_ar`, `name_en`, `is_active` bool, `sort` SMALLINT, timestamps. U (`name_en`), U (`name_ar`), I (`is_active`, `sort`). |
+| `lead_statuses` | `name_ar`, `name_en`, `kind` enum(`new`,`working`,`qualified`,`unqualified`,`converted`) CHECK (I), `color` VARCHAR(20), `is_default` bool, `is_active` bool, `sort`, timestamps. U names. Exactly one `is_default`; exactly one `converted` kind row (LeadStatusSeeder + LeadStatusService; pages call the service from handleRecordCreation/handleRecordUpdate and DeleteAction->using). |
 | `industries` | `name_ar`, `name_en`, `is_active`, `sort`, timestamps. U names. |
-| `pipelines` | `name_ar`, `name_en`, `is_default` bool, `is_active` bool, `sort`, timestamps, SD. U names. |
-| `pipeline_stages` | `pipeline_id` FK→pipelines RESTRICT (I), `name_ar`, `name_en`, `kind` enum(`open`,`won`,`lost`) CHECK, `probability` TINYINT UNSIGNED, `color`, `is_default` bool, `sort` SMALLINT, timestamps. U (`pipeline_id`,`name_en`), U (`pipeline_id`,`name_ar`). `pipeline_id` immutable (observer). Each pipeline has ≥1 open, exactly 1 won, exactly 1 lost stage (validated in service). |
-| `activity_types` | `name_ar`, `name_en`, `kind` enum(`call`,`meeting`,`email`,`note`,`task`,`other`) CHECK, `icon` VARCHAR(50) N, `color`, `is_active`, `sort`, timestamps. U names. System rows (one per kind) cannot be deleted. |
+| `pipelines` | `name_ar`, `name_en`, `is_default` bool, `is_active` bool, `sort` SMALLINT UNSIGNED, timestamps, SD. U (`name_en`), U (`name_ar`); I (`is_default`); I (`is_active`,`sort`). Exactly one `is_default`, which cannot be deactivated or deleted (PipelineService). |
+| `pipeline_stages` | `pipeline_id` FK→pipelines RESTRICT (I), `name_ar`, `name_en`, `kind` enum(`open`,`won`,`lost`) CHECK, `probability` TINYINT UNSIGNED CHECK 0–100 (`pipeline_stages_probability_check`), `color` VARCHAR(20) CHECK (BadgeColor) default `primary`, `is_default` bool, `sort` SMALLINT UNSIGNED, timestamps (no SD). U (`pipeline_id`,`name_en`), U (`pipeline_id`,`name_ar`); I (`pipeline_id`,`sort`); I (`pipeline_id`,`kind`). `pipeline_id` immutable (observer). Each pipeline has ≥1 open, exactly 1 won (probability 100), exactly 1 lost (probability 0) and exactly 1 default (open) stage (validated in PipelineService). |
+| `activity_types` | `name_ar`, `name_en`, `kind` enum(`call`,`meeting`,`email`,`note`,`task`,`system`,`other`) CHECK (I), `icon` VARCHAR(50) N (Heroicon case name), `color`, `is_system` bool, `is_active`, `sort`, timestamps. U names; I (`is_active`,`sort`). System rows (one per kind) cannot be deleted nor change kind. |
 | `deal_close_reasons` | `kind` enum(`won`,`lost`) CHECK (I), `name_ar`, `name_en`, `is_active`, `sort`, timestamps. U (`kind`,`name_en`), U (`kind`,`name_ar`). |
 | `competitors` | `name` VARCHAR(150) U, `website` N, `notes` TEXT N, `is_active`, timestamps, SD. |
 | `tags` | `name_ar`, `name_en`, `color`, `is_active`, timestamps. U names. |
 | `lead_scoring_rules` (D-7) | `kind` enum(`source`,`status`,`field_filled`,`activity_recency`) CHECK (I), `reference_id` BIGINT N (source/status id), `field` VARCHAR(50) N (for `field_filled`), `within_days` SMALLINT N (for `activity_recency`), `points` SMALLINT, `is_active`, `sort`, timestamps. U (`kind`,`reference_id`,`field`,`within_days`). |
 | `email_templates` (D-10) | `name_ar`, `name_en`, `subject_ar`, `subject_en`, `body_ar` TEXT, `body_en` TEXT (merge tags `{{contact.first_name}}` …), `entity` VARCHAR(50) N (lead/contact/account/deal), `is_active`, `sort`, timestamps, SD. U names. |
 | `taggables` | `tag_id` FK→tags CASCADE, `taggable_type` VARCHAR(100), `taggable_id` BIGINT. PK (`tag_id`,`taggable_type`,`taggable_id`); I (`taggable_type`,`taggable_id`). Keyless. |
-| `products` (D-8) | `code` VARCHAR(50) U N, `name_ar`, `name_en`, `unit_price` DECIMAL(14,2), `is_active`, timestamps, SD. |
+| `products` (D-8) | `code` VARCHAR(50) U N (normalised to trimmed uppercase on save; blank → NULL), `name_ar`, `name_en`, `unit_price` DECIMAL(14,2), `is_active`, timestamps, SD. |
 | `custom_fields` (D-9) | `entity` VARCHAR(50) (CHECK: lead/contact/account/deal) (I), `key` VARCHAR(50), `label_ar`, `label_en`, `type` enum(`text`,`textarea`,`number`,`decimal`,`date`,`datetime`,`boolean`,`select`,`multiselect`,`url`,`email`) CHECK, `options` JSON N (select options, bilingual), `is_required` bool, `is_filterable` bool, `is_listed` bool, `is_active`, `sort`, `validation` JSON N, timestamps. U (`entity`,`key`). |
 | `custom_field_values` (D-9) | `custom_field_id` FK→custom_fields CASCADE, `entity_type` VARCHAR(100), `entity_id` BIGINT, typed columns `value_string` VARCHAR(500) N, `value_text` TEXT N, `value_integer` BIGINT N, `value_decimal` DECIMAL(18,4) N, `value_date` DATE N, `value_datetime` DATETIME N, `value_boolean` bool N, `value_json` JSON N (multiselect only), timestamps. U (`custom_field_id`,`entity_type`,`entity_id`); I (`entity_type`,`entity_id`); I (`custom_field_id`,`value_string`); I (`custom_field_id`,`value_integer`); I (`custom_field_id`,`value_date`). |
 
@@ -121,7 +121,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `converted_by` | FK→users N SET NULL | |
 | `converted_account_id` | FK→accounts N SET NULL | |
 | `converted_contact_id` | FK→contacts N SET NULL | |
-| `converted_deal_id` | FK→deals N SET NULL | |
+| `converted_deal_id` | FK→deals N SET NULL | added by the deals migration (step 5) |
 | `last_activity_at` | DATETIME N | I; maintained by `ActivityRecorder` for stale detection |
 | `description` | TEXT N | |
 | `created_by` | FK→users N SET NULL | |

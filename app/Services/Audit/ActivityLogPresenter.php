@@ -7,6 +7,7 @@ namespace App\Services\Audit;
 use App\Enums\ActivityLogEvent;
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Support\RecordLabel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -162,21 +163,9 @@ final class ActivityLogPresenter
             return $subject->name;
         }
 
-        $displayName = $subject->getAttribute('display_name');
+        $label = RecordLabel::of($subject);
 
-        if (is_string($displayName) && $displayName !== '') {
-            return $displayName;
-        }
-
-        foreach (['title', 'name', 'key'] as $attribute) {
-            $value = $subject->getAttribute($attribute);
-
-            if (is_string($value) && $value !== '') {
-                return $value;
-            }
-        }
-
-        return null;
+        return $label === (string) $subject->getKey() ? null : $label;
     }
 
     private function scalar(mixed $value): string
