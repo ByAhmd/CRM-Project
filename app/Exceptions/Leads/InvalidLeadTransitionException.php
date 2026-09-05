@@ -30,4 +30,39 @@ final class InvalidLeadTransitionException extends RuntimeException
     {
         return new self(__('leads.validation.qualification_note_required'));
     }
+
+    public static function notQualified(): self
+    {
+        return new self(__('leads.validation.not_qualified'));
+    }
+
+    public static function convertedStatusMissing(): self
+    {
+        return new self(__('leads.validation.converted_status_missing'));
+    }
+
+    public static function accountNameRequired(): self
+    {
+        return new self(__('leads.validation.account_name_required'));
+    }
+
+    public static function accountNotAccessible(): self
+    {
+        return new self(__('leads.validation.account_not_accessible'));
+    }
+
+    public static function contactNotAccessible(): self
+    {
+        return new self(__('leads.validation.contact_not_accessible'));
+    }
+
+    public static function pipelineHasNoDefaultStage(): self
+    {
+        return new self(__('leads.validation.pipeline_has_no_default_stage'));
+    }
+
+    public static function pipelineInactive(): self
+    {
+        return new self(__('leads.validation.pipeline_inactive'));
+    }
 }
