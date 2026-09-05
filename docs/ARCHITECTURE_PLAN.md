@@ -1,6 +1,6 @@
 # CRM — Architecture and Implementation Plan
 
-Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13). Implementation in progress from step 0.**
+Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13). Steps 0–4 (scaffold, foundation, lookups, accounts & contacts, leads) complete 2026-09-06; step 5 (deals & pipelines) next.**
 
 Companion documents:
 

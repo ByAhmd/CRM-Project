@@ -9,6 +9,7 @@ use App\Listeners\PersistUserLocale;
 use App\Listeners\RecordAuthActivity;
 use App\Models\ActivityLog;
 use App\Observers\ActivityLogAppendOnlyObserver;
+use App\Services\Leads\LeadScoringService;
 use BezhanSalleh\LanguageSwitch\Events\LocaleChanged;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
 use Filament\Forms\Components\FileUpload;
@@ -22,7 +23,13 @@ use Illuminate\Validation\Rules\Password;
 
 final class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void {}
+    public function register(): void
+    {
+        // One rule cache per process: the lead observer, the status workflow and
+        // the rule observer all see the same instance, so a rule change refreshes
+        // the cache every path reads from.
+        $this->app->singleton(LeadScoringService::class);
+    }
 
     public function boot(): void
     {
