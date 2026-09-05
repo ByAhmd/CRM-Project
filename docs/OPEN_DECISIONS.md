@@ -1,4 +1,11 @@
-# Open decisions — answers required before implementation
+# Open decisions (historical record)
+
+> **All thirteen questions were answered on 2026-09-05.** The binding decisions are recorded in
+> [DECISIONS.md](DECISIONS.md) as D-1 … D-13. Summary of the answers: Q1 A · Q2 A · Q3 B · Q4 C (reps cannot
+> reassign) · Q5 A · Q6 A (one account per contact) · Q7 defaults, qualification note **required**, scoring B,
+> convert from Qualified only · Q8 B (SAR, Asia/Riyadh, forecast categories included) · Q9 **A** (all four entities) ·
+> Q10 B (log mailer until SMTP exists) · Q11 A with the proposed password policy · Q12 A · Q13 defaults, reps export
+> within their visibility scope.
 
 Date raised: 2026-09-04. Each question lists the options, the recommended default (marked ★) and the
 consequence. Answering with the question number and a letter is enough (e.g. `Q1 A, Q2 A, …`).

@@ -9,8 +9,8 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
 |---|---|
 | 1 — Discovery (CRM project, Stockflow reference, environment) | ✅ done 2026-09-04 |
 | 2 — Architecture plan | ✅ delivered 2026-09-04 — see `docs/` |
-| 3 — Critical questions | ⏳ awaiting the owner — [docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md) |
-| 4 — Foundation (scaffold, auth, roles, lang, theme, audit, tests) | not started |
+| 3 — Critical questions | ✅ answered 2026-09-05 — [docs/DECISIONS.md](docs/DECISIONS.md) |
+| 4 — Foundation (scaffold, auth, roles, lang, theme, audit, tests) | 🔨 in progress |
 | 5+ — Modules, integration, quality pass, production readiness | not started |
 
 No application code exists yet. The Laravel application will be scaffolded at the repository root once the
@@ -23,7 +23,8 @@ open decisions are answered.
 | [docs/ARCHITECTURE_PLAN.md](docs/ARCHITECTURE_PLAN.md) | Discovery findings, product scope, system architecture, module dependencies, implementation order, testing, security, performance, deployment, folder structure, risks, decision register |
 | [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md) | Every proposed table, column, key, index and integrity rule |
 | [docs/STOCKFLOW_COMPARISON.md](docs/STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table, reuse classification (must / should / CRM-specific / must not), conflict resolution |
-| [docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md) | The 13 questions that must be answered before implementation, each with a recommended default |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-15 |
+| [docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md) | The 13 questions as asked on 2026-09-04 (historical, all resolved) |
 
 ## Planned stack (pinned to the established environment)
 

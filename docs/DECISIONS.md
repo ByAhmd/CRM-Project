@@ -1,0 +1,44 @@
+# Decision register
+
+Every decision that shapes the CRM's architecture, data or business rules. Owner decisions (D-n) were
+answered on 2026-09-05 to the questions raised in [OPEN_DECISIONS.md](OPEN_DECISIONS.md). Architect
+decisions (A-n) are implementation choices within the established standard, listed for traceability.
+New decisions are appended; superseded ones are struck through with a pointer to their replacement.
+
+## Owner decisions
+
+| # | Decision | Consequence in the build |
+|---|---|---|
+| **D-1** | **Production target = Hostinger shared hosting** (Stockflow's host). | Database queue drained by the scheduler; assets built in CI and shipped; no Supervisor/Node/`exec()` on the server; PHP 8.3 language floor; **the database engine is confirmed in writing before the first production migration** — every CHECK/JSON migration goes through the engine-aware `EnumCheck` helper. |
+| **D-2** | **Single organisation.** No tenant column. | Organisation settings are a `settings` singleton; visibility is owner/team only; spatie `teams` feature off; no global tenant scope. Retrofitting tenancy later is a documented one-way door. |
+| **D-3** | **spatie tables are the runtime permission authority.** | Typed keys in `App\Enums\Permission`; defaults in `App\Support\Access\RolePermissionMatrix` seeded by `RolesAndPermissionsSeeder`; drift test pins the seeded defaults; own bilingual **Roles** resource for super admins; every role/permission change audited; Filament Shield **not** installed. |
+| **D-4** | **Permission-driven visibility with teams.** Defaults: `sales_rep` = own, `sales_manager` = team, `admin`/`support`/`read_only` = all. **Sales reps may not reassign their own records**; only holders of `{entity}.assign` may reassign. | `{entity}.view_team` / `{entity}.view_all` permissions; `teams` table, one team per user (`users.team_id`), optional team manager; `RecordVisibilityResolver` on every query path; reassignment audited and notified. |
+| **D-5** | **Arabic is the default locale, English the fallback.** | `app.locale = ar`, `app.fallback_locale = en`; RTL first; per-user locale persisted; Filament Arabic gaps patched under `lang/vendor`. |
+| **D-6** | **One `accounts` entity with a lifecycle `type`** (prospect / customer / partner / other). A prospect becomes a customer automatically on its first won deal; admins may set the type manually. **A contact belongs to exactly one account.** | `accounts.type`, `accounts.customer_since`; `DealCloseService` promotes the account; `contacts.account_id` single nullable FK, no account pivot. |
+| **D-7** | **Lead lifecycle.** Default statuses New → Contacted → Qualified → Converted, plus Unqualified (terminal, reopenable). **A qualification note is required** when moving into a status of kind *qualified*. **Rule-based scoring** with optional manual override. **Leads may only be converted from a Qualified status.** | `lead_statuses` seeded with these kinds; `LeadStatusWorkflow` enforces the note on qualification; `lead_scoring_rules` table + `LeadScoringService` (points per source, status, activity recency, filled fields) + `leads.score` and `leads.score_override`; `LeadConversionWorkflow` refuses non-qualified leads. |
+| **D-8** | **Product catalogue + deal line items**, single currency. Currency defaults to **SAR**, timezone to **Asia/Riyadh**, both editable in General Settings. Forecast categories (pipeline / best case / commit / omitted) and stage probabilities with per-deal override are included. | `products`, `deal_products`; deal amount computed from lines (manual amount allowed when there are no lines); `deals.forecast_category`, `deals.probability` override; `settings` keys `general.currency`, `general.timezone`. |
+| **D-9** | **Typed custom-field engine in v1 for Leads, Contacts, Accounts and Deals.** | `custom_fields` + `custom_field_values` (typed columns); runtime form/table/filter components; import/export columns; no JSON bags. |
+| **D-10** | **Templated email sending through the application mailer**, logged automatically as email activities. No mailbox synchronisation in v1. **Log mail driver during development** until production SMTP is configured. | `email_templates` table (bilingual, merge tags); `EmailSendService` writes an outbound `email` activity; mail notifications gated on a real transport; `MAIL_MAILER=log` locally; preflight warns when production mail is `log`. |
+| **D-11** | **MFA available to all users, optional.** Password policy: minimum 12 characters, mixed case, a number, uncompromised. Session lifetime 120 minutes, secure cookies in production. **Self-registration disabled; users are invite-only.** | Filament app + email MFA providers with `isRequired: false`; `Password::defaults()`; `SESSION_LIFETIME=120`; preflight fails without `SESSION_SECURE_COOKIE=true` in production; no registration page; invitation flow. |
+| **D-12** | **Kanban board and calendar built as custom Filament pages** (no packages). | `DealBoard` page on Filament's bundled SortableJS; `Calendar` page on FullCalendar from npm; direction and labels passed from the server; both tested with `Livewire::test`. |
+| **D-13** | **Retention and export policy.** Audit ledger 730 days (configurable), pruned weekly; timeline entries permanent; soft-deleted records kept indefinitely with admin restoration. **Sales reps may export only records inside their visibility scope; managers and above export everything they may view.** | `config('crm.audit.retention_days') = 730` + weekly `activitylog:clean`; no force-delete UI; `{entity}.export` granted to every role incl. `sales_rep`, exporters always pass through `RecordVisibilityResolver`. |
+
+## Architect decisions
+
+| # | Decision |
+|---|---|
+| A-1 | Stack pinned to the Stockflow line: Laravel `^13.0`, Filament `^5.0`, PHP `^8.3` (Herd 8.4 locally, 8.3 in CI), MySQL 8.4, spatie/laravel-permission `^8`, spatie/laravel-activitylog `^4.12` (5.x needs PHP 8.4), bezhansalleh/filament-language-switch `^5`, PHPUnit `^12` (13.x needs PHP 8.4), Larastan `^3`, Pint `^1`, Vite 8, Tailwind 4. |
+| A-2 | One Filament panel at `/admin`; no multi-panel layer, launcher or platform tier. Resources and pages discovered, with a structural test that every resource maps to a policy and permission keys. |
+| A-3 | Resource composition and naming as Stockflow (`Resource` + `Schemas/`, `Tables/`, `Pages/`, `RelationManagers/`), `final` + `declare(strict_types=1)` everywhere, attribute-based model configuration, `casts()` method, `@property` docblocks for every cast. |
+| A-4 | Configurable business data lives in bilingual lookup rows with a behavioural `kind` enum; code enums only where code must reason; `EnumCheck` DB constraints on code-enum columns. |
+| A-5 | spatie/laravel-activitylog is the audit ledger (append-only observer, own `audit.view` permission, indexes on subject/causer); `deal_stage_logs` and `lead_status_logs` hold stage/status history; `TimelineReader` composes the per-record timeline. |
+| A-6 | Own `attachments` table on the private `local` disk, server-side MIME allowlist, UUID file names, authorised download route; no media-library package. |
+| A-7 | Filament built-in Import/Export actions with importers/exporters, private disk, read-only Imports/Exports resources under System, `model:prune` weekly. |
+| A-8 | Filament global search with searchable attributes and scoped queries; own `saved_views` table; table filters/sort/search persisted in session. |
+| A-9 | One Tailwind 4 theme file with CRM tokens (`--crm-*`), `.dark` redefinitions, generated colour ramp; light/dark/system via Filament's theme switcher. |
+| A-10 | Notes are mutable with edit history in the ledger; activities are immutable events; tasks are mutable with daily/weekly/monthly recurrence and idempotent reminders. |
+| A-11 | Duplicate detection = exact match on normalised email/phone (warn on create and import, never block) plus a merge action; no fuzzy matching in v1. |
+| A-12 | Six roles seeded: `super_admin`, `admin`, `sales_manager`, `sales_rep`, `support`, `read_only`. `super_admin` via `Gate::before`; the last super admin cannot be demoted or disabled. |
+| A-13 | Tests: PHPUnit 12 on MySQL `crm_testing`; PHPStan level 5 with `checkModelProperties`, no baseline; Pint default preset; `composer check` = lint + analyse + test, also in CI. |
+| A-14 | Documentation and git conventions mirror Stockflow: README, CLAUDE.md, CONTRIBUTING.md, `docs/`, conventional commits, `master` (production) / `develop` (integration). |
+| A-15 | Out of scope for v1 unless decided later: mailbox sync, WhatsApp/SMS, telephony, AI features, public web-to-lead forms, quotes/invoices, multi-currency, API/Sanctum. |
