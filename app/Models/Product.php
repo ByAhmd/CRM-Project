@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -52,6 +53,14 @@ final class Product extends Model
     public static function auditedAttributes(): array
     {
         return ['code', 'name_ar', 'name_en', 'unit_price', 'is_active'];
+    }
+
+    /**
+     * @return HasMany<DealProduct, $this>
+     */
+    public function dealProducts(): HasMany
+    {
+        return $this->hasMany(DealProduct::class);
     }
 
     /**

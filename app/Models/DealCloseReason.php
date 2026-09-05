@@ -11,6 +11,7 @@ use Database\Factories\DealCloseReasonFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A configurable reason a deal was won or lost (decisions D-8, A-4).
@@ -46,5 +47,13 @@ final class DealCloseReason extends Model
     public static function auditedAttributes(): array
     {
         return ['kind', 'name_ar', 'name_en', 'is_active', 'sort'];
+    }
+
+    /**
+     * @return HasMany<Deal, $this>
+     */
+    public function deals(): HasMany
+    {
+        return $this->hasMany(Deal::class, 'close_reason_id');
     }
 }
