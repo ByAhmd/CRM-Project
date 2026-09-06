@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Models\Export;
+use App\Models\Import;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
 
@@ -95,4 +97,26 @@ Schedule::command(sprintf('activitylog:clean --days=%d --force', (int) config('c
 
 Schedule::command('queue:prune-failed --hours=168')
     ->weekly()
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Import / export history (module 18, D-13)
+|--------------------------------------------------------------------------
+|
+| Filament's Import and Export models carry Prunable without a window, so
+| the application models define one (Import::RETENTION_DAYS,
+| Export::RETENTION_DAYS) and Export removes its files from the private
+| disk before the row goes (pruning hook). Failed import rows are never
+| pruned on their own: Filament's FailedImportRow window (one month) is
+| shorter than the import retention, and a run whose failed rows had gone
+| early would still advertise them on its view page with an empty list and
+| a header-only download. They leave with their import through the
+| cascading foreign key. Daily, idempotent.
+|
+*/
+Schedule::command('model:prune', [
+    '--model' => [Import::class, Export::class],
+])
+    ->daily()
     ->onOneServer();

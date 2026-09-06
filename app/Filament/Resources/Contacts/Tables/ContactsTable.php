@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Contacts\Tables;
 
+use App\Filament\Exports\ContactExporter;
 use App\Filament\Support\EmailActions;
+use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
+use App\Filament\Support\QueryBuilderFilters;
 use App\Filament\Support\TagsSelect;
 use App\Models\Contact;
 use App\Models\User;
@@ -104,7 +107,11 @@ final class ContactsTable
                 TagsSelect::filter(),
 
                 TrashedFilter::make()->label(__('contacts.filters.trashed')),
+
+                QueryBuilderFilters::forContacts(),
             ])
+            ->filtersLayout(QueryBuilderFilters::layout())
+            ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
@@ -112,7 +119,9 @@ final class ContactsTable
                 OwnershipActions::assign(Contact::permissionGroup()),
             ])
             ->toolbarActions([
+                ImportExportActions::export(ContactExporter::class, Contact::class),
                 BulkActionGroup::make([
+                    ImportExportActions::exportBulk(ContactExporter::class, Contact::class),
                     OwnershipActions::assignBulk(Contact::permissionGroup()),
                     MergeActions::mergeBulk('contact', fn (Model $record): string => (string) $record->getAttribute('full_name')),
                     DeleteBulkAction::make()->authorizeIndividualRecords('delete'),

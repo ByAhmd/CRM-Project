@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Leads\Tables;
 
 use App\Enums\LeadPriority;
+use App\Filament\Exports\LeadExporter;
 use App\Filament\Resources\Leads\Schemas\LeadInfolist;
 use App\Filament\Support\EmailActions;
+use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\LeadActions;
 use App\Filament\Support\LeadConversionActions;
 use App\Filament\Support\OwnershipActions;
+use App\Filament\Support\QueryBuilderFilters;
 use App\Filament\Support\TagsSelect;
 use App\Models\Lead;
 use App\Models\LeadSource;
@@ -132,7 +135,11 @@ final class LeadsTable
                 TagsSelect::filter(),
 
                 TrashedFilter::make()->label(__('leads.filters.trashed')),
+
+                QueryBuilderFilters::forLeads(),
             ])
+            ->filtersLayout(QueryBuilderFilters::layout())
+            ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
@@ -142,7 +149,9 @@ final class LeadsTable
                 OwnershipActions::assign(Lead::permissionGroup()),
             ])
             ->toolbarActions([
+                ImportExportActions::export(LeadExporter::class, Lead::class),
                 BulkActionGroup::make([
+                    ImportExportActions::exportBulk(LeadExporter::class, Lead::class),
                     LeadActions::changeStatusBulk(),
                     OwnershipActions::assignBulk(Lead::permissionGroup()),
                     DeleteBulkAction::make()->authorizeIndividualRecords('delete'),

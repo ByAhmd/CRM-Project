@@ -6,10 +6,13 @@ namespace App\Filament\Resources\Deals\Tables;
 
 use App\Enums\DealStatus;
 use App\Enums\ForecastCategory;
+use App\Filament\Exports\DealExporter;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
 use App\Filament\Support\DealActions;
+use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\OwnershipActions;
+use App\Filament\Support\QueryBuilderFilters;
 use App\Filament\Support\TagsSelect;
 use App\Models\Deal;
 use App\Models\Pipeline;
@@ -161,7 +164,11 @@ final class DealsTable
                 TagsSelect::filter(),
 
                 TrashedFilter::make()->label(__('deals.filters.trashed')),
+
+                QueryBuilderFilters::forDeals(),
             ])
+            ->filtersLayout(QueryBuilderFilters::layout())
+            ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
@@ -172,7 +179,9 @@ final class DealsTable
                 OwnershipActions::assign(Deal::permissionGroup()),
             ])
             ->toolbarActions([
+                ImportExportActions::export(DealExporter::class, Deal::class),
                 BulkActionGroup::make([
+                    ImportExportActions::exportBulk(DealExporter::class, Deal::class),
                     OwnershipActions::assignBulk(Deal::permissionGroup()),
                     DeleteBulkAction::make()->authorizeIndividualRecords('delete'),
                     RestoreBulkAction::make()->authorizeIndividualRecords('restore'),

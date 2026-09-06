@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Accounts\Tables;
 
 use App\Enums\AccountType;
+use App\Filament\Exports\AccountExporter;
+use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
+use App\Filament\Support\QueryBuilderFilters;
 use App\Filament\Support\TagsSelect;
 use App\Models\Account;
 use App\Models\Industry;
@@ -105,14 +108,20 @@ final class AccountsTable
                 TagsSelect::filter(),
 
                 TrashedFilter::make()->label(__('accounts.filters.trashed')),
+
+                QueryBuilderFilters::forAccounts(),
             ])
+            ->filtersLayout(QueryBuilderFilters::layout())
+            ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
                 OwnershipActions::assign(Account::permissionGroup()),
             ])
             ->toolbarActions([
+                ImportExportActions::export(AccountExporter::class, Account::class),
                 BulkActionGroup::make([
+                    ImportExportActions::exportBulk(AccountExporter::class, Account::class),
                     OwnershipActions::assignBulk(Account::permissionGroup()),
                     MergeActions::mergeBulk('account', fn (Model $record): string => (string) $record->getAttribute('name')),
                     DeleteBulkAction::make()->authorizeIndividualRecords('delete'),

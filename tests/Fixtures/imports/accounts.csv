@@ -1,0 +1,3 @@
+name,type,industry,size,website,email,phone,address_line,city,region,country,postal_code,parent,owner,tags,description
+Horizon Trading,customer,Technology,51_200,https://horizon.example.com,Info@Horizon.example.com,0112223344,King Fahd Road,Riyadh,Riyadh Region,SA,12345,,,VIP|Enterprise,Regional distributor
+Horizon Retail,,تجارة التجزئة,,,retail@horizon.example.com,,,,,,,Horizon Trading,,,

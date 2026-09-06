@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Tasks\Pages;
 
 use App\Enums\TaskStatus;
+use App\Filament\Concerns\HasSavedViews;
 use App\Filament\Resources\Tasks\TaskResource;
+use App\Filament\Support\SavedViewActions;
 use App\Models\Task;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
@@ -20,11 +22,14 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class ListTasks extends ListRecords
 {
+    use HasSavedViews;
+
     protected static string $resource = TaskResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
+            ...SavedViewActions::for($this),
             CreateAction::make(),
         ];
     }

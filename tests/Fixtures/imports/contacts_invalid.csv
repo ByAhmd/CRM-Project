@@ -1,0 +1,7 @@
+first_name,last_name,account,email,mobile,preferred_locale,owner
+,NoFirst,,nofirst@example.com,,,
+Bad,Mail,,not-an-email,,,
+Ghost,Account,Nonexistent Co,ghost@example.com,,,
+Wrong,Locale,,locale@example.com,,fr,
+Owner,Outside,,outside@example.com,,,outsider@example.com
+Good,Contact,,goodc@example.com,0500000002,,
