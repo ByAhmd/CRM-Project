@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
+use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
@@ -35,6 +36,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
 ])]
 final class Contact extends Model implements HasLocalePreference, OwnedRecord
 {
+    use HasAttachments;
+
     /** @use HasFactory<ContactFactory> */
     use HasFactory;
 
@@ -117,6 +120,16 @@ final class Contact extends Model implements HasLocalePreference, OwnedRecord
     }
 
     /**
+     * Activities logged against the contact, newest first (decision A-10).
+     *
+     * @return HasMany<Activity, $this>
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    /**
      * The lead this contact was converted from, if any (D-7).
      *
      * @return BelongsTo<Lead, $this>
@@ -147,6 +160,26 @@ final class Contact extends Model implements HasLocalePreference, OwnedRecord
     public function primaryDeals(): HasMany
     {
         return $this->hasMany(Deal::class, 'contact_id');
+    }
+
+    /**
+     * Pinned first, newest first (decision A-10).
+     *
+     * @return HasMany<Note, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class)->orderByDesc('is_pinned')->orderByDesc('created_at');
+    }
+
+    /**
+     * Tasks linked to the contact, soonest due first (decision A-10).
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class)->orderBy('due_at')->orderBy('id');
     }
 
     /** Outbound mail to this contact is rendered in their language (D-5, D-10). */

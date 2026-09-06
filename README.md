@@ -11,7 +11,7 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
 | 2 — Architecture plan | ✅ delivered 2026-09-04 — see `docs/` |
 | 3 — Critical questions | ✅ answered 2026-09-05 — [docs/DECISIONS.md](docs/DECISIONS.md) |
 | 4 — Foundation (scaffold, auth, roles, lang, theme, audit, tests) | ✅ done 2026-09-05 |
-| 5 — Modules (lookups → accounts/contacts → leads → deals → conversion → activities → notifications → search/import → dashboard/reports → custom fields) | 🔨 in progress — lookups ✅, accounts & contacts ✅, leads ✅, deals & pipelines (stage workflow, line items, kanban) ✅, lead conversion ✅ 2026-09-06; next: activities, notes, tasks, attachments |
+| 5 — Modules (lookups → accounts/contacts → leads → deals → conversion → activities → notifications → search/import → dashboard/reports → custom fields) | 🔨 in progress — lookups ✅, accounts & contacts ✅, leads ✅, deals & pipelines (stage workflow, line items, kanban) ✅, lead conversion ✅, activities / notes / attachments / tasks (reminders, recurrence) ✅ 2026-09-06; next: timeline and calendar |
 | 6+ — Integration, quality pass, production readiness | not started |
 
 ## Local setup

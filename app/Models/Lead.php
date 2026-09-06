@@ -8,6 +8,7 @@ use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
 use App\Enums\LeadPriority;
 use App\Models\Concerns\GuardsWorkflowFields;
+use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
@@ -45,6 +46,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 final class Lead extends Model implements OwnedRecord
 {
     use GuardsWorkflowFields;
+    use HasAttachments;
 
     /** @use HasFactory<LeadFactory> */
     use HasFactory;
@@ -196,6 +198,36 @@ final class Lead extends Model implements OwnedRecord
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Activities logged against the lead, newest first (decision A-10).
+     *
+     * @return HasMany<Activity, $this>
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    /**
+     * Pinned first, newest first (decision A-10).
+     *
+     * @return HasMany<Note, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class)->orderByDesc('is_pinned')->orderByDesc('created_at');
+    }
+
+    /**
+     * Tasks linked to the lead, soonest due first (decision A-10).
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class)->orderBy('due_at')->orderBy('id');
     }
 
     public function isConverted(): bool

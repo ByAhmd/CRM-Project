@@ -12,6 +12,10 @@ use App\Filament\Resources\Deals\Pages\ListDeals;
 use App\Filament\Resources\Deals\Pages\ViewDeal;
 use App\Filament\Resources\Deals\RelationManagers\CompetitorsRelationManager;
 use App\Filament\Resources\Deals\RelationManagers\ContactsRelationManager;
+use App\Filament\Resources\Deals\RelationManagers\DealActivitiesRelationManager;
+use App\Filament\Resources\Deals\RelationManagers\DealAttachmentsRelationManager;
+use App\Filament\Resources\Deals\RelationManagers\DealNotesRelationManager;
+use App\Filament\Resources\Deals\RelationManagers\DealTasksRelationManager;
 use App\Filament\Resources\Deals\Schemas\DealForm;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
 use App\Filament\Resources\Deals\Tables\DealsTable;
@@ -98,8 +102,12 @@ final class DealResource extends Resource
     public static function getRelations(): array
     {
         return [
+            DealActivitiesRelationManager::class,
+            DealTasksRelationManager::class,
             ContactsRelationManager::class,
             CompetitorsRelationManager::class,
+            DealNotesRelationManager::class,
+            DealAttachmentsRelationManager::class,
         ];
     }
 

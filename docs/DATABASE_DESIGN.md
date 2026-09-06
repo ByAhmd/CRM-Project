@@ -261,7 +261,9 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 - Line items recalculate `deals.amount` through a normal `save()` so the amount change is audited as `deal.updated` (D-8); a deal without lines keeps its manual amount.
 - Lead conversion is one transaction: create/link account, create/link contact, optionally create deal, set `converted_*`, move status to the `converted` kind, write status log, audit and timeline entries.
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
-- Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`), max size from `config('crm.attachments.max_kb')`, file deleted with the row.
+- Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`) checked on the server-sniffed type, max size from `config('crm.attachments.max_kb')`, files parked under `tmp/{user id}/` until the form is submitted (pruned daily), soft delete keeps the file, force delete removes it, downloads go through the panel's authentication middleware and the subject's `view` policy; uploads are refused on soft-deleted subjects.
+- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`.
+- Notes: body trimmed and capped at 5000 characters in the service; a note on a contact or deal is listed on the account only when the reader may read that contact or deal.
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).
 - Normalised email/phone recomputed on save; duplicate warning surfaces on create/import when an exact normalised match exists in the same entity.

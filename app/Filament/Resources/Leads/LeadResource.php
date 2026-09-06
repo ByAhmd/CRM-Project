@@ -10,6 +10,10 @@ use App\Filament\Resources\Leads\Pages\CreateLead;
 use App\Filament\Resources\Leads\Pages\EditLead;
 use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Filament\Resources\Leads\Pages\ViewLead;
+use App\Filament\Resources\Leads\RelationManagers\LeadActivitiesRelationManager;
+use App\Filament\Resources\Leads\RelationManagers\LeadAttachmentsRelationManager;
+use App\Filament\Resources\Leads\RelationManagers\LeadNotesRelationManager;
+use App\Filament\Resources\Leads\RelationManagers\LeadTasksRelationManager;
 use App\Filament\Resources\Leads\Schemas\LeadForm;
 use App\Filament\Resources\Leads\Schemas\LeadInfolist;
 use App\Filament\Resources\Leads\Tables\LeadsTable;
@@ -87,6 +91,16 @@ final class LeadResource extends Resource
     {
         return parent::getRecordRouteBindingEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            LeadActivitiesRelationManager::class,
+            LeadTasksRelationManager::class,
+            LeadNotesRelationManager::class,
+            LeadAttachmentsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

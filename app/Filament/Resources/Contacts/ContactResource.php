@@ -10,6 +10,10 @@ use App\Filament\Resources\Contacts\Pages\CreateContact;
 use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
+use App\Filament\Resources\Contacts\RelationManagers\ContactActivitiesRelationManager;
+use App\Filament\Resources\Contacts\RelationManagers\ContactAttachmentsRelationManager;
+use App\Filament\Resources\Contacts\RelationManagers\ContactNotesRelationManager;
+use App\Filament\Resources\Contacts\RelationManagers\ContactTasksRelationManager;
 use App\Filament\Resources\Contacts\Schemas\ContactForm;
 use App\Filament\Resources\Contacts\Schemas\ContactInfolist;
 use App\Filament\Resources\Contacts\Tables\ContactsTable;
@@ -87,6 +91,16 @@ final class ContactResource extends Resource
     {
         return parent::getRecordRouteBindingEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            ContactActivitiesRelationManager::class,
+            ContactTasksRelationManager::class,
+            ContactNotesRelationManager::class,
+            ContactAttachmentsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

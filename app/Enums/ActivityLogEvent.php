@@ -82,6 +82,35 @@ enum ActivityLogEvent: string implements HasLabel
     case DealLost = 'deal.lost';
     case DealReopened = 'deal.reopened';
 
+    // Activities (immutable events)
+    case ActivityCreated = 'activity.created';
+    case ActivityDeleted = 'activity.deleted';
+
+    // Tasks
+    case TaskCreated = 'task.created';
+    case TaskUpdated = 'task.updated';
+    case TaskDeleted = 'task.deleted';
+    case TaskRestored = 'task.restored';
+    case TaskAssigned = 'task.assigned';
+    case TaskCompleted = 'task.completed';
+    case TaskCancelled = 'task.cancelled';
+    case TaskReopened = 'task.reopened';
+
+    // Notes
+    case NoteCreated = 'note.created';
+    case NoteUpdated = 'note.updated';
+    case NoteDeleted = 'note.deleted';
+    case NoteRestored = 'note.restored';
+    case NotePinned = 'note.pinned';
+    case NoteUnpinned = 'note.unpinned';
+
+    // Attachments
+    case AttachmentUploaded = 'attachment.uploaded';
+    case AttachmentUpdated = 'attachment.updated';
+    case AttachmentDeleted = 'attachment.deleted';
+    case AttachmentRestored = 'attachment.restored';
+    case AttachmentDownloaded = 'attachment.downloaded';
+
     // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';
     case LookupCreated = 'settings.lookup_created';
