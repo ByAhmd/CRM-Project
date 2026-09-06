@@ -1,6 +1,6 @@
 # CRM — Architecture and Implementation Plan
 
-Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export) complete 2026-09-07; step 10 (dashboard and reports) next.**
+Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export) complete 2026-09-07; step 10 (dashboard and reports) complete 2026-09-07; step 11 (custom fields) next.**
 
 Companion documents:
 
