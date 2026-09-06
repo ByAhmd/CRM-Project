@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Filament\Exports\Reports\ReportRowExporter;
+use App\Filament\Support\ImportExportActions;
 use App\Models\Export;
 use App\Models\Import;
 use Illuminate\Support\Facades\Schedule;
@@ -120,3 +122,25 @@ Schedule::command('model:prune', [
 ])
     ->daily()
     ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Report downloads (module 23, D-1)
+|--------------------------------------------------------------------------
+|
+| A report export is written to the private disk and unlinked as soon as it
+| has been streamed. A client that aborts mid-transfer, or a process the
+| host kills, can still strand the file; nothing else references the
+| directory, so anything older than an hour there is gone.
+|
+*/
+Schedule::call(function (): void {
+    $disk = Storage::disk(ImportExportActions::FILE_DISK);
+    $cutoff = now()->subHour()->getTimestamp();
+
+    foreach ($disk->files(ReportRowExporter::DIRECTORY) as $file) {
+        if ($disk->lastModified($file) < $cutoff) {
+            $disk->delete($file);
+        }
+    }
+})->name('reports:prune-downloads')->hourly()->onOneServer();
