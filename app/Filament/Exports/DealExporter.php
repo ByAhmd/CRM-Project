@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\Exports;
 
+use App\Enums\CustomFieldEntity;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Deal;
 use Carbon\CarbonInterface;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -79,6 +82,10 @@ final class DealExporter extends Exporter
             ExportColumn::make('updated_at')
                 ->label(__('exports.columns.deal.updated_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
+
+            // One column per active definition of the entity, rendered the
+            // way the record page shows it (D-9).
+            ...CustomFieldsSchema::exportColumns(CustomFieldEntity::Deal),
         ];
     }
 
@@ -90,6 +97,20 @@ final class DealExporter extends Exporter
         ImportExportActions::applyLocale($this->options);
 
         return parent::__invoke($record);
+    }
+
+    /**
+     * Every custom column reads the record's values, so the relation is
+     * loaded with the chunk instead of once per cell (D-9).
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    public static function modifyQuery(Builder $query): Builder
+    {
+        return CustomFieldsSchema::eagerLoad($query);
     }
 
     public static function getCompletedNotificationBody(Export $export): string

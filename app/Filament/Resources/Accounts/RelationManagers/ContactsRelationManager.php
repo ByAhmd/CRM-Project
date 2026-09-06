@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Accounts\RelationManagers;
 
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Contacts\Schemas\ContactForm;
+use App\Filament\Support\CustomFieldActions;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Contacts\ContactService;
@@ -67,18 +68,26 @@ final class ContactsRelationManager extends RelationManager
             ])
             ->defaultSort('is_primary', 'desc')
             ->headerActions([
-                CreateAction::make()
-                    ->mutateDataUsing(function (array $data): array {
+                // The create form is the contact form, custom section included,
+                // so its values are held aside and written once the row has an
+                // id (D-9).
+                CustomFieldActions::createAction(
+                    CreateAction::make(),
+                    mutate: function (array $data): array {
                         $data['created_by'] = auth()->id();
                         $data['owner_id'] = $data['owner_id'] ?? auth()->id();
 
                         return $data;
-                    })
-                    ->after(fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record)),
+                    },
+                    after: fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record),
+                ),
             ])
             ->recordActions([
                 ViewAction::make()->url(fn (Contact $record): string => ContactResource::getUrl('view', ['record' => $record])),
-                EditAction::make()->after(fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record)),
+                CustomFieldActions::editAction(
+                    EditAction::make(),
+                    after: fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record),
+                ),
             ])
             ->emptyStateHeading(__('contacts.empty.heading'))
             ->emptyStateDescription(__('contacts.empty.description'));

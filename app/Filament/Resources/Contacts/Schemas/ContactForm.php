@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Contacts\Schemas;
 
+use App\Enums\CustomFieldEntity;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
 use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\TagsSelect;
@@ -119,6 +121,8 @@ final class ContactForm
                         TagsSelect::make(),
                     ])
                     ->columns(1),
+
+                ...CustomFieldActions::formSection(CustomFieldEntity::Contact),
 
                 Section::make(__('contacts.sections.notes'))
                     ->schema([

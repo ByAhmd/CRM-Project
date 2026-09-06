@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Leads\Pages;
 
 use App\Filament\Resources\Leads\LeadResource;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\EmailActions;
 use App\Filament\Support\LeadActions;
 use App\Filament\Support\LeadConversionActions;
@@ -13,6 +14,7 @@ use App\Models\Lead;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Database\Eloquent\Model;
 
 final class ViewLead extends ViewRecord
 {
@@ -28,5 +30,14 @@ final class ViewLead extends ViewRecord
             EditAction::make(),
             DeleteAction::make(),
         ];
+    }
+
+    /**
+     * Every custom field entry of the page reads the record's values, so the
+     * relation is loaded once with the record instead of once per entry (D-9).
+     */
+    protected function resolveRecord(int|string $key): Model
+    {
+        return CustomFieldActions::loadValues(parent::resolveRecord($key));
     }
 }

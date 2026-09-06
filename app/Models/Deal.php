@@ -6,10 +6,12 @@ namespace App\Models;
 
 use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
+use App\Enums\CustomFieldEntity;
 use App\Enums\DealStatus;
 use App\Enums\ForecastCategory;
 use App\Models\Concerns\GuardsWorkflowFields;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
 use App\Observers\DealObserver;
@@ -55,6 +57,7 @@ final class Deal extends Model implements OwnedRecord
 {
     use GuardsWorkflowFields;
     use HasAttachments;
+    use HasCustomFields;
 
     /** @use HasFactory<DealFactory> */
     use HasFactory;
@@ -70,6 +73,12 @@ final class Deal extends Model implements OwnedRecord
     public static function permissionGroup(): string
     {
         return 'deal';
+    }
+
+    /** The custom field definitions this model carries (D-9). */
+    public static function customFieldEntity(): CustomFieldEntity
+    {
+        return CustomFieldEntity::Deal;
     }
 
     /**

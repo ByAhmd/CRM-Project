@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Deals\Schemas;
 
+use App\Enums\CustomFieldEntity;
 use App\Enums\ForecastCategory;
 use App\Enums\StageKind;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\TagsSelect;
 use App\Models\Account;
@@ -253,6 +255,8 @@ final class DealForm
                     ])
                     ->columns(1)
                     ->collapsible(),
+
+                ...CustomFieldActions::formSection(CustomFieldEntity::Deal),
 
                 Section::make(__('deals.sections.notes'))
                     ->schema([

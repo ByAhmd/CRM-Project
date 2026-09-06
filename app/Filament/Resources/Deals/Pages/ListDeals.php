@@ -8,6 +8,7 @@ use App\Enums\DealStatus;
 use App\Filament\Concerns\HasSavedViews;
 use App\Filament\Imports\DealImporter;
 use App\Filament\Resources\Deals\DealResource;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\SavedViewActions;
 use App\Models\Deal;
@@ -27,7 +28,10 @@ final class ListDeals extends ListRecords
         return [
             ...SavedViewActions::for($this),
             ImportExportActions::import(DealImporter::class, Deal::class),
-            CreateAction::make(),
+            // A panel that opens this as a modal instead of linking to the
+            // create page builds it from the entity form, custom section
+            // included, so the state is stripped and written here too (D-9).
+            CustomFieldActions::createAction(CreateAction::make()),
         ];
     }
 

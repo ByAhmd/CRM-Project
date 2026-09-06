@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Accounts\Schemas;
 
+use App\Enums\CustomFieldEntity;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use Filament\Infolists\Components\TextEntry;
@@ -65,6 +67,10 @@ final class AccountInfolist
                     ])
                     ->columns(1)
                     ->collapsible(),
+
+                // The administrator's own fields (D-9); nothing at all when the
+                // entity carries no active definition.
+                ...array_filter([CustomFieldsSchema::infolistSection(CustomFieldEntity::Account)]),
 
                 Section::make(__('timeline.section'))
                     ->schema([

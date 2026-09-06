@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Leads\Tables;
 
+use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Filament\Exports\LeadExporter;
 use App\Filament\Resources\Leads\Schemas\LeadInfolist;
+use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\EmailActions;
 use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\LeadActions;
@@ -36,6 +39,9 @@ final class LeadsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Every listed custom column reads the record's values, so the
+            // relation is loaded once for the page instead of per cell (D-9).
+            ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('leads.fields.name'))
@@ -99,6 +105,8 @@ final class LeadsTable
                     ->dateTime('Y-m-d')
                     ->sortable()
                     ->toggleable(),
+
+                ...CustomFieldsSchema::tableColumns(CustomFieldEntity::Lead),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
@@ -137,12 +145,16 @@ final class LeadsTable
                 TrashedFilter::make()->label(__('leads.filters.trashed')),
 
                 QueryBuilderFilters::forLeads(),
+
+                ...CustomFieldsSchema::tableFilters(CustomFieldEntity::Lead),
             ])
             ->filtersLayout(QueryBuilderFilters::layout())
             ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
+                // The custom section is part of the entity form, so an edit
+                // modal built from it pre-fills and writes the values too (D-9).
+                CustomFieldActions::editAction(EditAction::make()),
                 LeadActions::changeStatus(),
                 LeadConversionActions::convert(),
                 EmailActions::send(),

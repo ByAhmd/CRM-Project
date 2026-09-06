@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Contacts\Tables;
 
+use App\Enums\CustomFieldEntity;
 use App\Filament\Exports\ContactExporter;
+use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\EmailActions;
 use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\MergeActions;
@@ -33,6 +36,9 @@ final class ContactsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Every listed custom column reads the record's values, so the
+            // relation is loaded once for the page instead of per cell (D-9).
+            ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('contacts.fields.name'))
@@ -82,6 +88,8 @@ final class ContactsTable
                     ->dateTime('Y-m-d')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                ...CustomFieldsSchema::tableColumns(CustomFieldEntity::Contact),
             ])
             ->defaultSort('last_name')
             ->filters([
@@ -109,12 +117,16 @@ final class ContactsTable
                 TrashedFilter::make()->label(__('contacts.filters.trashed')),
 
                 QueryBuilderFilters::forContacts(),
+
+                ...CustomFieldsSchema::tableFilters(CustomFieldEntity::Contact),
             ])
             ->filtersLayout(QueryBuilderFilters::layout())
             ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
+                // The custom section is part of the entity form, so an edit
+                // modal built from it pre-fills and writes the values too (D-9).
+                CustomFieldActions::editAction(EditAction::make()),
                 EmailActions::send(),
                 OwnershipActions::assign(Contact::permissionGroup()),
             ])

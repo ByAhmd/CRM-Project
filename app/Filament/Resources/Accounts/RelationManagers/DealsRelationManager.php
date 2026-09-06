@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Accounts\RelationManagers;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Deals\Schemas\DealForm;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
+use App\Filament\Support\CustomFieldActions;
 use App\Models\Deal;
 use App\Models\User;
 use App\Services\Deals\DealAmountCalculator;
@@ -87,8 +88,12 @@ final class DealsRelationManager extends RelationManager
             ])
             ->defaultSort('created_at', 'desc')
             ->headerActions([
-                CreateAction::make()
-                    ->mutateDataUsing(function (array $data): array {
+                // The create form is the deal form, custom section included, so
+                // its values are held aside and written once the row has an id
+                // (D-9).
+                CustomFieldActions::createAction(
+                    CreateAction::make(),
+                    mutate: function (array $data): array {
                         $data['created_by'] = auth()->id();
                         $data['owner_id'] = $data['owner_id'] ?? auth()->id();
                         $data['currency'] = DealResource::currency();
@@ -96,8 +101,9 @@ final class DealsRelationManager extends RelationManager
                         $data['stage_id'] = $data['stage_id'] ?? DealForm::defaultStageId($data['pipeline_id']);
 
                         return $data;
-                    })
-                    ->after(fn (Deal $record) => app(DealAmountCalculator::class)->recalculate($record)),
+                    },
+                    after: fn (Deal $record) => app(DealAmountCalculator::class)->recalculate($record),
+                ),
             ])
             ->recordActions([
                 ViewAction::make()->url(fn (Deal $record): string => DealResource::getUrl('view', ['record' => $record])),

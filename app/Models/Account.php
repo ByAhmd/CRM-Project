@@ -8,7 +8,9 @@ use App\Contracts\OwnedRecord;
 use App\Enums\AccountType;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CompanySize;
+use App\Enums\CustomFieldEntity;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
@@ -38,6 +40,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 final class Account extends Model implements OwnedRecord
 {
     use HasAttachments;
+    use HasCustomFields;
 
     /** @use HasFactory<AccountFactory> */
     use HasFactory;
@@ -54,6 +57,12 @@ final class Account extends Model implements OwnedRecord
     public static function permissionGroup(): string
     {
         return 'account';
+    }
+
+    /** The custom field definitions this model carries (D-9). */
+    public static function customFieldEntity(): CustomFieldEntity
+    {
+        return CustomFieldEntity::Account;
     }
 
     /**

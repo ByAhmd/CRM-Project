@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Imports;
 
+use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Filament\Imports\Concerns\ResolvesImportLookups;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Lead;
 use App\Models\LeadSource;
@@ -187,6 +190,10 @@ final class LeadImporter extends Importer
                 ->rules(['nullable', 'string', 'max:5000'])
                 ->ignoreBlankState()
                 ->example('Met at the Riyadh expo.'),
+
+            // One column per active definition of the entity, mapped by its
+            // own label (D-9).
+            ...CustomFieldActions::importColumns(CustomFieldEntity::Lead),
         ];
     }
 
@@ -232,9 +239,25 @@ final class LeadImporter extends Importer
         }
     }
 
+    /**
+     * Filament reuses one importer instance for every row of a chunk, so the
+     * values a row collects are dropped before the next one starts (D-9).
+     */
+    protected function beforeValidate(): void
+    {
+        CustomFieldsSchema::forgetImported($this);
+    }
+
     protected function afterSave(): void
     {
         $this->syncTags();
+
+        // The row's values, now that the record has an id (D-9).
+        $record = $this->record;
+
+        if ($record !== null) {
+            CustomFieldsSchema::persistImported($record, CustomFieldsSchema::importedValues($this, $record), $this->importingUser());
+        }
     }
 
     public static function getCompletedNotificationBody(Import $import): string
