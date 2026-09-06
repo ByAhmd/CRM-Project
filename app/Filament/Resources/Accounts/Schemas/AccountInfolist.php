@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Accounts\Schemas;
 
 use App\Filament\Support\AddressSchema;
+use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
@@ -60,6 +62,17 @@ final class AccountInfolist
                             TextEntry::make('created_at')->label(__('accounts.fields.created_at'))->dateTime('Y-m-d H:i'),
                             TextEntry::make('updated_at')->label(__('accounts.fields.updated_at'))->dateTime('Y-m-d H:i'),
                         ]),
+                    ])
+                    ->columns(1)
+                    ->collapsible(),
+
+                Section::make(__('timeline.section'))
+                    ->schema([
+                        Livewire::make(RecordTimeline::class, fn (Model $record): array => [
+                            'subjectType' => $record::class,
+                            'subjectId' => (int) $record->getKey(),
+                        ])
+                            ->lazy(),
                     ])
                     ->columns(1)
                     ->collapsible(),

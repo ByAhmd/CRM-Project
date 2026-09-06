@@ -8,6 +8,7 @@ use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Leads\LeadResource;
+use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Deal;
@@ -16,6 +17,7 @@ use App\Models\Lead;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
@@ -184,6 +186,17 @@ final class DealInfolist
                             TextEntry::make('updated_at')->label(__('deals.fields.updated_at'))->dateTime('Y-m-d H:i'),
                             TextEntry::make('last_activity_at')->label(__('deals.fields.last_activity_at'))->dateTime('Y-m-d H:i')->placeholder(__('common.placeholders.empty')),
                         ]),
+                    ])
+                    ->columns(1)
+                    ->collapsible(),
+
+                Section::make(__('timeline.section'))
+                    ->schema([
+                        Livewire::make(RecordTimeline::class, fn (Model $record): array => [
+                            'subjectType' => $record::class,
+                            'subjectId' => (int) $record->getKey(),
+                        ])
+                            ->lazy(),
                     ])
                     ->columns(1)
                     ->collapsible(),

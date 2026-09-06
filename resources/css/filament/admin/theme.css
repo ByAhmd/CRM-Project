@@ -138,3 +138,127 @@ html.dark {
 .crm-tabular {
     font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+ | Calendar (D-12)
+ |
+ | FullCalendar injects its own base stylesheet from JS and paints from its
+ | --fc-* variables, so the calendar page only maps those onto the tokens
+ | above. The --crm-color-* tokens are what CalendarFeed emits for events
+ | (var(--crm-color-<filament colour name>)), resolved from the panel's own
+ | colour ramps so an event matches its badge in both themes.
+ * ------------------------------------------------------------------------- */
+
+.fi-crm-calendar {
+    --crm-color-primary: var(--primary-600);
+    --crm-color-gray: var(--gray-500);
+    --crm-color-info: var(--info-600);
+    --crm-color-success: var(--success-600);
+    --crm-color-warning: var(--warning-600);
+    --crm-color-danger: var(--danger-600);
+    --crm-color-on-event: #ffffff;
+
+    --fc-border-color: var(--crm-border);
+    --fc-page-bg-color: var(--crm-card);
+    --fc-neutral-bg-color: var(--crm-bg);
+    --fc-neutral-text-color: var(--crm-muted);
+    --fc-today-bg-color: color-mix(in oklab, var(--primary-500) 10%, transparent);
+    --fc-highlight-color: color-mix(in oklab, var(--primary-500) 18%, transparent);
+    --fc-now-indicator-color: var(--danger-500);
+    --fc-event-bg-color: var(--primary-600);
+    --fc-event-border-color: var(--primary-600);
+    --fc-event-text-color: var(--crm-color-on-event);
+    --fc-event-selected-overlay-color: color-mix(in oklab, var(--crm-text) 25%, transparent);
+    --fc-more-link-bg-color: var(--crm-bg);
+    --fc-more-link-text-color: var(--crm-text-2);
+    --fc-list-event-hover-bg-color: var(--crm-bg);
+    --fc-non-business-color: color-mix(in oklab, var(--crm-border) 35%, transparent);
+    --fc-button-bg-color: var(--primary-700);
+    --fc-button-border-color: var(--primary-700);
+    --fc-button-hover-bg-color: var(--primary-800);
+    --fc-button-hover-border-color: var(--primary-800);
+    --fc-button-active-bg-color: var(--primary-900);
+    --fc-button-active-border-color: var(--primary-900);
+    --fc-button-text-color: var(--crm-color-on-event);
+    --fc-small-font-size: 0.8rem;
+
+    color: var(--crm-text);
+}
+
+.dark .fi-crm-calendar {
+    --crm-color-primary: var(--primary-500);
+    --crm-color-gray: var(--gray-600);
+    --crm-color-info: var(--info-500);
+    --crm-color-success: var(--success-500);
+    --crm-color-warning: var(--warning-500);
+    --crm-color-danger: var(--danger-500);
+
+    --fc-today-bg-color: color-mix(in oklab, var(--primary-400) 14%, transparent);
+    --fc-highlight-color: color-mix(in oklab, var(--primary-400) 22%, transparent);
+    --fc-event-bg-color: var(--primary-500);
+    --fc-event-border-color: var(--primary-500);
+    --fc-button-bg-color: var(--primary-600);
+    --fc-button-border-color: var(--primary-600);
+    --fc-button-hover-bg-color: var(--primary-500);
+    --fc-button-hover-border-color: var(--primary-500);
+    --fc-button-active-bg-color: var(--primary-400);
+    --fc-button-active-border-color: var(--primary-400);
+}
+
+.fi-crm-calendar .fc .fc-toolbar-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--crm-text);
+}
+
+.fi-crm-calendar .fc .fc-button {
+    border-radius: var(--radius-crm-sm);
+    font-weight: 500;
+    text-transform: none;
+    box-shadow: none;
+}
+
+.fi-crm-calendar .fc .fc-button:focus-visible {
+    outline: 2px solid var(--primary-400);
+    outline-offset: 2px;
+}
+
+.fi-crm-calendar .fc .fc-col-header-cell-cushion,
+.fi-crm-calendar .fc .fc-daygrid-day-number,
+.fi-crm-calendar .fc .fc-list-day-text,
+.fi-crm-calendar .fc .fc-list-day-side-text,
+.fi-crm-calendar .fc .fc-timegrid-slot-label-cushion,
+.fi-crm-calendar .fc .fc-timegrid-axis-cushion {
+    color: var(--crm-text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.fi-crm-calendar .fc .fc-list-day-cushion {
+    background-color: var(--crm-bg);
+}
+
+.fi-crm-calendar .fc .fc-event {
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.fi-crm-calendar .fc .fc-daygrid-event-dot {
+    border-color: var(--fc-event-border-color);
+}
+
+.fi-crm-calendar .fc .fc-h-event .fc-event-main,
+.fi-crm-calendar .fc .fc-v-event .fc-event-main {
+    color: var(--fc-event-text-color);
+}
+
+.fi-crm-calendar .fc .fc-daygrid-dot-event .fc-event-title,
+.fi-crm-calendar .fc .fc-list-event-title,
+.fi-crm-calendar .fc .fc-list-event-time {
+    color: var(--crm-text);
+}
+
+/* A completed or cancelled task stays on the calendar but recedes. */
+.crm-calendar-event-muted {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
