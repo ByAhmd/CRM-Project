@@ -31,6 +31,7 @@ enum ActivityLogEvent: string implements HasLabel
     case UserRestored = 'user.restored';
     case UserInvited = 'user.invited';
     case UserRolesChanged = 'user.roles_changed';
+    case UserNotificationPreferencesUpdated = 'user.notification_preferences_updated';
 
     // Roles and permissions
     case RoleCreated = 'role.created';
@@ -110,6 +111,9 @@ enum ActivityLogEvent: string implements HasLabel
     case AttachmentDeleted = 'attachment.deleted';
     case AttachmentRestored = 'attachment.restored';
     case AttachmentDownloaded = 'attachment.downloaded';
+
+    // Email (D-10)
+    case EmailSent = 'email.sent';
 
     // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';

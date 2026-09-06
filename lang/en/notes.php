@@ -18,10 +18,12 @@ return [
         'created_at' => 'Added',
         'edited_at' => 'Edited',
         'excerpt' => 'Note',
+        'mentions' => 'Mention',
     ],
 
     'helpers' => [
         'body' => 'Plain text; line breaks are kept. Up to 5,000 characters.',
+        'mentions' => 'The people you pick are notified about this note.',
     ],
 
     'actions' => [

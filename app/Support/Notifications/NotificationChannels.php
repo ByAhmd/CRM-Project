@@ -4,31 +4,27 @@ declare(strict_types=1);
 
 namespace App\Support\Notifications;
 
+use App\Enums\NotificationEvent;
 use App\Models\User;
+use App\Services\Notifications\NotificationPreferenceService;
 
 /**
- * Which channels a notification travels on (decision D-10).
+ * Which channels a notification travels on (plan section 3.6, decision D-10).
  *
- * The in-app bell (database) is always on. Mail is added only when the
+ * The answer is the user's preference for the event: the in-app bell
+ * (database) unless the user switched it off, and mail only when the
  * application has a real transport — never under the log or array mailers —
- * and, once per-user preferences exist (notifications step of the plan),
- * only when the user opted in for the event. Until then every user receives
- * mail for every event when a mailer is configured.
+ * AND the user opted in for the event (mail is off by default). Every
+ * notification's via() goes through here, so no class decides on its own.
  */
 final class NotificationChannels
 {
     /**
      * @return list<string>
      */
-    public static function for(User $user, string $event): array
+    public static function for(User $user, NotificationEvent $event): array
     {
-        $channels = ['database'];
-
-        if (self::mailIsConfigured()) {
-            $channels[] = 'mail';
-        }
-
-        return $channels;
+        return app(NotificationPreferenceService::class)->channelsFor($user, $event);
     }
 
     public static function mailIsConfigured(): bool

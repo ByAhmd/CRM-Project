@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Notes;
 
+use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
 use App\Models\Account;
 use App\Models\Contact;
@@ -11,6 +12,8 @@ use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\Note;
 use App\Models\User;
+use App\Notifications\NoteMentionNotification;
+use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Audit\AuditLogger;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -30,20 +33,32 @@ use Spatie\Activitylog\CauserResolver;
  * actor (not whoever happens to be authenticated); the pin toggles are
  * audited on top with the note's excerpt as the subject label, so the audit
  * screen names the note rather than showing a bare boolean diff.
+ *
+ * Mentions are explicit (plan section 3.6): create() and update() accept the
+ * ids of the users the author named. Only users the actor could assign the
+ * subject to (RecordVisibilityResolver, D-4) who may themselves view the
+ * subject are kept — anyone else is dropped silently — and each of them is
+ * told once the transaction has committed. Mentions are not persisted: there
+ * is no mentions table, the NoteMentionNotification is the record.
  */
 final class NoteService
 {
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly CauserResolver $causers,
+        private readonly RecordVisibilityResolver $visibility,
     ) {}
 
-    public function create(Model $subject, User $author, string $body, bool $pinned = false): Note
+    /**
+     * @param  list<int>  $mentionUserIds
+     */
+    public function create(Model $subject, User $author, string $body, bool $pinned = false, array $mentionUserIds = []): Note
     {
         $body = $this->cleanBody($body);
         $foreignKeys = $this->foreignKeysFor($subject);
+        $mentioned = $this->mentionableUsers($subject, $author, $mentionUserIds);
 
-        return $this->asCauser($author, fn (): Note => DB::transaction(function () use ($author, $body, $pinned, $foreignKeys): Note {
+        return $this->asCauser($author, fn (): Note => DB::transaction(function () use ($author, $body, $pinned, $foreignKeys, $mentioned): Note {
             $note = new Note([
                 'body' => $body,
                 'author_id' => $author->getKey(),
@@ -52,23 +67,30 @@ final class NoteService
             ]);
             $note->save();
 
+            $this->notifyMentioned($note, $author, $mentioned);
+
             return $note;
         }));
     }
 
-    public function update(Note $note, User $actor, string $body): Note
+    /**
+     * @param  list<int>  $mentionUserIds
+     */
+    public function update(Note $note, User $actor, string $body, array $mentionUserIds = []): Note
     {
         $this->assertEditable($note);
         $body = $this->cleanBody($body);
+        $subject = $note->subjectRecord();
+        $mentioned = $subject === null ? [] : $this->mentionableUsers($subject, $actor, $mentionUserIds);
 
-        return $this->asCauser($actor, fn (): Note => DB::transaction(function () use ($note, $body): Note {
-            if ($body === $note->body) {
-                return $note;
+        return $this->asCauser($actor, fn (): Note => DB::transaction(function () use ($note, $actor, $body, $mentioned): Note {
+            if ($body !== $note->body) {
+                $note->body = $body;
+                $note->edited_at = now();
+                $note->save();
             }
 
-            $note->body = $body;
-            $note->edited_at = now();
-            $note->save();
+            $this->notifyMentioned($note, $actor, $mentioned);
 
             return $note;
         }));
@@ -123,6 +145,50 @@ final class NoteService
 
             return $note;
         }));
+    }
+
+    /**
+     * The users among the given ids the actor may mention on the subject:
+     * within the actor's assignment reach for the subject's permission group,
+     * able to view the subject themselves, and never the actor. Ids outside
+     * that set are dropped without complaint.
+     *
+     * @param  list<int>  $userIds
+     * @return list<User>
+     */
+    private function mentionableUsers(Model $subject, User $actor, array $userIds): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $id): int => (int) $id, $userIds),
+            static fn (int $id): bool => $id > 0 && $id !== (int) $actor->getKey(),
+        )));
+
+        if ($ids === [] || ! $subject instanceof OwnedRecord) {
+            return [];
+        }
+
+        return $this->visibility->assignableUsers($actor, $subject::permissionGroup())
+            ->whereKey($ids)
+            ->get()
+            ->filter(static fn (User $user): bool => $user->can('view', $subject))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<User>  $mentioned
+     */
+    private function notifyMentioned(Note $note, User $actor, array $mentioned): void
+    {
+        if ($mentioned === []) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($note, $actor, $mentioned): void {
+            foreach ($mentioned as $user) {
+                $user->notify((new NoteMentionNotification($note, $actor))->locale($user->preferredLocale()));
+            }
+        });
     }
 
     /**

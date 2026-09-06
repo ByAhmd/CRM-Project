@@ -162,6 +162,17 @@ return [
         'email' => 'بريد إلكتروني',
     ],
 
+    'notification_event' => [
+        'record_assigned' => 'إسناد سجل إليّ',
+        'task_reminder' => 'تذكير بمهمة',
+        'task_overdue' => 'تأخر مهمة',
+        'deal_stage_changed' => 'تغيير مرحلة صفقة أملكها',
+        'deal_closed' => 'كسب أو خسارة صفقة أملكها',
+        'lead_converted' => 'تحويل عميل محتمل أملكه',
+        'lead_stale' => 'ركود عميل محتمل أملكه',
+        'note_mention' => 'الإشارة إليّ في ملاحظة',
+    ],
+
     'custom_field_entity' => [
         'lead' => 'العملاء المحتملون',
         'contact' => 'جهات الاتصال',

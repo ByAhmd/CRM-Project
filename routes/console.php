@@ -50,6 +50,21 @@ Schedule::command('tasks:notify-overdue')
 
 /*
 |--------------------------------------------------------------------------
+| Stale leads (module 19, plan section 3.6)
+|--------------------------------------------------------------------------
+|
+| Once a day, at the start of the working morning in the app timezone, the
+| owner of every open lead that has had no activity for crm.leads.stale_days
+| is told once. Idempotent (stale_notified_at is stamped by LeadStaleService
+| and cleared again by the next activity), so a doubled run never repeats.
+|
+*/
+Schedule::command('leads:notify-stale')
+    ->dailyAt('07:00')
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
 | Abandoned uploads
 |--------------------------------------------------------------------------
 |

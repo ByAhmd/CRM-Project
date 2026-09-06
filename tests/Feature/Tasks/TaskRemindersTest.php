@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Tasks;
 
 use App\Enums\CrmRole;
+use App\Enums\NotificationEvent;
 use App\Filament\Resources\Tasks\TaskResource;
+use App\Models\NotificationPreference;
 use App\Models\Task;
 use App\Models\User;
 use App\Notifications\TaskOverdueNotification;
@@ -143,7 +145,7 @@ final class TaskRemindersTest extends TestCase
     }
 
     #[Test]
-    public function mail_travels_only_when_a_real_mailer_is_configured(): void
+    public function mail_travels_only_when_a_real_mailer_is_configured_and_the_assignee_opted_in(): void
     {
         $rep = $this->salesRep();
         $task = Task::factory()->create(['assignee_id' => $rep->getKey()]);
@@ -153,10 +155,23 @@ final class TaskRemindersTest extends TestCase
         $this->assertSame(['database'], (new TaskReminderNotification($task))->via($rep));
         $this->assertSame(['database'], (new TaskOverdueNotification($task))->via($rep));
 
+        // A real transport alone is not enough: mail is opt-in per event (D-10).
         config()->set('mail.default', 'smtp');
+
+        $this->assertSame(['database'], (new TaskReminderNotification($task))->via($rep));
+        $this->assertSame(['database'], (new TaskOverdueNotification($task))->via($rep));
+
+        NotificationPreference::factory()->ofEvent(NotificationEvent::TaskReminder)->withMail()->create(['user_id' => $rep->getKey()]);
+        NotificationPreference::factory()->ofEvent(NotificationEvent::TaskOverdue)->withMail()->create(['user_id' => $rep->getKey()]);
 
         $this->assertSame(['database', 'mail'], (new TaskReminderNotification($task))->via($rep));
         $this->assertSame(['database', 'mail'], (new TaskOverdueNotification($task))->via($rep));
+
+        // The opt-in is worthless without a transport.
+        config()->set('mail.default', 'log');
+
+        $this->assertSame(['database'], (new TaskReminderNotification($task))->via($rep));
+        $this->assertSame(['database'], (new TaskOverdueNotification($task))->via($rep));
     }
 
     #[Test]

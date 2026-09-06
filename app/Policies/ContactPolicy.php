@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Enums\Permission;
 use App\Models\Contact;
 use App\Models\User;
 use App\Policies\Concerns\ChecksPermissions;
@@ -28,6 +29,12 @@ final class ContactPolicy
     public function merge(User $user, ?Contact $contact = null): bool
     {
         return $this->verb($user, 'merge', $contact);
+    }
+
+    /** Sending a templated email (D-10): the cross-cutting `email.send` permission plus reach over the record. */
+    public function sendEmail(User $user, ?Contact $contact = null): bool
+    {
+        return $user->can(Permission::EmailSend->value) && $this->reaches($user, $contact);
     }
 
     public function export(User $user): bool

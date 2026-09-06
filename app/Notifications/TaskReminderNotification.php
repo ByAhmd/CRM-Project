@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\NotificationEvent;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
 use App\Models\User;
@@ -30,7 +31,7 @@ final class TaskReminderNotification extends Notification
      */
     public function via(User $notifiable): array
     {
-        return NotificationChannels::for($notifiable, 'task_reminder');
+        return NotificationChannels::for($notifiable, NotificationEvent::TaskReminder);
     }
 
     /**

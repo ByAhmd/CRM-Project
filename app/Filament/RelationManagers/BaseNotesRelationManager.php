@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\RelationManagers;
 
+use App\Contracts\OwnedRecord;
 use App\Models\Note;
 use App\Models\User;
+use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Notes\NoteService;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -13,6 +15,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\IconEntry;
@@ -40,6 +43,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  * Reading follows the subject (`view` on the owner record gates the manager);
  * every write authorises through NotePolicy explicitly, so the actions work
  * on the view page as well as the edit page, and delegates to NoteService.
+ * The add and edit forms carry a mentions picker limited to the users the
+ * actor may assign the subject to; the service re-checks and notifies them.
  */
 abstract class BaseNotesRelationManager extends RelationManager
 {
@@ -69,6 +74,8 @@ abstract class BaseNotesRelationManager extends RelationManager
             ->columns(1)
             ->components([
                 self::bodyField(),
+
+                $this->mentionsField(),
 
                 Toggle::make('is_pinned')
                     ->label(__('notes.fields.is_pinned'))
@@ -158,6 +165,7 @@ abstract class BaseNotesRelationManager extends RelationManager
                         $this->actor(),
                         (string) ($data['body'] ?? ''),
                         (bool) ($data['is_pinned'] ?? false),
+                        self::mentionIds($data),
                     )),
             ])
             ->recordActions([
@@ -169,7 +177,7 @@ abstract class BaseNotesRelationManager extends RelationManager
                 EditAction::make()
                     ->label(__('notes.actions.edit'))
                     ->modalHeading(__('notes.actions.edit'))
-                    ->schema([self::bodyField()])
+                    ->schema([self::bodyField(), $this->mentionsField()])
                     ->successNotificationTitle(__('notes.notifications.updated'))
                     ->hidden(fn (Note $record): bool => $record->trashed())
                     ->authorize(fn (Note $record): bool => $this->actor()->can('update', $record))
@@ -177,6 +185,7 @@ abstract class BaseNotesRelationManager extends RelationManager
                         $record,
                         $this->actor(),
                         (string) ($data['body'] ?? ''),
+                        self::mentionIds($data),
                     )),
 
                 Action::make('togglePin')
@@ -245,6 +254,54 @@ abstract class BaseNotesRelationManager extends RelationManager
             ->required()
             ->maxLength(Note::MAX_BODY_LENGTH)
             ->rows(5);
+    }
+
+    /**
+     * Users the actor may mention: their assignment reach for the subject's
+     * permission group (D-4), without themselves. Not a column on the note —
+     * the service turns the selection into notifications.
+     */
+    private function mentionsField(): Select
+    {
+        return Select::make('mentions')
+            ->label(__('notes.fields.mentions'))
+            ->helperText(__('notes.helpers.mentions'))
+            ->multiple()
+            ->searchable()
+            ->preload()
+            ->native(false)
+            ->options(function (): array {
+                $subject = $this->getOwnerRecord();
+
+                if (! $subject instanceof OwnedRecord) {
+                    return [];
+                }
+
+                /** @var array<int, string> $options */
+                $options = app(RecordVisibilityResolver::class)
+                    ->assignableUsers($this->actor(), $subject::permissionGroup())
+                    ->whereKeyNot($this->actor()->getKey())
+                    ->pluck('name', 'id')
+                    ->all();
+
+                return $options;
+            })
+            ->dehydrated();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<int>
+     */
+    private static function mentionIds(array $data): array
+    {
+        $ids = $data['mentions'] ?? [];
+
+        if (! is_array($ids)) {
+            return [];
+        }
+
+        return array_values(array_map(static fn (mixed $id): int => (int) $id, array_filter($ids, static fn (mixed $id): bool => is_int($id) || (is_string($id) && ctype_digit($id)))));
     }
 
     private function actor(): User

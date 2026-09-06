@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Contacts\Tables;
 
+use App\Filament\Support\EmailActions;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\TagsSelect;
@@ -107,6 +108,7 @@ final class ContactsTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                EmailActions::send(),
                 OwnershipActions::assign(Contact::permissionGroup()),
             ])
             ->toolbarActions([

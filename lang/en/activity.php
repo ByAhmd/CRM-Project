@@ -56,6 +56,7 @@ return [
         'task' => 'Tasks',
         'note' => 'Notes',
         'attachment' => 'Attachments',
+        'email' => 'Email',
     ],
 
     'events' => [
@@ -69,6 +70,7 @@ return [
         'user.restored' => 'User restored',
         'user.invited' => 'Invitation sent',
         'user.roles_changed' => 'User roles changed',
+        'user.notification_preferences_updated' => 'Notification preferences updated',
         'role.created' => 'Role created',
         'role.updated' => 'Role updated',
         'role.deleted' => 'Role deleted',
@@ -128,6 +130,7 @@ return [
         'attachment.deleted' => 'Attachment deleted',
         'attachment.restored' => 'Attachment restored',
         'attachment.downloaded' => 'Attachment downloaded',
+        'email.sent' => 'Email sent',
         'settings.updated' => 'Settings updated',
         'settings.lookup_created' => 'Settings item added',
         'settings.lookup_updated' => 'Settings item updated',
@@ -161,6 +164,8 @@ return [
         'Task' => 'Task',
         'Note' => 'Note',
         'Attachment' => 'Attachment',
+        'EmailTemplate' => 'Email template',
+        'NotificationPreference' => 'Notification preference',
     ],
 
     'subject' => [
@@ -275,6 +280,19 @@ return [
         'downloaded_by' => 'Downloaded by',
         'task_id' => 'Task',
         'task_title' => 'Task',
+        'subject_ar' => 'Subject (Arabic)',
+        'subject_en' => 'Subject (English)',
+        'body_ar' => 'Body (Arabic)',
+        'body_en' => 'Body (English)',
+        'entity' => 'Entity',
+        'to' => 'To',
+        'template' => 'Template',
+        'template_id' => 'Template',
+        'recipient' => 'Recipient',
+        'event' => 'Event',
+        'database' => 'In-app',
+        'mail' => 'Email',
+        'preferences' => 'Preferences',
     ],
 
     'values' => [
