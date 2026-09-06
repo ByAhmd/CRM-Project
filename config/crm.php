@@ -25,6 +25,11 @@ return [
     // 0 = Sunday … 6 = Saturday. Saudi working week starts on Sunday.
     'week_starts_on' => 0,
 
+    'leads' => [
+        // Days without activity after which an open lead is reported stale to its owner.
+        'stale_days' => (int) env('CRM_LEAD_STALE_DAYS', 14),
+    ],
+
     'audit' => [
         // D-13: how long audit rows are kept before the weekly prune.
         'retention_days' => (int) env('CRM_AUDIT_RETENTION_DAYS', 730),

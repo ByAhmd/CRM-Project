@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Leads\Pages;
 
 use App\Filament\Resources\Leads\LeadResource;
+use App\Filament\Support\EmailActions;
 use App\Filament\Support\LeadActions;
 use App\Filament\Support\LeadConversionActions;
 use App\Filament\Support\OwnershipActions;
@@ -22,6 +23,7 @@ final class ViewLead extends ViewRecord
         return [
             LeadConversionActions::convert(),
             LeadActions::changeStatus(),
+            EmailActions::send(),
             OwnershipActions::assign(Lead::permissionGroup()),
             EditAction::make(),
             DeleteAction::make(),

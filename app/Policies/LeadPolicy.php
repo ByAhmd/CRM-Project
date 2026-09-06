@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Enums\Permission;
 use App\Models\Lead;
 use App\Models\User;
 use App\Policies\Concerns\ChecksPermissions;
@@ -52,6 +53,12 @@ final class LeadPolicy
     public function assign(User $user, ?Lead $lead = null): bool
     {
         return $this->verb($user, 'assign', $lead);
+    }
+
+    /** Sending a templated email (D-10): the cross-cutting `email.send` permission plus reach over the record. */
+    public function sendEmail(User $user, ?Lead $lead = null): bool
+    {
+        return $user->can(Permission::EmailSend->value) && $this->reaches($user, $lead);
     }
 
     public function export(User $user): bool

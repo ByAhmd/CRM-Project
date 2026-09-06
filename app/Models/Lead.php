@@ -34,6 +34,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property ?Carbon $qualified_at
  * @property ?Carbon $converted_at
  * @property ?Carbon $last_activity_at
+ * @property ?Carbon $stale_notified_at
  * @property-read string $full_name
  * @property-read int $effective_score
  */
@@ -87,6 +88,7 @@ final class Lead extends Model implements OwnedRecord
             'qualified_at' => 'datetime',
             'converted_at' => 'datetime',
             'last_activity_at' => 'datetime',
+            'stale_notified_at' => 'datetime',
         ];
     }
 

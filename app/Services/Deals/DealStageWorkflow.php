@@ -14,8 +14,11 @@ use App\Models\DealCloseReason;
 use App\Models\DealStageLog;
 use App\Models\PipelineStage;
 use App\Models\User;
+use App\Notifications\DealClosedNotification;
+use App\Notifications\DealStageChangedNotification;
 use App\Services\Accounts\AccountLifecycleService;
 use App\Services\Audit\AuditLogger;
+use App\Services\Notifications\NotificationRecipients;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -30,13 +33,17 @@ use Illuminate\Support\Facades\DB;
  * - winning promotes a prospect account to customer (D-6);
  * - every change writes a deal_stage_logs row (with the seconds spent in the
  *   previous stage) and an audit event, inside one transaction with the row
- *   locked.
+ *   locked;
+ * - once the transaction has committed, the owner hears about a move made by
+ *   someone else and the owner's team manager about a win or a loss (plan
+ *   section 3.6); the actor is never told about their own action.
  */
 final class DealStageWorkflow
 {
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly AccountLifecycleService $accounts,
+        private readonly NotificationRecipients $recipients,
     ) {}
 
     public function transition(
@@ -146,6 +153,14 @@ final class DealStageWorkflow
 
             $this->syncBack($deal, $current);
 
+            $fromLabel = $from?->getAttribute('display_name');
+
+            if ($kind === StageKind::Open) {
+                $this->notifyStageChanged($current, is_string($fromLabel) ? $fromLabel : '', $to->display_name, $actor);
+            } else {
+                $this->notifyClosed($current, DealStatus::fromStageKind($kind), (string) $closeReasonLabel, $actor);
+            }
+
             return $deal;
         });
     }
@@ -191,7 +206,47 @@ final class DealStageWorkflow
 
             $this->syncBack($deal, $current);
 
+            $fromLabel = $from?->getAttribute('display_name');
+
+            $this->notifyStageChanged($current, is_string($fromLabel) ? $fromLabel : '', $to->display_name, $actor);
+
             return $deal;
+        });
+    }
+
+    /**
+     * Tells the owner, once the transaction has committed, that someone else
+     * moved the deal. Under a sync queue the send happens right after commit.
+     */
+    private function notifyStageChanged(Deal $deal, string $fromStage, string $toStage, User $actor): void
+    {
+        $owner = $this->recipients->ownerOf($deal, $actor);
+
+        if ($owner === null) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($owner, $deal, $fromStage, $toStage, $actor): void {
+            $owner->notify((new DealStageChangedNotification($deal, $fromStage, $toStage, $actor))->locale($owner->preferredLocale()));
+        });
+    }
+
+    /**
+     * Tells the owner and the owner's team manager, once the transaction has
+     * committed, that the deal was won or lost; the actor is never told.
+     */
+    private function notifyClosed(Deal $deal, DealStatus $outcome, string $reason, User $actor): void
+    {
+        $recipients = $this->recipients->ownerAndManagerOf($deal, $actor);
+
+        if ($recipients === []) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($recipients, $deal, $outcome, $reason, $actor): void {
+            foreach ($recipients as $recipient) {
+                $recipient->notify((new DealClosedNotification($deal, $outcome, $reason, $actor))->locale($recipient->preferredLocale()));
+            }
         });
     }
 

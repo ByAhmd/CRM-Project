@@ -161,6 +161,8 @@ final class ActivityRecorder
     /**
      * last_activity_at is not a workflow-guarded column: it is a derived
      * timestamp, so it is written quietly without an audit row of its own.
+     * Moving a lead's stamp forward also clears stale_notified_at, so the
+     * stale-lead pass may warn the owner again if the lead goes quiet later.
      */
     private function touchLastActivity(Lead|Deal|null $record, Carbon $occurredAt): void
     {
@@ -174,6 +176,12 @@ final class ActivityRecorder
             return;
         }
 
-        $record->forceFill(['last_activity_at' => $occurredAt])->saveQuietly();
+        $attributes = ['last_activity_at' => $occurredAt];
+
+        if ($record instanceof Lead) {
+            $attributes['stale_notified_at'] = null;
+        }
+
+        $record->forceFill($attributes)->saveQuietly();
     }
 }

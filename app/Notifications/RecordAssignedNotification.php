@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Contracts\OwnedRecord;
+use App\Enums\NotificationEvent;
 use App\Models\User;
 use App\Support\Notifications\NotificationChannels;
 use App\Support\RecordLabel;
+use App\Support\RecordUrl;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Database\Eloquent\Model;
@@ -30,7 +32,7 @@ final class RecordAssignedNotification extends Notification
      */
     public function via(User $notifiable): array
     {
-        return NotificationChannels::for($notifiable, 'assignment');
+        return NotificationChannels::for($notifiable, NotificationEvent::RecordAssigned);
     }
 
     /**
@@ -86,13 +88,6 @@ final class RecordAssignedNotification extends Notification
 
     private function url(): string
     {
-        $resource = '\\App\\Filament\\Resources\\'.ucfirst($this->record::permissionGroup()).'s\\'.ucfirst($this->record::permissionGroup()).'Resource';
-
-        if (class_exists($resource) && method_exists($resource, 'getUrl')) {
-            /** @var class-string<\Filament\Resources\Resource> $resource */
-            return $resource::getUrl('view', ['record' => $this->record]);
-        }
-
-        return url('/admin');
+        return RecordUrl::view($this->record);
     }
 }

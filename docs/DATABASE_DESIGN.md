@@ -53,7 +53,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `competitors` | `name` VARCHAR(150) U, `website` N, `notes` TEXT N, `is_active`, timestamps, SD. |
 | `tags` | `name_ar`, `name_en`, `color`, `is_active`, timestamps. U names. |
 | `lead_scoring_rules` (D-7) | `kind` enum(`source`,`status`,`field_filled`,`activity_recency`) CHECK (I), `reference_id` BIGINT N (source/status id), `field` VARCHAR(50) N (for `field_filled`), `within_days` SMALLINT N (for `activity_recency`), `points` SMALLINT, `is_active`, `sort`, timestamps. U (`kind`,`reference_id`,`field`,`within_days`). |
-| `email_templates` (D-10) | `name_ar`, `name_en`, `subject_ar`, `subject_en`, `body_ar` TEXT, `body_en` TEXT (merge tags `{{contact.first_name}}` …), `entity` VARCHAR(50) N (lead/contact/account/deal), `is_active`, `sort`, timestamps, SD. U names. |
+| `email_templates` (D-10) | `name_ar`, `name_en`, `subject_ar`, `subject_en`, `body_ar` TEXT, `body_en` TEXT (merge tags `{{contact.first_name}}` …), `entity` VARCHAR(32) N CHECK (lead/contact/account/deal; the UI offers lead and contact) (I), `is_active`, `sort`, timestamps, SD. U names; I (`is_active`,`sort`). |
 | `taggables` | `tag_id` FK→tags CASCADE, `taggable_type` VARCHAR(100), `taggable_id` BIGINT. PK (`tag_id`,`taggable_type`,`taggable_id`); I (`taggable_type`,`taggable_id`). Keyless. |
 | `products` (D-8) | `code` VARCHAR(50) U N (normalised to trimmed uppercase on save; blank → NULL), `name_ar`, `name_en`, `unit_price` DECIMAL(14,2), `is_active`, timestamps, SD. |
 | `custom_fields` (D-9) | `entity` VARCHAR(50) (CHECK: lead/contact/account/deal) (I), `key` VARCHAR(50), `label_ar`, `label_en`, `type` enum(`text`,`textarea`,`number`,`decimal`,`date`,`datetime`,`boolean`,`select`,`multiselect`,`url`,`email`) CHECK, `options` JSON N (select options, bilingual), `is_required` bool, `is_filterable` bool, `is_listed` bool, `is_active`, `sort`, `validation` JSON N, timestamps. U (`entity`,`key`). |
@@ -123,6 +123,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `converted_contact_id` | FK→contacts N SET NULL | |
 | `converted_deal_id` | FK→deals N SET NULL | added by the deals migration (step 5) |
 | `last_activity_at` | DATETIME N | I; maintained by `ActivityRecorder` for stale detection |
+| `stale_notified_at` | DATETIME N | I; stamped by `LeadStaleService` once the owner was told the lead is stale, cleared by `ActivityRecorder` when `last_activity_at` moves forward |
 | `description` | TEXT N | |
 | `created_by` | FK→users N SET NULL | |
 | timestamps, SD | | |

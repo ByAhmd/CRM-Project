@@ -56,6 +56,7 @@ return [
         'task' => 'المهام',
         'note' => 'الملاحظات',
         'attachment' => 'المرفقات',
+        'email' => 'البريد الإلكتروني',
     ],
 
     'events' => [
@@ -69,6 +70,7 @@ return [
         'user.restored' => 'استعادة مستخدم',
         'user.invited' => 'إرسال دعوة',
         'user.roles_changed' => 'تغيير أدوار المستخدم',
+        'user.notification_preferences_updated' => 'تحديث تفضيلات الإشعارات',
         'role.created' => 'إنشاء دور',
         'role.updated' => 'تعديل دور',
         'role.deleted' => 'حذف دور',
@@ -128,6 +130,7 @@ return [
         'attachment.deleted' => 'حذف مرفق',
         'attachment.restored' => 'استعادة مرفق',
         'attachment.downloaded' => 'تنزيل مرفق',
+        'email.sent' => 'إرسال بريد إلكتروني',
         'settings.updated' => 'تعديل الإعدادات',
         'settings.lookup_created' => 'إضافة عنصر إعدادات',
         'settings.lookup_updated' => 'تعديل عنصر إعدادات',
@@ -161,6 +164,8 @@ return [
         'Task' => 'مهمة',
         'Note' => 'ملاحظة',
         'Attachment' => 'مرفق',
+        'EmailTemplate' => 'قالب بريد',
+        'NotificationPreference' => 'تفضيل إشعارات',
     ],
 
     'subject' => [
@@ -275,6 +280,19 @@ return [
         'downloaded_by' => 'نزّله',
         'task_id' => 'المهمة',
         'task_title' => 'المهمة',
+        'subject_ar' => 'الموضوع (عربي)',
+        'subject_en' => 'الموضوع (إنجليزي)',
+        'body_ar' => 'النص (عربي)',
+        'body_en' => 'النص (إنجليزي)',
+        'entity' => 'الكيان',
+        'to' => 'إلى',
+        'template' => 'القالب',
+        'template_id' => 'القالب',
+        'recipient' => 'المستلم',
+        'event' => 'الحدث',
+        'database' => 'داخل التطبيق',
+        'mail' => 'البريد الإلكتروني',
+        'preferences' => 'التفضيلات',
     ],
 
     'values' => [

@@ -18,9 +18,11 @@ use App\Models\LeadStatusLog;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\User;
+use App\Notifications\LeadConvertedNotification;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Audit\AuditLogger;
 use App\Services\Contacts\ContactService;
+use App\Services\Notifications\NotificationRecipients;
 use App\Services\Settings\SettingsRepository;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -41,7 +43,9 @@ use Illuminate\Support\Facades\DB;
  *   freezes; the move is logged in lead_status_logs and audited.
  *
  * Everything happens in one transaction with the lead row locked; any
- * refusal or failure rolls the whole conversion back.
+ * refusal or failure rolls the whole conversion back. Once it has committed,
+ * the owner is told what the conversion produced when someone else ran it
+ * (plan section 3.6).
  */
 final class LeadConversionWorkflow
 {
@@ -50,6 +54,7 @@ final class LeadConversionWorkflow
         private readonly RecordVisibilityResolver $visibility,
         private readonly ContactService $contacts,
         private readonly SettingsRepository $settings,
+        private readonly NotificationRecipients $recipients,
     ) {}
 
     public function convert(Lead $lead, ConversionRequest $request, User $actor): ConversionResult
@@ -118,7 +123,28 @@ final class LeadConversionWorkflow
             $lead->unsetRelation('convertedContact');
             $lead->unsetRelation('convertedDeal');
 
+            $this->notifyOwner($current, $account, $contact, $deal, $actor);
+
             return new ConversionResult(account: $account, contact: $contact, deal: $deal, lead: $lead);
+        });
+    }
+
+    /**
+     * Tells the owner, once the transaction has committed, that someone else
+     * converted the lead and what came out of it.
+     */
+    private function notifyOwner(Lead $lead, ?Account $account, Contact $contact, ?Deal $deal, User $actor): void
+    {
+        $owner = $this->recipients->ownerOf($lead, $actor);
+
+        if ($owner === null) {
+            return;
+        }
+
+        $notification = new LeadConvertedNotification($lead, $account?->name, $contact->full_name, $deal?->title, $actor);
+
+        DB::afterCommit(static function () use ($owner, $notification): void {
+            $owner->notify($notification->locale($owner->preferredLocale()));
         });
     }
 

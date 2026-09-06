@@ -26,6 +26,7 @@ final class DatabaseSeeder extends Seeder
             PipelineSeeder::class,
             ActivityTypeSeeder::class,
             DealCloseReasonSeeder::class,
+            EmailTemplateSeeder::class,
         ]);
     }
 }

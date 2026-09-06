@@ -162,6 +162,17 @@ return [
         'email' => 'Email',
     ],
 
+    'notification_event' => [
+        'record_assigned' => 'A record is assigned to me',
+        'task_reminder' => 'Task reminder',
+        'task_overdue' => 'Task overdue',
+        'deal_stage_changed' => 'A deal of mine changes stage',
+        'deal_closed' => 'A deal of mine is won or lost',
+        'lead_converted' => 'A lead of mine is converted',
+        'lead_stale' => 'A lead of mine goes stale',
+        'note_mention' => 'I am mentioned in a note',
+    ],
+
     'custom_field_entity' => [
         'lead' => 'Leads',
         'contact' => 'Contacts',
