@@ -1,0 +1,8 @@
+first_name,last_name,email,phone,status,owner,country
+,Missing,missing@example.com,,,,
+Bad,Email,not-an-email,,,,
+Unknown,Status,unknown@example.com,,Nonexistent,,
+Converted,Status,conv@example.com,,Converted,,
+Owner,Outside,owner@example.com,,,outsider@example.com,
+Bad,Country,country@example.com,,,,ZZ
+Good,Row,good@example.com,0500000001,,,

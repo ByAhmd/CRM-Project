@@ -145,7 +145,7 @@ final class TaskResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['title'];
+        return ['title', 'description'];
     }
 
     public static function getGlobalSearchEloquentQuery(): Builder
@@ -161,8 +161,9 @@ final class TaskResource extends Resource
         assert($record instanceof Task);
 
         return array_filter([
-            __('tasks.fields.due_at') => $record->due_at?->format('Y-m-d H:i'),
             __('tasks.fields.assignee') => $record->assignee?->name,
+            __('tasks.fields.due_at') => $record->due_at?->format('Y-m-d H:i'),
+            __('tasks.fields.status') => $record->status->getLabel(),
         ]);
     }
 

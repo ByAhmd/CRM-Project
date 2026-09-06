@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Activities\Tables;
 
 use App\Enums\ActivityKind;
+use App\Filament\Exports\ActivityExporter;
 use App\Filament\Resources\Activities\ActivityResource;
+use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Activity;
 use App\Models\ActivityType;
@@ -146,7 +148,9 @@ final class ActivitiesTable
                 self::deleteAction(),
             ])
             ->toolbarActions([
+                ...$withSubject ? [ImportExportActions::export(ActivityExporter::class, Activity::class)] : [],
                 BulkActionGroup::make([
+                    ...$withSubject ? [ImportExportActions::exportBulk(ActivityExporter::class, Activity::class)] : [],
                     self::deleteBulkAction(),
                 ]),
             ])

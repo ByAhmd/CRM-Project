@@ -1,0 +1,7 @@
+name,type,industry,email,parent,owner
+,prospect,,noname@example.com,,
+Bad Type,vendor,,badtype@example.com,,
+Bad Industry,,Astrology,badind@example.com,,
+Bad Parent,,,badparent@example.com,Nonexistent Group,
+Owner Outside,,,outside@example.com,,outsider@example.com
+Good Account,,,good@example.com,,

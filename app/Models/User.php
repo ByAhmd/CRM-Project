@@ -120,6 +120,16 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(NotificationPreference::class);
     }
 
+    /**
+     * The table views the user has saved (decision A-8).
+     *
+     * @return HasMany<SavedView, $this>
+     */
+    public function savedViews(): HasMany
+    {
+        return $this->hasMany(SavedView::class);
+    }
+
     /** Only active accounts may enter the panel; roles decide what they see inside. */
     public function canAccessPanel(Panel $panel): bool
     {

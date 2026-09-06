@@ -7,8 +7,10 @@ namespace App\Filament\Resources\Tasks\Tables;
 use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
+use App\Filament\Exports\TaskExporter;
 use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\TaskResource;
+use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\TaskActions;
 use App\Models\Task;
@@ -153,7 +155,9 @@ final class TasksTable
                 OwnershipActions::assign(Task::permissionGroup()),
             ])
             ->toolbarActions([
+                ...$withSubject ? [ImportExportActions::export(TaskExporter::class, Task::class)] : [],
                 BulkActionGroup::make([
+                    ...$withSubject ? [ImportExportActions::exportBulk(TaskExporter::class, Task::class)] : [],
                     TaskActions::completeBulk(),
                     OwnershipActions::assignBulk(Task::permissionGroup()),
                     DeleteBulkAction::make()->authorizeIndividualRecords('delete'),

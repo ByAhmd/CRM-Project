@@ -1,0 +1,4 @@
+first_name,last_name,company_name,job_title,email,phone,website,address_line,city,region,country,postal_code,source,status,priority,owner,tags,description
+Fahad,Alqahtani,Horizon Co,Purchasing Manager,Fahad@Example.com,0501112233,https://horizon.example.com,King Fahd Road,Riyadh,Riyadh Region,sa,12345,Website,Contacted,High,,VIP|Enterprise,Met at the expo
+نورة,العتيبي,شركة الأفق,مديرة التسويق,noura@example.com,+966509998877,,,جدة,,SA,,إحالة,,عالية,rep@example.com,VIP,
+Omar,Saleh,,,omar@example.com,0512345678,,,,,,,,,,,,

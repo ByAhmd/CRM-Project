@@ -1,0 +1,9 @@
+title,account,contact,pipeline,stage,amount,probability,expected_close_date
+No Account,,,,,,,
+Ghost Account,Nonexistent Co,,,,,,
+Closed Stage,Horizon Trading,,,Won,,,
+Unknown Stage,Horizon Trading,,,Moon,,,
+Unknown Contact,Horizon Trading,Nobody Here,,,,,
+Bad Probability,Horizon Trading,,,,,150,
+Bad Date,Horizon Trading,,,,,,31/12/2026
+Good Deal,Horizon Trading,,,,1000,,
