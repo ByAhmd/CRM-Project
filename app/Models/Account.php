@@ -8,6 +8,7 @@ use App\Contracts\OwnedRecord;
 use App\Enums\AccountType;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CompanySize;
+use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
@@ -36,6 +37,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
 ])]
 final class Account extends Model implements OwnedRecord
 {
+    use HasAttachments;
+
     /** @use HasFactory<AccountFactory> */
     use HasFactory;
 
@@ -134,6 +137,37 @@ final class Account extends Model implements OwnedRecord
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Activities logged against the account, newest first (decision A-10).
+     *
+     * @return HasMany<Activity, $this>
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    /**
+     * Pinned first, newest first (decision A-10); includes the notes written
+     * on the account's contacts and deals, which carry the account too.
+     *
+     * @return HasMany<Note, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class)->orderByDesc('is_pinned')->orderByDesc('created_at');
+    }
+
+    /**
+     * Tasks linked to the account, soonest due first (decision A-10).
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class)->orderBy('due_at')->orderBy('id');
     }
 
     public function isCustomer(): bool

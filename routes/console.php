@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Storage;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +26,48 @@ Schedule::command('queue:work --stop-when-empty --max-time=50')
     ->when(fn (): bool => config('queue.default') !== 'sync')
     ->withoutOverlapping(10)
     ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Task reminders and overdue notices (module 9, A-10)
+|--------------------------------------------------------------------------
+|
+| Both commands are idempotent (reminder_sent_at / overdue_notified_at are
+| stamped by TaskReminderService), so a missed or doubled run never sends
+| twice. Reminders fire within five minutes of reminder_at; overdue notices
+| within fifteen minutes of due_at passing.
+|
+*/
+Schedule::command('tasks:send-reminders')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(5)
+    ->onOneServer();
+
+Schedule::command('tasks:notify-overdue')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(5)
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Abandoned uploads
+|--------------------------------------------------------------------------
+|
+| Filament parks uploads under tmp/{user id}/ on the attachments disk until
+| the form is submitted; a closed form leaves the file behind. Anything older
+| than a day there is no longer referenced by any open form and is removed.
+|
+*/
+Schedule::call(function (): void {
+    $disk = Storage::disk((string) config('crm.attachments.disk'));
+    $cutoff = now()->subDay()->getTimestamp();
+
+    foreach ($disk->allFiles('tmp') as $file) {
+        if ($disk->lastModified($file) < $cutoff) {
+            $disk->delete($file);
+        }
+    }
+})->name('attachments:prune-temporary')->daily()->onOneServer();
 
 /*
 |--------------------------------------------------------------------------

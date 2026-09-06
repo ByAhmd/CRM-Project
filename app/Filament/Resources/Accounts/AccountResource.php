@@ -10,6 +10,10 @@ use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Filament\Resources\Accounts\Pages\ViewAccount;
+use App\Filament\Resources\Accounts\RelationManagers\AccountActivitiesRelationManager;
+use App\Filament\Resources\Accounts\RelationManagers\AccountAttachmentsRelationManager;
+use App\Filament\Resources\Accounts\RelationManagers\AccountNotesRelationManager;
+use App\Filament\Resources\Accounts\RelationManagers\AccountTasksRelationManager;
 use App\Filament\Resources\Accounts\RelationManagers\ContactsRelationManager;
 use App\Filament\Resources\Accounts\RelationManagers\DealsRelationManager;
 use App\Filament\Resources\Accounts\Schemas\AccountForm;
@@ -91,8 +95,12 @@ final class AccountResource extends Resource
     public static function getRelations(): array
     {
         return [
+            AccountActivitiesRelationManager::class,
+            AccountTasksRelationManager::class,
             ContactsRelationManager::class,
             DealsRelationManager::class,
+            AccountNotesRelationManager::class,
+            AccountAttachmentsRelationManager::class,
         ];
     }
 

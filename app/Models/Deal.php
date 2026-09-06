@@ -9,6 +9,7 @@ use App\Enums\ActivityLogEvent;
 use App\Enums\DealStatus;
 use App\Enums\ForecastCategory;
 use App\Models\Concerns\GuardsWorkflowFields;
+use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
 use App\Observers\DealObserver;
@@ -53,6 +54,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 final class Deal extends Model implements OwnedRecord
 {
     use GuardsWorkflowFields;
+    use HasAttachments;
 
     /** @use HasFactory<DealFactory> */
     use HasFactory;
@@ -215,6 +217,16 @@ final class Deal extends Model implements OwnedRecord
     }
 
     /**
+     * Activities logged against the deal, newest first (decision A-10).
+     *
+     * @return HasMany<Activity, $this>
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    /**
      * @return HasMany<DealStageLog, $this>
      */
     public function stageLogs(): HasMany
@@ -250,6 +262,26 @@ final class Deal extends Model implements OwnedRecord
     public function products(): HasMany
     {
         return $this->hasMany(DealProduct::class)->orderBy('sort')->orderBy('id');
+    }
+
+    /**
+     * Pinned first, newest first (decision A-10).
+     *
+     * @return HasMany<Note, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class)->orderByDesc('is_pinned')->orderByDesc('created_at');
+    }
+
+    /**
+     * Tasks linked to the deal, soonest due first (decision A-10).
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class)->orderBy('due_at')->orderBy('id');
     }
 
     public function isClosed(): bool
