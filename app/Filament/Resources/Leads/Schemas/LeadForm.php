@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Leads\Schemas;
 
+use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Enums\LeadStatusKind;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
 use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\TagsSelect;
@@ -149,6 +151,8 @@ final class LeadForm
                         TagsSelect::make(),
                     ])
                     ->columns(1),
+
+                ...CustomFieldActions::formSection(CustomFieldEntity::Lead),
 
                 Section::make(__('leads.sections.notes'))
                     ->schema([

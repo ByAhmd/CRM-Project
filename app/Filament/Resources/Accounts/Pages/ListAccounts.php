@@ -8,6 +8,7 @@ use App\Enums\AccountType;
 use App\Filament\Concerns\HasSavedViews;
 use App\Filament\Imports\AccountImporter;
 use App\Filament\Resources\Accounts\AccountResource;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\SavedViewActions;
 use App\Models\Account;
@@ -27,7 +28,10 @@ final class ListAccounts extends ListRecords
         return [
             ...SavedViewActions::for($this),
             ImportExportActions::import(AccountImporter::class, Account::class),
-            CreateAction::make(),
+            // A panel that opens this as a modal instead of linking to the
+            // create page builds it from the entity form, custom section
+            // included, so the state is stripped and written here too (D-9).
+            CustomFieldActions::createAction(CreateAction::make()),
         ];
     }
 

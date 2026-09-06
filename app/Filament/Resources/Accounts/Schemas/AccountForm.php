@@ -6,7 +6,9 @@ namespace App\Filament\Resources\Accounts\Schemas;
 
 use App\Enums\AccountType;
 use App\Enums\CompanySize;
+use App\Enums\CustomFieldEntity;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
 use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\TagsSelect;
@@ -121,6 +123,8 @@ final class AccountForm
                         TagsSelect::make(),
                     ])
                     ->columns(1),
+
+                ...CustomFieldActions::formSection(CustomFieldEntity::Account),
 
                 Section::make(__('accounts.sections.notes'))
                     ->schema([

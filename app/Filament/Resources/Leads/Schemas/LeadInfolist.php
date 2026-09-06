@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Leads\Schemas;
 
+use App\Enums\CustomFieldEntity;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -129,6 +131,10 @@ final class LeadInfolist
                     ])
                     ->columns(1)
                     ->collapsible(),
+
+                // The administrator's own fields (D-9); nothing at all when the
+                // entity carries no active definition.
+                ...array_filter([CustomFieldsSchema::infolistSection(CustomFieldEntity::Lead)]),
 
                 Section::make(__('timeline.section'))
                     ->schema([

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Contacts\Schemas;
 
+use App\Enums\CustomFieldEntity;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -76,6 +78,10 @@ final class ContactInfolist
                     ])
                     ->columns(1)
                     ->collapsible(),
+
+                // The administrator's own fields (D-9); nothing at all when the
+                // entity carries no active definition.
+                ...array_filter([CustomFieldsSchema::infolistSection(CustomFieldEntity::Contact)]),
 
                 Section::make(__('timeline.section'))
                     ->schema([

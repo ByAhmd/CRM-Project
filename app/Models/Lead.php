@@ -6,9 +6,11 @@ namespace App\Models;
 
 use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
+use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Models\Concerns\GuardsWorkflowFields;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
@@ -48,6 +50,7 @@ final class Lead extends Model implements OwnedRecord
 {
     use GuardsWorkflowFields;
     use HasAttachments;
+    use HasCustomFields;
 
     /** @use HasFactory<LeadFactory> */
     use HasFactory;
@@ -64,6 +67,12 @@ final class Lead extends Model implements OwnedRecord
     public static function permissionGroup(): string
     {
         return 'lead';
+    }
+
+    /** The custom field definitions this model carries (D-9). */
+    public static function customFieldEntity(): CustomFieldEntity
+    {
+        return CustomFieldEntity::Lead;
     }
 
     /**

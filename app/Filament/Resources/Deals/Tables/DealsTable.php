@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Deals\Tables;
 
+use App\Enums\CustomFieldEntity;
 use App\Enums\DealStatus;
 use App\Enums\ForecastCategory;
 use App\Filament\Exports\DealExporter;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
+use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\DealActions;
 use App\Filament\Support\ImportExportActions;
 use App\Filament\Support\OwnershipActions;
@@ -39,6 +42,9 @@ final class DealsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Every listed custom column reads the record's values, so the
+            // relation is loaded once for the page instead of per cell (D-9).
+            ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
             ->columns([
                 TextColumn::make('title')
                     ->label(__('deals.fields.title'))
@@ -110,6 +116,8 @@ final class DealsTable
                     ->dateTime('Y-m-d')
                     ->sortable()
                     ->toggleable(),
+
+                ...CustomFieldsSchema::tableColumns(CustomFieldEntity::Deal),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
@@ -166,12 +174,16 @@ final class DealsTable
                 TrashedFilter::make()->label(__('deals.filters.trashed')),
 
                 QueryBuilderFilters::forDeals(),
+
+                ...CustomFieldsSchema::tableFilters(CustomFieldEntity::Deal),
             ])
             ->filtersLayout(QueryBuilderFilters::layout())
             ->filtersFormWidth(QueryBuilderFilters::width())
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
+                // The custom section is part of the entity form, so an edit
+                // modal built from it pre-fills and writes the values too (D-9).
+                CustomFieldActions::editAction(EditAction::make()),
                 DealActions::changeStage(),
                 DealActions::markWon(),
                 DealActions::markLost(),

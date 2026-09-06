@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Imports;
 
+use App\Enums\CustomFieldEntity;
 use App\Filament\Imports\Concerns\ResolvesImportLookups;
 use App\Filament\Support\AddressSchema;
+use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Account;
 use App\Models\Contact;
@@ -172,6 +175,10 @@ final class ContactImporter extends Importer
                 ->rules(['nullable', 'string', 'max:5000'])
                 ->ignoreBlankState()
                 ->example('Prefers email in the morning.'),
+
+            // One column per active definition of the entity, mapped by its
+            // own label (D-9).
+            ...CustomFieldActions::importColumns(CustomFieldEntity::Contact),
         ];
     }
 
@@ -214,6 +221,15 @@ final class ContactImporter extends Importer
         }
     }
 
+    /**
+     * Filament reuses one importer instance for every row of a chunk, so the
+     * values a row collects are dropped before the next one starts (D-9).
+     */
+    protected function beforeValidate(): void
+    {
+        CustomFieldsSchema::forgetImported($this);
+    }
+
     protected function afterSave(): void
     {
         $this->syncTags();
@@ -223,6 +239,9 @@ final class ContactImporter extends Importer
         assert($record instanceof Contact);
 
         app(ContactService::class)->enforcePrimaryRule($record);
+
+        // The row's values, now that the record has an id (D-9).
+        CustomFieldsSchema::persistImported($record, CustomFieldsSchema::importedValues($this, $record), $this->importingUser());
     }
 
     public static function getCompletedNotificationBody(Import $import): string

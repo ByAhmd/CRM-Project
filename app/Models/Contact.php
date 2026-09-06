@@ -6,7 +6,9 @@ namespace App\Models;
 
 use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
+use App\Enums\CustomFieldEntity;
 use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
@@ -37,6 +39,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 final class Contact extends Model implements HasLocalePreference, OwnedRecord
 {
     use HasAttachments;
+    use HasCustomFields;
 
     /** @use HasFactory<ContactFactory> */
     use HasFactory;
@@ -53,6 +56,12 @@ final class Contact extends Model implements HasLocalePreference, OwnedRecord
     public static function permissionGroup(): string
     {
         return 'contact';
+    }
+
+    /** The custom field definitions this model carries (D-9). */
+    public static function customFieldEntity(): CustomFieldEntity
+    {
+        return CustomFieldEntity::Contact;
     }
 
     /**
