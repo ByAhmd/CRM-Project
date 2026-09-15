@@ -19,9 +19,20 @@ use Illuminate\Support\Collection;
  *
  * Owners are the viewer's visible deal owners (D-4, D-13): a rep sees one
  * line, a manager their team, an admin everyone — only owners with at least
- * one visible deal matching the pipeline filter appear, plus an
- * "unassigned" line when unowned deals are in reach. A reopened deal is
- * open again and counts in neither column.
+ * one visible deal matching the pipeline filter that counts in a column (won
+ * or lost in the period, or open now) appear, plus an "unassigned" line when
+ * such unowned deals are in reach. A reopened deal is open again and counts
+ * in neither the won nor the lost column.
+ *
+ * The rows read are bounded to the ones a column can count, so the report
+ * grows with the open pipeline and the period, not with the whole deal
+ * history (plan section 8). It is three grouped aggregates, each a bounded
+ * read on its own index — open deals (deals_status_index), deals won in the
+ * period (deals_won_at_index), deals lost in the period (deals_lost_at_index)
+ * — merged per owner here. One aggregate with the period inside CASE
+ * expressions read every deal, and an OR of the three conditions is not
+ * merged by MySQL 8.4: it keeps a full scan of deals_owner_id_status_index
+ * for the GROUP BY (step-13 EXPLAIN evidence).
  */
 final class SalesPerformanceReport
 {
@@ -35,36 +46,57 @@ final class SalesPerformanceReport
     public function rows(User $viewer, ReportFilters $filters): Collection
     {
         [$from, $to] = $filters->bounds();
-        $won = DealStatus::Won->value;
-        $lost = DealStatus::Lost->value;
-        $open = DealStatus::Open->value;
+
+        /** @var array<int, array{won_count: int, won_amount: float, lost_count: int, lost_amount: float, cycle_days: float, open_amount: float}> $totals */
+        $totals = [];
+        $empty = ['won_count' => 0, 'won_amount' => 0.0, 'lost_count' => 0, 'lost_amount' => 0.0, 'cycle_days' => 0.0, 'open_amount' => 0.0];
+
+        foreach ($this->query($viewer, $filters)
+            ->where('deals.status', DealStatus::Won->value)
+            ->whereBetween('deals.won_at', [$from, $to])
+            ->selectRaw('deals.owner_id AS owner_id, COUNT(*) AS won_count, SUM(deals.amount) AS won_amount, AVG(DATEDIFF(deals.won_at, deals.created_at)) AS cycle_days')
+            ->groupBy('deals.owner_id')
+            ->toBase()
+            ->get() as $won) {
+            $owner = (int) ($won->owner_id ?? 0);
+            $totals[$owner] = ['won_count' => (int) $won->won_count, 'won_amount' => (float) $won->won_amount, 'cycle_days' => (float) $won->cycle_days] + ($totals[$owner] ?? $empty);
+        }
+
+        foreach ($this->query($viewer, $filters)
+            ->where('deals.status', DealStatus::Lost->value)
+            ->whereBetween('deals.lost_at', [$from, $to])
+            ->selectRaw('deals.owner_id AS owner_id, COUNT(*) AS lost_count, SUM(deals.amount) AS lost_amount')
+            ->groupBy('deals.owner_id')
+            ->toBase()
+            ->get() as $lost) {
+            $owner = (int) ($lost->owner_id ?? 0);
+            $totals[$owner] = ['lost_count' => (int) $lost->lost_count, 'lost_amount' => (float) $lost->lost_amount] + ($totals[$owner] ?? $empty);
+        }
+
+        foreach ($this->query($viewer, $filters)
+            ->where('deals.status', DealStatus::Open->value)
+            ->selectRaw('deals.owner_id AS owner_id, SUM(deals.amount) AS open_amount')
+            ->groupBy('deals.owner_id')
+            ->toBase()
+            ->get() as $open) {
+            $owner = (int) ($open->owner_id ?? 0);
+            $totals[$owner] = ['open_amount' => (float) $open->open_amount] + ($totals[$owner] ?? $empty);
+        }
 
         $aggregates = [];
 
-        foreach ($this->query($viewer, $filters)
-            ->selectRaw('deals.owner_id AS owner_id')
-            ->selectRaw('SUM(CASE WHEN deals.status = ? AND deals.won_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS won_count', [$won, $from, $to])
-            ->selectRaw('SUM(CASE WHEN deals.status = ? AND deals.won_at BETWEEN ? AND ? THEN deals.amount ELSE 0 END) AS won_amount', [$won, $from, $to])
-            ->selectRaw('SUM(CASE WHEN deals.status = ? AND deals.lost_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS lost_count', [$lost, $from, $to])
-            ->selectRaw('SUM(CASE WHEN deals.status = ? AND deals.lost_at BETWEEN ? AND ? THEN deals.amount ELSE 0 END) AS lost_amount', [$lost, $from, $to])
-            ->selectRaw('AVG(CASE WHEN deals.status = ? AND deals.won_at BETWEEN ? AND ? THEN DATEDIFF(deals.won_at, deals.created_at) END) AS cycle_days', [$won, $from, $to])
-            ->selectRaw('SUM(CASE WHEN deals.status = ? THEN deals.amount ELSE 0 END) AS open_amount', [$open])
-            ->groupBy('deals.owner_id')
-            ->toBase()
-            ->get() as $aggregate) {
-            $wonCount = (int) $aggregate->won_count;
-            $lostCount = (int) $aggregate->lost_count;
-            $wonAmount = round((float) $aggregate->won_amount, 2);
+        foreach ($totals as $owner => $total) {
+            $wonAmount = round($total['won_amount'], 2);
 
-            $aggregates[(int) ($aggregate->owner_id ?? 0)] = [
-                'won_count' => $wonCount,
+            $aggregates[$owner] = [
+                'won_count' => $total['won_count'],
                 'won_amount' => $wonAmount,
-                'lost_count' => $lostCount,
-                'lost_amount' => round((float) $aggregate->lost_amount, 2),
-                'win_rate' => ReportRow::rate($wonCount, $wonCount + $lostCount),
-                'avg_deal_size' => ReportRow::average($wonAmount, $wonCount, 2),
-                'avg_cycle_days' => round((float) $aggregate->cycle_days, 1),
-                'open_amount' => round((float) $aggregate->open_amount, 2),
+                'lost_count' => $total['lost_count'],
+                'lost_amount' => round($total['lost_amount'], 2),
+                'win_rate' => ReportRow::rate($total['won_count'], $total['won_count'] + $total['lost_count']),
+                'avg_deal_size' => ReportRow::average($wonAmount, $total['won_count'], 2),
+                'avg_cycle_days' => round($total['cycle_days'], 1),
+                'open_amount' => round($total['open_amount'], 2),
             ];
         }
 

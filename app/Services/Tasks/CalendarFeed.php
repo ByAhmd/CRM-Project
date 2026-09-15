@@ -144,40 +144,68 @@ final class CalendarFeed
 
     /**
      * Tasks whose span (meetings and calls with a start) or due date falls
-     * inside the range.
+     * inside the range, the earliest MAX_EVENTS + 1 of them by their stored
+     * moment (the start, else the due date), ties by id.
+     *
+     * The overlap is read as three disjoint slices, each a bounded range on
+     * its own index, so the rows examined follow the visible range and not
+     * the size of the task history (plan section 8):
+     *
+     * - starting inside the range: `starts_at` in [start, end) on
+     *   tasks_starts_at_index, which also supplies the (starts_at, id) order;
+     * - started before the range and still running into it: `ends_at` >= start
+     *   on tasks_ends_at_index (a task without an end is a point in time and
+     *   never runs into a later range); it reads the timed tasks that end
+     *   after the range start — for the current month the scheduled ones,
+     *   never the history before it;
+     * - due-only: `due_at` in [start, end) with no start, on
+     *   tasks_due_at_index, which supplies the (due_at, id) order.
+     *
+     * Each slice reads at most MAX_EVENTS + 1 rows in the stored-moment order
+     * and the slices never share a row, so the earliest MAX_EVENTS + 1 of the
+     * union are among the rows read; they are merged and cut here.
      *
      * @param  Builder<Task>  $query
      * @return Collection<int, Task>
      */
     private function tasks(Builder $query, Carbon $start, Carbon $end): Collection
     {
-        return $query
-            ->where(static function (Builder $overlap) use ($start, $end): void {
-                $overlap
-                    ->where(static function (Builder $timed) use ($start, $end): void {
-                        $timed
-                            ->whereNotNull('tasks.starts_at')
-                            ->where('tasks.starts_at', '<', $end)
-                            ->where(static function (Builder $endsAfterStart) use ($start): void {
-                                $endsAfterStart
-                                    ->where('tasks.ends_at', '>=', $start)
-                                    ->orWhere(static function (Builder $openEnded) use ($start): void {
-                                        $openEnded->whereNull('tasks.ends_at')->where('tasks.starts_at', '>=', $start);
-                                    });
-                            });
-                    })
-                    ->orWhere(static function (Builder $due) use ($start, $end): void {
-                        $due
-                            ->whereNull('tasks.starts_at')
-                            ->where('tasks.due_at', '>=', $start)
-                            ->where('tasks.due_at', '<', $end);
-                    });
+        $limit = self::MAX_EVENTS + 1;
+
+        $startingInside = (clone $query)
+            ->where('tasks.starts_at', '>=', $start)
+            ->where('tasks.starts_at', '<', $end)
+            ->where(static function (Builder $ends) use ($start): void {
+                $ends->whereNull('tasks.ends_at')->orWhere('tasks.ends_at', '>=', $start);
             })
-            // The stored moment taskMoment() reads: the start, else the due date.
-            ->orderByRaw('COALESCE(tasks.starts_at, tasks.due_at)')
+            ->orderBy('tasks.starts_at')
             ->orderBy('tasks.id')
-            ->limit(self::MAX_EVENTS + 1)
+            ->limit($limit)
             ->get();
+
+        $runningInto = (clone $query)
+            ->where('tasks.ends_at', '>=', $start)
+            ->where('tasks.starts_at', '<', $start)
+            ->orderBy('tasks.starts_at')
+            ->orderBy('tasks.id')
+            ->limit($limit)
+            ->get();
+
+        $dueInside = (clone $query)
+            ->where('tasks.due_at', '>=', $start)
+            ->where('tasks.due_at', '<', $end)
+            ->whereNull('tasks.starts_at')
+            ->orderBy('tasks.due_at')
+            ->orderBy('tasks.id')
+            ->limit($limit)
+            ->get();
+
+        return $runningInto
+            ->concat($startingInside)
+            ->concat($dueInside)
+            ->sort(static fn (Task $a, Task $b): int => [self::taskMoment($a), (int) $a->getKey()] <=> [self::taskMoment($b), (int) $b->getKey()])
+            ->take($limit)
+            ->values();
     }
 
     /**

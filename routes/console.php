@@ -7,8 +7,10 @@ use App\Filament\Support\ImportExportActions;
 use App\Jobs\RescoreLeads;
 use App\Models\Export;
 use App\Models\Import;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +33,25 @@ Schedule::command('queue:work --stop-when-empty --max-time=50')
     ->when(fn (): bool => config('queue.default') !== 'sync')
     ->withoutOverlapping(10)
     ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Scheduler heartbeat (D-1, app:preflight)
+|--------------------------------------------------------------------------
+|
+| Everything above and below relies on the host's cron running
+| `php artisan schedule:run` every minute. Nothing fails loudly when that
+| cron line is missing or broken — reminders, the queue drain and the
+| retention prunes simply never happen — so every run stamps the time under
+| the `scheduler.heartbeat` cache key (kept 10 minutes). app:preflight warns
+| when the stamp is missing or older than five minutes. It runs even in
+| maintenance mode (it only writes the cache), so a deploy that keeps the site
+| down for a few minutes does not make preflight blame a missing cron line.
+|
+*/
+Schedule::call(function (): void {
+    Cache::put('scheduler.heartbeat', now()->toIso8601String(), now()->addMinutes(10));
+})->name('scheduler:heartbeat')->everyMinute()->evenInMaintenanceMode()->onOneServer();
 
 /*
 |--------------------------------------------------------------------------
@@ -105,6 +126,40 @@ Schedule::call(function (): void {
         }
     }
 })->name('attachments:prune-temporary')->daily()->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Livewire temporary uploads (module 18, D-13)
+|--------------------------------------------------------------------------
+|
+| Every file picked in a panel form — the CSV or XLSX of an import above
+| all — is first stored by Livewire under its temporary upload directory
+| (config livewire.temporary_file_upload.directory, `livewire-tmp` by
+| default) on its upload disk (the default disk, storage/app/private). An
+| import reads the file but never deletes it, and Livewire only clears
+| files older than a day when the next upload starts, so on a quiet
+| installation import files full of personal data would stay there, and in
+| every backup of the private disk, indefinitely. Anything older than a
+| day is no longer part of an open form and is removed, with Livewire's own
+| path and disk resolution. Daily, idempotent; skipped on S3, where Livewire
+| delegates the clean-up to a bucket lifecycle rule.
+|
+*/
+Schedule::call(function (): void {
+    if (FileUploadConfiguration::isUsingS3()) {
+        return;
+    }
+
+    $disk = FileUploadConfiguration::storage();
+    $cutoff = now()->subDay()->getTimestamp();
+
+    foreach ($disk->allFiles(FileUploadConfiguration::path()) as $file) {
+        // A concurrent upload request may have cleared the file already.
+        if ($disk->exists($file) && $disk->lastModified($file) < $cutoff) {
+            $disk->delete($file);
+        }
+    }
+})->name('uploads:prune-livewire-temporary')->daily()->onOneServer();
 
 /*
 |--------------------------------------------------------------------------

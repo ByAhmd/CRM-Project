@@ -38,10 +38,14 @@ final class ImportExportActions
     /** The option carrying the actor's locale into the queued job. */
     public const LOCALE_OPTION = 'locale';
 
-    /** Imports one user may start per minute; Filament refuses the rest with its throttle notice. */
+    /**
+     * Imports that may be started per minute per client IP address per list page (Filament's action rate limit is
+     * keyed on the component, the mounted action and request()->ip(), not on the user); Filament refuses the rest
+     * with its throttle notice. Behind an untrusted proxy every user shares it (CRM_TRUSTED_PROXIES).
+     */
     public const IMPORT_RATE_LIMIT = 5;
 
-    /** Exports (whole list or selection) one user may start per minute. */
+    /** Exports (whole list or selection) that may be started per minute per client IP address per list page. */
     public const EXPORT_RATE_LIMIT = 10;
 
     /**

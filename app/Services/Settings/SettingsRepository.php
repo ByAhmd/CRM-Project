@@ -138,6 +138,32 @@ final class SettingsRepository
         });
     }
 
+    /**
+     * Stores a value the application keeps for itself under a reserved key
+     * (the demo data registry of `app:demo-data`). It is bookkeeping, not an
+     * organisation setting an administrator changed, so no settings audit
+     * event is written; the cache is cleared like on every other write.
+     */
+    public function putInternal(string $key, mixed $value): void
+    {
+        DB::transaction(function () use ($key, $value): void {
+            $setting = Setting::query()->firstOrNew(['key' => $key]);
+            $setting->group = explode('.', $key, 2)[0];
+            $setting->value = $value;
+            $setting->save();
+        });
+
+        $this->forget();
+    }
+
+    /** Removes a value stored with putInternal(). */
+    public function forgetInternal(string $key): void
+    {
+        Setting::query()->where('key', $key)->delete();
+
+        $this->forget();
+    }
+
     /** Creates missing rows from config defaults; existing values are never overwritten. */
     public function seedDefaults(): void
     {

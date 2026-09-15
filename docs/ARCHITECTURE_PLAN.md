@@ -1,6 +1,6 @@
 # CRM — Architecture and Implementation Plan
 
-Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13, A-1 … A-21). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) and step 8 (notifications, scheduler, templated email) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export), step 10 (dashboard and reports) and step 11 (custom fields) complete 2026-09-07; step 12 (quality pass) complete 2026-09-15 — open go-live items are carried in [GoLive_Checklist.md](GoLive_Checklist.md). Step 13 (production readiness) is next.**
+Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13, A-1 … A-21). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) and step 8 (notifications, scheduler, templated email) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export), step 10 (dashboard and reports) and step 11 (custom fields) complete 2026-09-07; step 12 (quality pass) complete 2026-09-15 — open go-live items are carried in [GoLive_Checklist.md](GoLive_Checklist.md). Step 13 (production readiness) engineering complete 2026-09-15; go-live rows that need the host or the owner are tracked in [GoLive_Checklist.md](GoLive_Checklist.md).**
 
 Companion documents:
 
@@ -100,7 +100,7 @@ A single-organisation (D-2) sales CRM operated from one Filament admin panel.
 | 20 | Roles & permissions | spatie roles/permissions, six default roles, permission keys per verb (view/create/update/delete/export/import/assign/convert/change stage/manage settings/reports/audit/admin), policies enforced server-side |
 | 21 | Teams & ownership | Teams, record owner, assignment with history, visibility own/team/all driven by permissions (D-4); reps cannot reassign |
 | 22 | Audit logs | spatie activitylog ledger: create/update/delete diffs, ownership, status/stage, permission and settings changes, login events; read-only UI; retention policy |
-| 23 | Reports | Lead, conversion/funnel, pipeline, sales performance, activity, source performance, win/loss, forecast, task performance; export from every report |
+| 23 | Reports | Lead, conversion/funnel, pipeline, sales performance, activity, source performance, win/loss, forecast, task performance; export from every report. The sales-performance report lists an owner only when they have deals open now or won or lost in the period (no all-zero lines), so a rep with nothing in the period sees an empty report |
 | 24 | Settings | Lead statuses, sources, industries, pipelines/stages, activity types, close reasons, competitors, tags, custom fields, teams, general settings, notification preferences, user preferences (locale, theme) |
 | 25 | Admin | Users (invite flow), roles, permissions, settings, audit, reports, import/export history |
 | 26 | Platform | Arabic + English, RTL + LTR, light + dark + system, responsive, tests, static analysis, docs, CI/CD |
@@ -260,11 +260,13 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   | Entry | Cadence | Purpose |
   |---|---|---|
   | `queue:work --stop-when-empty --max-time=50` | every minute, `withoutOverlapping(10)`, skipped when the queue driver is `sync` | drains the database queue (D-1) |
+  | `scheduler:heartbeat` (named closure) | every minute | stores the time under the cache key `scheduler.heartbeat` for ten minutes; `app:preflight` warns when it is missing or older than five minutes (the host's cron is not running `schedule:run`) |
   | `tasks:send-reminders` | every five minutes, `withoutOverlapping(5)` | task reminders, idempotent via `reminder_sent_at` (A-10) |
   | `tasks:notify-overdue` | every fifteen minutes, `withoutOverlapping(5)` | overdue notices, idempotent via `overdue_notified_at` |
   | `leads:notify-stale` | daily at 07:00 (app timezone) | stale-lead notice, idempotent via `stale_notified_at` |
   | `RescoreLeads` (queued job) | daily at 03:00 | recomputes open lead scores in batches of 500 so activity-recency points expire (D-7); unique, `$timeout = 45` so one batch fits one drain |
   | `attachments:prune-temporary` (named closure) | daily | deletes uploads parked under `tmp/` on the attachments disk for more than a day |
+  | `uploads:prune-livewire-temporary` (named closure) | daily | deletes Livewire temporary uploads (import files included) older than a day under `livewire.temporary_file_upload.directory` (`livewire-tmp`) on the upload disk; Livewire itself clears them only when the next upload starts (D-13) |
   | `activitylog:clean --days=<crm.audit.retention_days> --force` | weekly | audit retention, 730 days by default (D-13) |
   | `queue:prune-failed --hours=168` | weekly | failed jobs older than seven days |
   | `model:prune --model=App\Models\Import --model=App\Models\Export` | daily | import history after `Import::RETENTION_DAYS` (90), export history and files after `Export::RETENTION_DAYS` (30); failed import rows leave with their import through the cascading key |
@@ -430,7 +432,7 @@ Each step is designed → implemented → validated → authorised → tested (P
 
 ## 8. Performance plan
 
-> Quality pass (2026-09-14): `SettingsRepository` and `CustomFieldRegistry` are container-scoped (one memo per request, job or command) and forgotten whenever a setting or a definition is saved; date filters compare raw columns against organisation-day bounds instead of `whereDate()`; import and export actions are rate limited (5 and 10 per minute); the rescore job reads 500 whole leads per batch and queues its continuation.
+> Quality pass (2026-09-14): `SettingsRepository` and `CustomFieldRegistry` are container-scoped (one memo per request, job or command) and forgotten whenever a setting or a definition is saved; date filters compare raw columns against organisation-day bounds instead of `whereDate()`; import and export actions are rate limited (5 and 10 per minute); the rescore job reads 500 whole leads per batch and queues its continuation. Production readiness (2026-09-15): the calendar reads tasks as three bounded index ranges (starting inside the range, running into it, due inside it); the running-into slice is bounded only by `ends_at`, so a month far in the past reads the timed tasks that end after it — accepted, because the current and coming months stay bounded; the lead and deal list tabs and counts use `leads (deleted_at, lead_status_id)` and `deals (status, deleted_at, created_at)`.
 
 - Eager loading declared per table (`modifyQueryUsing(fn ($q) => $q->with([...]))`), `preventLazyLoading`
   in tests so N+1s fail the suite.
@@ -447,38 +449,51 @@ Each step is designed → implemented → validated → authorised → tested (P
 
 ## 9. Deployment readiness
 
-Items marked **step 13** do not exist in the tree yet; everything else is built. Open go-live items and
-their owners are tracked in [GoLive_Checklist.md](GoLive_Checklist.md).
+Step 13 status (2026-09-15). The runbook is [DEPLOYMENT.md](DEPLOYMENT.md), day-2 operations are in
+[OPERATIONS.md](OPERATIONS.md); open go-live items (host, owner and evidence runs) are tracked in
+[GoLive_Checklist.md](GoLive_Checklist.md).
 
-- Target host is Hostinger shared hosting (D-1). **Step 13:** GitHub Actions `deploy.yml` that builds assets
-  and ships `public/build`, deploys over SSH with `scripts/deploy-production.sh` (maintenance mode,
-  `composer install --no-dev`, `migrate --force`, caches, `filament:optimize`, `app:preflight`, `up`),
-  one cron running `schedule:run` every minute, storage symlink created once by hand, `.env` set on the
-  server only, trusted-proxy configuration for HTTPS detection behind the host's proxy. If a VPS: same
-  pipeline plus Supervisor for `queue:work`.
+- Target host is Hostinger shared hosting (D-1). Built: `.github/workflows/deploy.yml`, run by hand
+  (`workflow_dispatch` with a release note): a PHP 8.3 + Node 22 job builds `vendor/` without dev packages and
+  `public/build` into a release tarball artifact; an optional job, active only when the `DEPLOY_SSH_HOST`,
+  `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` and `DEPLOY_PATH` secrets exist, uploads it with rsync into a release folder and
+  runs maintenance mode, `migrate --force`, `db:seed --force`, `optimize:clear`, `optimize`, `filament:optimize`,
+  `app:preflight`, the `current` switch and `up` on the host. The release commands live inline in the workflow; the
+  `scripts/deploy-production.sh` of the step-0 proposal was not needed. One cron running `schedule:run` every minute
+  drives the schedule of section 3.6; `.env` is set on the server only; no `storage:link` is needed (nothing is served
+  from the public disk). If a VPS: same pipeline plus Supervisor for `queue:work`.
+- Built: trusted proxies through `CRM_TRUSTED_PROXIES` (`App\Http\Middleware\TrustProxies`, read per request),
+  `tests/Feature/System/TrustedProxiesTest.php`.
 - Built: `.github/workflows/ci.yml` (Pint, PHPStan, asset build and PHPUnit on PHP 8.3 + MySQL 8.4).
-- Built: `app:preflight` fails on a blank `APP_KEY`; in production on `APP_DEBUG=true`, a non-https
-  `APP_URL`, `SESSION_SECURE_COOKIE≠true` and a `sync` queue; everywhere on pending migrations and on missing
-  reference rows (default lead status, converted status, default pipeline and its default stage, system
-  activity types). It warns on the `log` / `array` mailer and, in production, the `array` cache
-  (`tests/Feature/System/PreflightCommandTest.php`).
-- Documentation set built: README, CLAUDE.md, CONTRIBUTING.md, `docs/ARCHITECTURE_PLAN.md`,
-  `DATABASE_DESIGN.md`, `DECISIONS.md`, `PERMISSIONS.md`, `GoLive_Checklist.md`, `STOCKFLOW_COMPARISON.md`,
-  `OPEN_DECISIONS.md`. **Step 13:** `DEPLOYMENT.md` (runbook and `.env` reference), `MODULES.md`,
-  `DESIGN_TOKENS.md`, and `Static_Analysis_Known_False_Positives.md` once a false positive needs recording.
+- Built: `app:preflight` (`tests/Feature/System/PreflightCommandTest.php`). Fails everywhere on PHP older than 8.3 or a
+  missing required extension, a blank `APP_KEY`, an attachments disk under `public/`, unwritable `storage/app`,
+  `storage/logs` or `bootstrap/cache`, an unreachable or unmigrated database, pending migrations, an incomplete
+  permission catalogue, no active super admin and missing reference rows (default lead status, converted status,
+  default pipeline and its default stage, system activity types); in production on `APP_DEBUG=true`, a non-https
+  `APP_URL`, `SESSION_SECURE_COOKIE≠true`, a `sync` queue and the `array` cache. Warns on the `log` / `array` mailer
+  and a missing or stale scheduler heartbeat, and in production on `SESSION_LIFETIME≠120`, uncached configuration,
+  routes, views or Filament components, and unset trusted proxies. `--json` for scripts.
+- Built: `app:demo-data` (`--force`, `--fresh`, `--scale`), refused in production
+  (`tests/Feature/System/DemoDataCommandTest.php`); `.env.example` lists every key the configuration reads
+  (`tests/Feature/System/EnvExampleTest.php`).
+- Documentation set built: README, CLAUDE.md, CONTRIBUTING.md, `docs/ARCHITECTURE_PLAN.md`, `DATABASE_DESIGN.md`,
+  `DECISIONS.md`, `PERMISSIONS.md`, `GoLive_Checklist.md`, `STOCKFLOW_COMPARISON.md`, `OPEN_DECISIONS.md`,
+  `DEPLOYMENT.md` (runbook and `.env` reference), `OPERATIONS.md`, `Static_Analysis_Known_False_Positives.md` (no
+  entries). `tests/Feature/System/DeploymentDocsTest.php` keeps DEPLOYMENT.md and OPERATIONS.md in step with the
+  schedule, the artisan commands and `.env.example`. Not built: `MODULES.md`, `DESIGN_TOKENS.md`.
 
 ---
 
 ## 10. Proposed folder structure
 
-The tree below is the step-0 proposal, kept for orientation; the code is the authority for class names. Entries
-marked **step 13** are not built yet. The console commands, job and notification lines are as built.
+The tree below is the step-0 proposal, kept for orientation; the code is the authority for class names. The console
+commands, job, notification, docs and workflow lines are as built (step 13).
 
 ```
 CRM_Project/
 ├── app/
 │   ├── Console/Commands/          OnboardCommand (app:onboard), PreflightCommand (app:preflight), SendTaskReminders (tasks:send-reminders),
-│   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale); step 13: demo data command
+│   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale), DemoDataCommand (app:demo-data)
 │   ├── Contracts/                 TranslatableStatus
 │   ├── Enums/                     NavigationGroup, Permission, CrmRole, UserStatus, LeadStatusKind, LeadPriority, StageKind, DealStatus,
 │   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskPriority, RecurrenceFrequency,
@@ -539,9 +554,9 @@ CRM_Project/
 ├── bootstrap/                     app.php, providers.php
 ├── config/                        admin.php, brand-colors.php (generated), crm.php, activitylog.php, permission.php, filament.php
 ├── database/                      migrations/ (one table per file), seeders/ (DatabaseSeeder, RolesAndPermissionsSeeder, LookupSeeder,
-│                                  DefaultPipelineSeeder; step 13: DemoDataSeeder), factories/
-├── docs/                          ARCHITECTURE_PLAN.md, DATABASE_DESIGN.md, DECISIONS.md, PERMISSIONS.md, GoLive_Checklist.md;
-│                                  step 13: MODULES.md, DEPLOYMENT.md, DESIGN_TOKENS.md, Static_Analysis_Known_False_Positives.md
+│                                  DefaultPipelineSeeder; Demo/ builders for app:demo-data), factories/
+├── docs/                          ARCHITECTURE_PLAN.md, DATABASE_DESIGN.md, DECISIONS.md, PERMISSIONS.md, GoLive_Checklist.md,
+│                                  DEPLOYMENT.md, OPERATIONS.md, Static_Analysis_Known_False_Positives.md; not built: MODULES.md, DESIGN_TOKENS.md
 ├── lang/{ar,en}/                  app, navigation, enums, auth, passwords, validation, pagination, dashboard, leads, contacts, accounts, deals,
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
 │                                  views, imports, reports, activity, notifications
@@ -550,11 +565,10 @@ CRM_Project/
 ├── resources/js/                  app.js, deal-board.js, calendar.js
 ├── resources/views/filament/      pages/, widgets/, components/timeline/, activity-log/
 ├── routes/                        web.php, console.php
-├── scripts/                       step 13: deploy-production.sh
 ├── tests/                         Concerns/, Support/, Feature/{Access,Audit,Leads,Contacts,Accounts,Deals,Activities,Tasks,Attachments,Imports,
 │                                  Views,Search,Filament,Isolation,Qa,Seeders,System,Domain,Statistics,Localization}, Unit/{Services,Deployment}
 ├── tools/                         ramp.mjs (colour ramps)
-├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); step 13: deploy.yml (master → host)
+├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); deploy.yml (manual release archive, optional SSH deploy)
 ├── CLAUDE.md  README.md  CONTRIBUTING.md
 └── composer.json  package.json  vite.config.js  phpstan.neon.dist  phpunit.xml  .editorconfig  .gitattributes  .env.example  .gitignore
 ```

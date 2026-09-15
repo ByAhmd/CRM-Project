@@ -1,0 +1,324 @@
+name: Deploy
+
+# Manual release pipeline for Hostinger shared hosting (decision D-1).
+# Runbook: docs/DEPLOYMENT.md (section 11 describes this file).
+#
+# - build:  PHP 8.3 + Node 22; composer install without dev packages, npm ci and
+#           npm run build; packs a release tarball (vendor/ and public/build
+#           included; .git, .github, node_modules, tests and any .env left out)
+#           and uploads it as a workflow artifact. Nothing leaves GitHub.
+# - deploy: optional. Runs its steps only when the secrets DEPLOY_SSH_HOST,
+#           DEPLOY_SSH_USER, DEPLOY_SSH_KEY and DEPLOY_PATH are all set (checked
+#           in a step, never printed) and the run was dispatched from master
+#           (production, A-14). It then requires DEPLOY_SSH_KNOWN_HOSTS and
+#           refuses an unverified host key. Uploads the release with rsync over SSH
+#           into DEPLOY_PATH/releases/<release>, links the shared .env and
+#           storage, and runs the release commands on the host: maintenance
+#           mode, migrate --force, db:seed --force, optimize:clear, optimize,
+#           filament:optimize, app:preflight, switch `current`, up.
+#
+# Required once the deploy job is enabled: DEPLOY_SSH_KNOWN_HOSTS (the host's
+# known_hosts line). Optional secrets: DEPLOY_SSH_PORT (default 22),
+# DEPLOY_PHP_BINARY (absolute path of PHP 8.3 on the host; default `php`).
+# Third-party actions are pinned by major tag, as in ci.yml.
+# No host, user, path or credential is written in this file.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_note:
+        description: 'Release note: what this release contains'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release archive
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.name.outputs.release }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Name the release
+        id: name
+        run: echo "release=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      # PHP 8.3 is the production floor (D-1); the extensions are composer.json's ext-* requirements.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, fileinfo, intl, mbstring, openssl, pdo_mysql, xmlreader, zip
+          coverage: none
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-nodev-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-nodev-
+
+      - name: Install Composer dependencies (production)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Write release metadata
+        env:
+          RELEASE: ${{ steps.name.outputs.release }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+        run: |
+          {
+            echo "release: $RELEASE"
+            echo "commit: $GITHUB_SHA"
+            echo "ref: $GITHUB_REF_NAME"
+            echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "note: $RELEASE_NOTE"
+          } > RELEASE.txt
+
+      - name: Pack the release
+        env:
+          RELEASE: ${{ steps.name.outputs.release }}
+        run: |
+          test -f public/build/manifest.json || { echo "::error::public/build/manifest.json is missing after npm run build."; exit 1; }
+          tar -czf "$RUNNER_TEMP/crm-$RELEASE.tar.gz" \
+            --exclude=./.git \
+            --exclude=./.github \
+            --exclude=./node_modules \
+            --exclude=./tests \
+            --exclude=./.env \
+            --exclude=./.phpunit.cache \
+            --exclude=./.phpunit.result.cache \
+            -C "$GITHUB_WORKSPACE" .
+          ls -l "$RUNNER_TEMP/crm-$RELEASE.tar.gz"
+
+      - name: Upload the release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-release-${{ steps.name.outputs.release }}
+          path: ${{ runner.temp }}/crm-${{ steps.name.outputs.release }}.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        env:
+          RELEASE: ${{ steps.name.outputs.release }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+        run: |
+          {
+            echo "### Release $RELEASE"
+            echo ""
+            echo "Commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`."
+            echo ""
+            echo "Artifact: \`crm-release-$RELEASE\` (contains \`crm-$RELEASE.tar.gz\`)."
+            echo ""
+            echo "Note: $RELEASE_NOTE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy over SSH (only when the DEPLOY_* secrets exist)
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check the deployment secrets
+        id: gate
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          if [ -z "$DEPLOY_SSH_HOST" ] || [ -z "$DEPLOY_SSH_USER" ] || [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_PATH" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::DEPLOY_SSH_HOST, DEPLOY_SSH_USER, DEPLOY_SSH_KEY and DEPLOY_PATH are not all set. The release archive is available as a workflow artifact; see docs/DEPLOYMENT.md."
+          elif [ "$GITHUB_REF" != "refs/heads/master" ]; then
+            # Production is master (A-14); a run dispatched from any other ref only builds the archive.
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Deploy skipped::Only a run dispatched from master deploys (this run is on $GITHUB_REF). The release archive is available as a workflow artifact; see docs/DEPLOYMENT.md, section 11."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the release archive
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: crm-release-${{ needs.build.outputs.release }}
+          path: artifact
+
+      - name: Unpack the release
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: |
+          mkdir release
+          tar -xzf "artifact/crm-$RELEASE.tar.gz" -C release
+          test -f release/artisan
+
+      - name: Prepare SSH
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PHP_BINARY: ${{ secrets.DEPLOY_PHP_BINARY }}
+        run: |
+          if ! printf '%s' "$DEPLOY_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$'; then
+            echo "::error::DEPLOY_PATH must be an absolute path made of letters, digits, '.', '_', '-' and '/'."
+            exit 1
+          fi
+          if [ -n "$DEPLOY_PHP_BINARY" ] && ! printf '%s' "$DEPLOY_PHP_BINARY" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::DEPLOY_PHP_BINARY must be a path made of letters, digits, '.', '_', '-' and '/'."
+            exit 1
+          fi
+          port="${DEPLOY_SSH_PORT:-22}"
+          if ! printf '%s' "$port" | grep -Eq '^[0-9]+$'; then
+            echo "::error::DEPLOY_SSH_PORT must be a number."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Fail closed: the host key is never learned from whatever answers on the network during the run.
+          if [ -z "$DEPLOY_SSH_KNOWN_HOSTS" ]; then
+            echo "::error::DEPLOY_SSH_KNOWN_HOSTS is not set. The deploy job does not trust an unverified host key; add the host's known_hosts line as that secret (docs/DEPLOYMENT.md, section 11)."
+            exit 1
+          fi
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if ! ssh-keygen -F "$DEPLOY_SSH_HOST" -f ~/.ssh/known_hosts > /dev/null && ! ssh-keygen -F "[$DEPLOY_SSH_HOST]:$port" -f ~/.ssh/known_hosts > /dev/null; then
+            echo "::error::DEPLOY_SSH_KNOWN_HOSTS has no entry for the deployment host (for a non-standard port the entry is [host]:port). See docs/DEPLOYMENT.md, section 11."
+            exit 1
+          fi
+
+      - name: Upload the release with rsync
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: |
+          ssh_cmd="ssh -i $HOME/.ssh/deploy_key -p ${DEPLOY_SSH_PORT:-22} -o IdentitiesOnly=yes -o BatchMode=yes"
+          $ssh_cmd "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" "mkdir -p '$DEPLOY_PATH/releases'"
+          rsync -az --delete -e "$ssh_cmd" release/ "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST:$DEPLOY_PATH/releases/$RELEASE/"
+
+      - name: Run the release commands on the host
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PHP_BINARY: ${{ secrets.DEPLOY_PHP_BINARY }}
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: |
+          cat > "$RUNNER_TEMP/release.sh" <<'REMOTE'
+          set -euo pipefail
+
+          DEPLOY_PATH="$1"
+          RELEASE="$2"
+          PHP_BIN="$3"
+          KEEP_RELEASES=5
+
+          RELEASE_DIR="$DEPLOY_PATH/releases/$RELEASE"
+          SHARED_DIR="$DEPLOY_PATH/shared"
+          CURRENT_LINK="$DEPLOY_PATH/current"
+
+          step() { printf '\n==> %s\n' "$*"; }
+          fail() { printf '::error::%s\n' "$*"; exit 1; }
+
+          [ -d "$RELEASE_DIR" ] || fail "The release folder $RELEASE_DIR was not uploaded."
+          [ -f "$SHARED_DIR/.env" ] || fail "$SHARED_DIR/.env is missing. Create it by hand before the first deploy (docs/DEPLOYMENT.md, section 11)."
+          if [ -e "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
+            fail "$CURRENT_LINK exists and is not a symbolic link. Move it aside (docs/DEPLOYMENT.md, section 11)."
+          fi
+          "$PHP_BIN" -r 'exit(PHP_VERSION_ID >= 80300 ? 0 : 1);' || fail "\"$PHP_BIN\" is missing or older than PHP 8.3. Set DEPLOY_PHP_BINARY to the PHP 8.3 binary."
+
+          step "Linking the shared .env and storage into $RELEASE"
+          mkdir -p "$SHARED_DIR/storage/app/private" "$SHARED_DIR/storage/app/public" \
+            "$SHARED_DIR/storage/framework/cache/data" "$SHARED_DIR/storage/framework/sessions" \
+            "$SHARED_DIR/storage/framework/views" "$SHARED_DIR/storage/logs"
+          rm -rf "$RELEASE_DIR/storage"
+          ln -s "$SHARED_DIR/storage" "$RELEASE_DIR/storage"
+          ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env"
+          mkdir -p "$RELEASE_DIR/bootstrap/cache"
+
+          in_release() { (cd "$RELEASE_DIR" && "$PHP_BIN" artisan "$@"); }
+
+          previous="none"
+          if [ -L "$CURRENT_LINK" ] && [ -f "$CURRENT_LINK/artisan" ]; then
+            previous="$(readlink "$CURRENT_LINK")"
+            step "Maintenance mode on (live release: $previous)"
+            (cd "$CURRENT_LINK" && "$PHP_BIN" artisan down --retry=60)
+          fi
+
+          on_error() {
+            printf '::error::The release stopped before going live. current still points at %s and, if a release was live, the site is in maintenance mode. Follow docs/DEPLOYMENT.md, section 5, before running php artisan up.\n' "$previous"
+          }
+          trap on_error ERR
+
+          step "Migrating the database"
+          in_release migrate --force
+
+          step "Seeding missing reference rows (idempotent)"
+          in_release db:seed --force
+
+          step "Rebuilding caches"
+          in_release optimize:clear
+          in_release optimize
+          in_release filament:optimize
+
+          step "Preflight"
+          in_release app:preflight
+
+          trap - ERR
+
+          step "Switching current to releases/$RELEASE"
+          ln -sfn "releases/$RELEASE" "$DEPLOY_PATH/current.next"
+          mv -Tf "$DEPLOY_PATH/current.next" "$CURRENT_LINK"
+
+          step "Maintenance mode off"
+          (cd "$CURRENT_LINK" && "$PHP_BIN" artisan up)
+
+          step "Keeping the newest $KEEP_RELEASES releases"
+          live="$(basename "$(readlink "$CURRENT_LINK")")"
+          ls -1 "$DEPLOY_PATH/releases" | sort | head -n -"$KEEP_RELEASES" | while IFS= read -r old; do
+            if [ "$old" != "$live" ]; then
+              rm -rf "${DEPLOY_PATH:?}/releases/$old"
+            fi
+          done
+
+          step "Release $RELEASE is live"
+          REMOTE
+          ssh -i "$HOME/.ssh/deploy_key" -p "${DEPLOY_SSH_PORT:-22}" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \
+            "bash -s -- '$DEPLOY_PATH' '$RELEASE' '${DEPLOY_PHP_BINARY:-php}'" < "$RUNNER_TEMP/release.sh"

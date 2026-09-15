@@ -1,8 +1,8 @@
-!.env.example
 *.log
 .DS_Store
 .env
 .env.*
+!.env.example
 .env.backup
 .env.production
 .phpactor.json
