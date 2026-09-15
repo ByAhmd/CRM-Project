@@ -35,6 +35,12 @@ return [
         'retention_days' => (int) env('CRM_AUDIT_RETENTION_DAYS', 730),
     ],
 
+    // Reverse proxies whose X-Forwarded-* headers are believed (App\Http\Middleware\TrustProxies).
+    // Unset = trust nobody (secure default); '*' = trust any peer (only when PHP is reachable solely
+    // through the host's proxy — otherwise clients can spoof their IP and https); or a comma-separated
+    // list of IPs / CIDR ranges, preferred whenever the host publishes its proxy addresses.
+    'trusted_proxies' => env('CRM_TRUSTED_PROXIES'),
+
     'invitations' => [
         // Minutes an invitation / password-reset link stays valid (Laravel broker default).
         'expire_minutes' => 60,

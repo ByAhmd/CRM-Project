@@ -262,6 +262,38 @@ final class CalendarFeedTest extends TestCase
     }
 
     #[Test]
+    public function tasks_starting_inside_running_into_and_due_inside_the_range_are_merged_in_start_order(): void
+    {
+        $rep = $this->salesRep();
+        $meeting = fn (string $startsAt, ?string $endsAt): Task => Task::factory()->create([
+            'assignee_id' => $rep->getKey(), 'kind' => TaskKind::Meeting, 'due_at' => $startsAt, 'starts_at' => $startsAt, 'ends_at' => $endsAt,
+        ]);
+
+        $wholeMonth = $meeting('2026-08-25 09:00:00', '2026-10-05 17:00:00');
+        $runsIntoRange = $meeting('2026-08-31 22:00:00', '2026-09-01 00:00:00');
+        $openEndedBefore = $meeting('2026-08-31 23:30:00', null);
+        $openEndedInside = $meeting('2026-09-03 09:00:00', null);
+        $startsAtRangeEnd = $meeting('2026-10-01 00:00:00', '2026-10-01 02:00:00');
+        $startsInside = $meeting('2026-09-02 09:00:00', '2026-09-02 10:00:00');
+        $dueSameDay = Task::factory()->create(['assignee_id' => $rep->getKey(), 'due_at' => '2026-09-02 09:00:00']);
+        $dueInside = Task::factory()->create(['assignee_id' => $rep->getKey(), 'due_at' => '2026-09-01 00:00:00']);
+
+        $ids = $this->ids($rep);
+
+        $this->assertNotContains('task-'.$openEndedBefore->getKey(), $ids, 'a start without an end is a point in time before the range');
+        $this->assertNotContains('task-'.$startsAtRangeEnd->getKey(), $ids, 'the range end is exclusive');
+        $this->assertSame([
+            'task-'.$wholeMonth->getKey(),
+            'task-'.$runsIntoRange->getKey(),
+            'task-'.$dueInside->getKey(),
+            // An all-day entry sorts at the start of its day, before a timed entry of that day.
+            'task-'.$dueSameDay->getKey(),
+            'task-'.$startsInside->getKey(),
+            'task-'.$openEndedInside->getKey(),
+        ], $ids);
+    }
+
+    #[Test]
     public function a_task_with_neither_a_due_date_nor_a_start_is_not_on_the_calendar(): void
     {
         $rep = $this->salesRep();

@@ -16,8 +16,10 @@ use App\Services\Settings\PipelineService;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
 use App\Services\Statistics\Reports\SalesPerformanceReport;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
@@ -145,9 +147,46 @@ final class SalesPerformanceReportTest extends TestCase
     {
         $august = $this->report()->rows($this->admin, $this->filters(['from' => '2026-08-01', 'to' => '2026-08-31']));
 
-        $this->assertSame([$this->repA->name, $this->repB->name], $august->map(fn (ReportRow $row): string => $row->label)->all());
+        // Rep B's only deal was won in September and nothing of theirs is open: no column counts it in August.
+        $this->assertSame([$this->repA->name], $august->map(fn (ReportRow $row): string => $row->label)->all());
         $this->assertSame(['won_count' => 1, 'won_amount' => 6000.0, 'lost_count' => 0, 'lost_amount' => 0.0, 'win_rate' => 100.0, 'avg_deal_size' => 6000.0, 'avg_cycle_days' => 19.0, 'open_amount' => 700.0], $august->first()?->values);
-        $this->assertSame(0, (int) $august->last()?->value('won_count'));
+    }
+
+    #[Test]
+    public function each_aggregate_reads_only_the_deals_its_columns_count_through_a_bounded_condition(): void
+    {
+        $queries = [];
+        DB::listen(static function (QueryExecuted $query) use (&$queries): void {
+            if (str_contains($query->sql, 'from `deals`') && str_contains($query->sql, 'group by `deals`.`owner_id`')) {
+                $queries[] = $query->sql;
+            }
+        });
+
+        $this->report()->rows($this->admin, $this->filters());
+
+        // Won in the period, lost in the period, open now: each a sargable condition on its own index, never an OR
+        // over them and never a period that only a CASE expression sees (which aggregates every deal ever created).
+        $this->assertCount(3, $queries, implode("\n", $queries));
+        $this->assertMatchesRegularExpression('/where `deals`\.`status` = \? and `deals`\.`won_at` between \? and \?/', $queries[0]);
+        $this->assertMatchesRegularExpression('/where `deals`\.`status` = \? and `deals`\.`lost_at` between \? and \?/', $queries[1]);
+        $this->assertMatchesRegularExpression('/where `deals`\.`status` = \?/', $queries[2]);
+
+        foreach ($queries as $sql) {
+            $this->assertStringNotContainsString(' or ', strtolower($sql), $sql);
+            $this->assertStringNotContainsString('case when', strtolower($sql), $sql);
+        }
+    }
+
+    #[Test]
+    public function an_owner_with_only_closed_deals_outside_the_period_and_nothing_open_has_no_line(): void
+    {
+        $august = $this->report()->rows($this->repB, $this->filters(['from' => '2026-08-01', 'to' => '2026-08-31'], $this->repB));
+
+        $this->assertTrue($august->isEmpty(), 'every column of such a line would be zero');
+
+        $september = $this->report()->rows($this->repB, $this->filters([], $this->repB));
+
+        $this->assertSame([$this->repB->name], $september->map(fn (ReportRow $row): string => $row->label)->all());
     }
 
     #[Test]

@@ -8,14 +8,18 @@ use App\Jobs\RescoreLeads;
 use Illuminate\Console\Scheduling\CallbackEvent;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Features\SupportFileUploads\FileUploadConfiguration;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
  * The scheduler entries the notification module depends on (decisions D-1,
- * D-13, plan section 3.6): the queue drain, the task passes, the stale-lead
- * pass, the lead rescore, the upload prune and the audit retention — each pinned to one
+ * D-13, plan section 3.6): the queue drain, the scheduler heartbeat
+ * app:preflight reads, the task passes, the stale-lead pass, the lead
+ * rescore, the upload prunes (attachments and Livewire temporary uploads)
+ * and the audit retention — each pinned to one
  * server, so a deploy cannot silently lose or double one.
  */
 final class SchedulerWiringTest extends TestCase
@@ -28,6 +32,30 @@ final class SchedulerWiringTest extends TestCase
         $this->assertSame('* * * * *', $event->expression);
         $this->assertTrue($event->onOneServer);
         $this->assertTrue($event->withoutOverlapping);
+    }
+
+    #[Test]
+    public function the_scheduler_heartbeat_is_a_named_closure_every_minute_on_one_server(): void
+    {
+        $event = $this->callbackEvent('scheduler:heartbeat');
+
+        $this->assertSame('* * * * *', $event->expression);
+        $this->assertTrue($event->onOneServer);
+        $this->assertTrue($event->evenInMaintenanceMode, 'the heartbeat must keep stamping while a deploy holds the site down');
+    }
+
+    #[Test]
+    public function the_scheduler_heartbeat_stamps_the_time_app_preflight_reads(): void
+    {
+        $this->travelTo(now()->startOfMinute());
+        Cache::forget('scheduler.heartbeat');
+
+        $this->callbackEvent('scheduler:heartbeat')->run(app());
+
+        $this->assertSame(now()->toIso8601String(), Cache::get('scheduler.heartbeat'));
+
+        $this->travel(11)->minutes();
+        $this->assertNull(Cache::get('scheduler.heartbeat'), 'the heartbeat outlives its ten minutes');
     }
 
     #[Test]
@@ -96,6 +124,55 @@ final class SchedulerWiringTest extends TestCase
         $disk->assertMissing('tmp/7/stale.pdf');
         $disk->assertExists('tmp/7/fresh.pdf');
         $disk->assertExists('leads/1/kept.pdf');
+    }
+
+    #[Test]
+    public function the_livewire_upload_prune_is_a_named_daily_closure_on_one_server(): void
+    {
+        $event = $this->callbackEvent('uploads:prune-livewire-temporary');
+
+        $this->assertSame('0 0 * * *', $event->expression);
+        $this->assertTrue($event->onOneServer);
+    }
+
+    #[Test]
+    public function the_livewire_upload_prune_removes_only_temporary_uploads_older_than_a_day(): void
+    {
+        // In tests Livewire resolves its own faked disk; the closure reads the same configuration.
+        $disk = FileUploadConfiguration::storage();
+        $directory = FileUploadConfiguration::path();
+        $disk->put($directory.'/stale-import.csv', "name,email\nReal Person,real@example.com\n");
+        $disk->put($directory.'/stale-import.csv.json', '{}');
+        $disk->put($directory.'/fresh-import.csv', 'fresh');
+        $disk->put('kept/older.csv', 'kept');
+        touch($disk->path($directory.'/stale-import.csv'), now()->subDays(2)->getTimestamp());
+        touch($disk->path($directory.'/stale-import.csv.json'), now()->subHours(25)->getTimestamp());
+        touch($disk->path('kept/older.csv'), now()->subDays(30)->getTimestamp());
+
+        $this->callbackEvent('uploads:prune-livewire-temporary')->run(app());
+
+        $disk->assertMissing($directory.'/stale-import.csv');
+        $disk->assertMissing($directory.'/stale-import.csv.json');
+        $disk->assertExists($directory.'/fresh-import.csv');
+        $disk->assertExists('kept/older.csv');
+    }
+
+    #[Test]
+    public function the_livewire_upload_prune_follows_the_configured_directory(): void
+    {
+        config(['livewire.temporary_file_upload.directory' => 'uploads-in-flight']);
+
+        $disk = FileUploadConfiguration::storage();
+        $disk->put('uploads-in-flight/stale.xlsx', 'stale');
+        $disk->put('livewire-tmp/untouched.xlsx', 'other');
+        touch($disk->path('uploads-in-flight/stale.xlsx'), now()->subDays(2)->getTimestamp());
+        touch($disk->path('livewire-tmp/untouched.xlsx'), now()->subDays(2)->getTimestamp());
+
+        $this->callbackEvent('uploads:prune-livewire-temporary')->run(app());
+
+        $disk->assertMissing('uploads-in-flight/stale.xlsx');
+        $disk->assertExists('livewire-tmp/untouched.xlsx');
+        $disk->delete('livewire-tmp/untouched.xlsx');
     }
 
     #[Test]

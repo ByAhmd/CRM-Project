@@ -14,7 +14,7 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
 | 5 — Modules, plan steps 2–10 (lookups → accounts/contacts → leads → deals → conversion → activities → notifications → search/import → dashboard/reports) | ✅ done 2026-09-07 — lookups, accounts & contacts, leads, deals & pipelines (stage workflow, line items, kanban), lead conversion, activities / notes / attachments / tasks, timeline and calendar, notifications and templated email, search / saved views / import-export, dashboard and nine reports |
 | Step 11 — Custom fields (D-9) | ✅ done 2026-09-07 — typed custom fields on leads, contacts, accounts and deals: forms, tables, filters, import and export |
 | Step 12 — Quality pass (security, performance, localisation and RTL, theme, schema on MySQL 8.4 and MariaDB 10.4, authorisation matrix, test review) | ✅ done 2026-09-15 — steps 0–12 complete; open go-live items with their owners in [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) |
-| Step 13 — Production readiness (deployment pipeline and runbook, trusted proxies, clean install, demo data) | next |
+| Step 13 — Production readiness (deployment pipeline and runbook, trusted proxies, clean install, demo data) | ✅ engineering done 2026-09-15 — deploy workflow, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/OPERATIONS.md](docs/OPERATIONS.md), production preflight, trusted proxies, scheduler heartbeat, `app:demo-data`; clean install, rollback and the whole suite proven on MySQL 8.4 and MariaDB 10.4; real database-queue import/export smoke run; EXPLAIN at 40× volume. Go-live rows that need the host or the owner stay open in [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) |
 
 ## Local setup
 
@@ -27,6 +27,8 @@ php artisan app:onboard     # seeds all reference data (roles, permissions, sett
                             # system activity types, email templates), then creates the first super admin
 php artisan app:preflight   # fails on pending migrations or missing reference data
 herd link crm               # http://crm.test/admin
+php artisan app:demo-data   # optional: bilingual demo dataset through the real services (8 demo users, one password
+                            # printed once); never in production; remove it with `php artisan app:demo-data --fresh`
 ```
 
 The reference seed is idempotent and never overwrites an administrator's edits: `php artisan db:seed --force` after a
@@ -48,7 +50,10 @@ composer check              # pint --test, phpstan, phpunit — must be green be
 | [docs/STOCKFLOW_COMPARISON.md](docs/STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table, reuse classification (must / should / CRM-specific / must not), conflict resolution |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-21 |
 | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) | Seeded roles and their default grants, record scope (own / team / all) and the guards above the permissions |
-| [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, date, result and owner |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Hostinger runbook: prerequisites, first deployment, the cron line and what it drives, releases, rollback, PHP limits, backups, logs, monitoring, the deploy workflow and its secrets, the full `.env` reference |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2 operations: users, roles, audit retention, deleted records, imports/exports, attachments, failed jobs, scheduler troubleshooting, settings, demo data, common preflight failures |
+| [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) | Go-live checklist (steps 12 and 13): every go-live item with its evidence, date, result and owner |
+| [docs/Static_Analysis_Known_False_Positives.md](docs/Static_Analysis_Known_False_Positives.md) | PHPStan level 5 without baseline or suppressions; how a genuine false positive would be recorded |
 | [docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md) | The 13 questions as asked on 2026-09-04 (historical, all resolved) |
 
 ## Stack (pinned to the established environment)
