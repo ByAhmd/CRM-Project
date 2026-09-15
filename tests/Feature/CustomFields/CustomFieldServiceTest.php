@@ -295,7 +295,7 @@ final class CustomFieldServiceTest extends TestCase
             $this->service->delete($field);
             $this->fail('a definition with values was deleted');
         } catch (InvalidCustomFieldException $exception) {
-            $this->assertSame(__('custom_fields.validation.delete_has_values', ['count' => '1']), $exception->getMessage());
+            $this->assertSame(trans_choice('custom_fields.validation.delete_has_values', 1, ['count' => '1']), $exception->getMessage());
         }
 
         $this->service->update($field, ['is_active' => false]);

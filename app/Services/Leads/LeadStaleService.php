@@ -48,6 +48,14 @@ final class LeadStaleService
                     continue;
                 }
 
+                // An owner who may no longer sign in (disabled, pending) is not
+                // told; the lead is still stamped so the pass stays idempotent.
+                if (! $owner->status->canAuthenticate()) {
+                    Lead::withoutWorkflowGuard(static fn (): bool => $lead->forceFill(['stale_notified_at' => $now])->saveQuietly());
+
+                    continue;
+                }
+
                 try {
                     $owner->notify((new LeadStaleNotification($lead, $this->daysIdle($lead, $now)))->locale($owner->preferredLocale()));
                 } catch (Throwable $exception) {

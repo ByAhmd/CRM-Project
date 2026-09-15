@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Imports;
 
 use App\Enums\NavigationGroup;
-use App\Enums\Permission;
 use App\Filament\Imports\AccountImporter;
 use App\Filament\Imports\ContactImporter;
 use App\Filament\Imports\DealImporter;
@@ -16,6 +15,7 @@ use App\Filament\Resources\Imports\Schemas\ImportInfolist;
 use App\Filament\Resources\Imports\Tables\ImportsTable;
 use App\Models\Import;
 use App\Models\User;
+use App\Policies\ImportPolicy;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -24,9 +24,10 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Import history (module 18): read-only. A user sees their own runs; holders
- * of `imports.view` see every run. The rows are written by Filament's
- * ImportAction and pruned by retention only.
+ * Import history (module 18, decisions D-4, D-13): read-only. A user sees
+ * their own runs; holders of `imports.view` see other users' runs of the
+ * entities they reach at all level (ImportPolicy). The rows are written by
+ * Filament's ImportAction and pruned by retention only.
  */
 final class ImportResource extends Resource
 {
@@ -41,6 +42,9 @@ final class ImportResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUpTray;
 
     protected static ?int $navigationSort = 60;
+
+    /** Global search covers leads, contacts, accounts, deals and tasks only (plan section 3.8, decision A-8). */
+    protected static bool $isGloballySearchable = false;
 
     protected static ?string $recordTitleAttribute = 'file_name';
 
@@ -75,7 +79,11 @@ final class ImportResource extends Resource
     }
 
     /**
-     * Own runs always; every run for `imports.view` holders.
+     * Own runs always; other users' runs only of the importers whose entity
+     * the viewer reviews (ImportPolicy::reviews: `imports.view` plus all-level
+     * reach), so neither the list nor the view page opens a run the viewer
+     * could not read. The reviewable importers are resolved in PHP from the
+     * known classes, not per row.
      */
     public static function getEloquentQuery(): Builder
     {
@@ -86,11 +94,19 @@ final class ImportResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->can(Permission::ImportsView->value)) {
-            return $query;
-        }
+        $policy = app(ImportPolicy::class);
+        $reviewable = array_values(array_filter(
+            array_keys(self::entityOptions()),
+            static fn (string $importer): bool => $policy->reviews($user, $importer),
+        ));
 
-        return $query->where('user_id', $user->getKey());
+        return $query->where(static function (Builder $runs) use ($user, $reviewable): void {
+            $runs->where('user_id', $user->getKey());
+
+            if ($reviewable !== []) {
+                $runs->orWhereIn('importer', $reviewable);
+            }
+        });
     }
 
     public static function getPages(): array

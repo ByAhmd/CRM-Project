@@ -246,9 +246,4 @@ final class StaleLeadsTest extends TestCase
     {
         return app(LeadStaleService::class);
     }
-
-    private function statusOfKind(LeadStatusKind $kind): LeadStatus
-    {
-        return LeadStatus::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
-    }
 }

@@ -7,8 +7,9 @@ namespace Tests\Support;
 use App\Policies\Concerns\ChecksPermissions;
 
 /**
- * Exercises the shared policy trait against OwnedStub before the real owned
- * entities exist.
+ * The shared ChecksPermissions trait with nothing layered on top, so its
+ * permission-plus-scope rules are tested in isolation from the verb
+ * overrides and state guards of any real entity policy.
  */
 final class OwnedStubPolicy
 {

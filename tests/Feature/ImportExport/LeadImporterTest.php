@@ -17,13 +17,11 @@ use App\Models\Import;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\Tag;
-use App\Models\Team;
 use App\Models\User;
 use Filament\Actions\Imports\Jobs\ImportCsv;
 use Filament\Actions\Imports\Models\FailedImportRow;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use League\Csv\Reader;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -57,7 +55,7 @@ final class LeadImporterTest extends TestCase
         Tag::factory()->create(['name_en' => 'VIP', 'name_ar' => 'كبار العملاء']);
         Tag::factory()->create(['name_en' => 'Enterprise', 'name_ar' => 'المنشآت']);
 
-        $import = $this->runImport($manager, $this->rows('leads.csv'));
+        $import = $this->runImport($manager, $this->importFixtureRows('leads.csv'));
 
         $this->assertSame(3, $import->successful_rows);
         $this->assertSame(0, $import->getFailedRowsCount());
@@ -100,19 +98,19 @@ final class LeadImporterTest extends TestCase
         $rep = $this->salesRep();
         $this->makeUser(CrmRole::SalesRep, ['email' => 'outsider@example.com']);
 
-        $import = $this->runImport($rep, $this->rows('leads_invalid.csv'));
+        $import = $this->runImport($rep, $this->importFixtureRows('leads_invalid.csv'));
 
         $this->assertSame(1, $import->successful_rows);
         $this->assertSame(6, $import->getFailedRowsCount());
         $this->assertSame(6, FailedImportRow::query()->where('import_id', $import->getKey())->count());
         $this->assertTrue(Lead::query()->where('last_name', 'Row')->exists());
 
-        $this->assertSame(__('validation.required', ['attribute' => __('imports.columns.lead.first_name')]), $this->failure($import, 'last_name', 'Missing'));
-        $this->assertSame(__('validation.email', ['attribute' => __('imports.columns.lead.email')]), $this->failure($import, 'last_name', 'Email'));
-        $this->assertSame(__('imports.validation.unknown_lookup', ['value' => 'Nonexistent']), $this->failure($import, 'email', 'unknown@example.com'));
-        $this->assertSame(__('imports.validation.converted_status'), $this->failure($import, 'email', 'conv@example.com'));
-        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'outsider@example.com']), $this->failure($import, 'email', 'owner@example.com'));
-        $this->assertSame(__('validation.in', ['attribute' => __('imports.columns.lead.country')]), $this->failure($import, 'email', 'country@example.com'));
+        $this->assertSame(__('validation.required', ['attribute' => __('imports.columns.lead.first_name')]), $this->failedImportReason($import, 'last_name', 'Missing'));
+        $this->assertSame(__('validation.email', ['attribute' => __('imports.columns.lead.email')]), $this->failedImportReason($import, 'last_name', 'Email'));
+        $this->assertSame(__('imports.validation.unknown_lookup', ['value' => 'Nonexistent']), $this->failedImportReason($import, 'email', 'unknown@example.com'));
+        $this->assertSame(__('imports.validation.converted_status'), $this->failedImportReason($import, 'email', 'conv@example.com'));
+        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'outsider@example.com']), $this->failedImportReason($import, 'email', 'owner@example.com'));
+        $this->assertSame(__('validation.in', ['attribute' => __('imports.columns.lead.country')]), $this->failedImportReason($import, 'email', 'country@example.com'));
     }
 
     #[Test]
@@ -126,7 +124,7 @@ final class LeadImporterTest extends TestCase
 
         $this->assertSame(
             __('imports.validation.unknown_lookup', ['value' => 'Nonexistent'], 'en'),
-            $this->failure($import, 'first_name', 'Unknown'),
+            $this->failedImportReason($import, 'first_name', 'Unknown'),
         );
 
         foreach ([LeadImporter::class, ContactImporter::class, AccountImporter::class, DealImporter::class] as $importer) {
@@ -134,7 +132,7 @@ final class LeadImporterTest extends TestCase
                 $import->options(['duplicate_strategy' => 'skip', 'locale' => $locale]);
 
                 $this->assertSame(
-                    __('imports.notifications.completed', ['successful' => '0', 'failed' => '1'], $locale),
+                    trans_choice('imports.notifications.completed', 0, ['count' => '0'], $locale).' '.trans_choice('imports.notifications.failed', 1, ['count' => '1'], $locale),
                     $importer::getCompletedNotificationBody($import),
                     "{$importer} renders the {$locale} completion body regardless of the worker's locale",
                 );
@@ -155,7 +153,7 @@ final class LeadImporterTest extends TestCase
         $skipped = $this->runImport($rep, [$row]);
 
         $this->assertSame(0, $skipped->successful_rows);
-        $this->assertSame(__('imports.validation.duplicate', ['id' => (string) $existing->getKey()]), $this->failure($skipped, 'email', 'DUP@example.com'));
+        $this->assertSame(__('imports.validation.duplicate', ['id' => (string) $existing->getKey()]), $this->failedImportReason($skipped, 'email', 'DUP@example.com'));
         $this->assertSame(1, Lead::query()->count());
         $this->assertSame('Old Co', $existing->refresh()->company_name);
 
@@ -214,8 +212,8 @@ final class LeadImporterTest extends TestCase
         ], ['duplicate_strategy' => 'update']);
 
         $this->assertSame(0, $refused->successful_rows);
-        $this->assertSame(__('imports.validation.update_forbidden', ['id' => (string) $theirs->getKey()]), $this->failure($refused, 'email', 'theirs@example.com'));
-        $this->assertSame(__('imports.validation.create_forbidden'), $this->failure($refused, 'email', 'new@example.com'));
+        $this->assertSame(__('imports.validation.update_forbidden', ['id' => (string) $theirs->getKey()]), $this->failedImportReason($refused, 'email', 'theirs@example.com'));
+        $this->assertSame(__('imports.validation.create_forbidden'), $this->failedImportReason($refused, 'email', 'new@example.com'));
         $this->assertSame('Old Co', $theirs->refresh()->company_name, 'a visible teammate record is not updated without the update verb');
         $this->assertSame(1, Lead::query()->count(), 'nothing is created without the create verb');
 
@@ -228,26 +226,9 @@ final class LeadImporterTest extends TestCase
         ]);
 
         $this->assertSame(1, $handed->successful_rows);
-        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failure($handed, 'email', 'handed@example.com'));
+        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failedImportReason($handed, 'email', 'handed@example.com'));
         $this->assertFalse(Lead::query()->where('email_normalized', 'handed@example.com')->exists(), 'a reachable teammate is still not an owner without the assign verb (D-4)');
         $this->assertSame($importer->getKey(), Lead::query()->where('email_normalized', 'kept@example.com')->firstOrFail()->owner_id);
-    }
-
-    /**
-     * A user holding exactly the given permissions and nothing through a
-     * role (buildable through the Roles resource, D-3), in the team.
-     *
-     * @param  list<Permission>  $permissions
-     */
-    private function userWithPermissions(Team $team, array $permissions): User
-    {
-        $user = User::factory()->create(['team_id' => $team->getKey()]);
-        $user->syncRoles([]);
-        $user->syncPermissions(array_map(fn (Permission $permission): string => $permission->value, $permissions));
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        return $user->fresh() ?? $user;
     }
 
     /**
@@ -271,28 +252,5 @@ final class LeadImporterTest extends TestCase
         $import->touch('completed_at');
 
         return $import->refresh();
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function rows(string $fixture): array
-    {
-        $reader = Reader::createFromPath(base_path('tests/Fixtures/imports/'.$fixture));
-        $reader->setHeaderOffset(0);
-
-        return array_values(iterator_to_array($reader->getRecords()));
-    }
-
-    /** The reason the row whose $column holds $value was refused. */
-    private function failure(Import $import, string $column, string $value): ?string
-    {
-        foreach (FailedImportRow::query()->where('import_id', $import->getKey())->get() as $row) {
-            if (($row->data[$column] ?? null) === $value) {
-                return $row->validation_error;
-            }
-        }
-
-        $this->fail("no failed row with {$column} = {$value}");
     }
 }

@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Pipelines\Schemas;
 
 use App\Models\Pipeline;
+use Closure;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Validation\Rule;
 
+/**
+ * Create / edit pipeline. Both names are unique across live pipelines; the
+ * index is global, so a deleted namesake is refused with a "restore instead"
+ * message rather than failing on insert.
+ */
 final class PipelineForm
 {
     public static function configure(Schema $schema): Schema
@@ -29,6 +35,9 @@ final class PipelineForm
                                 fn (?Pipeline $record): object => Rule::unique('pipelines', 'name_ar')
                                     ->ignore($record?->getKey())
                                     ->withoutTrashed(),
+                                // The database index is global, so a deleted namesake must be
+                                // restored rather than recreated; say so instead of crashing.
+                                fn (?Pipeline $record): Closure => self::trashedNamesakeRule('name_ar', $record),
                             ])
                             ->validationMessages(['unique' => __('pipelines.validation.name_unique')]),
 
@@ -43,6 +52,9 @@ final class PipelineForm
                                 fn (?Pipeline $record): object => Rule::unique('pipelines', 'name_en')
                                     ->ignore($record?->getKey())
                                     ->withoutTrashed(),
+                                // The database index is global, so a deleted namesake must be
+                                // restored rather than recreated; say so instead of crashing.
+                                fn (?Pipeline $record): Closure => self::trashedNamesakeRule('name_en', $record),
                             ])
                             ->validationMessages(['unique' => __('pipelines.validation.name_unique')]),
 
@@ -68,5 +80,20 @@ final class PipelineForm
                     ->columns(1),
             ])
             ->columns(1);
+    }
+
+    /** Fails when a soft-deleted pipeline other than the record carries the name. */
+    private static function trashedNamesakeRule(string $column, ?Pipeline $record): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($column, $record): void {
+            $trashed = Pipeline::onlyTrashed()
+                ->where($column, $value)
+                ->whereKeyNot($record?->getKey())
+                ->exists();
+
+            if ($trashed) {
+                $fail(__('pipelines.validation.'.$column.'_unique_trashed'));
+            }
+        };
     }
 }

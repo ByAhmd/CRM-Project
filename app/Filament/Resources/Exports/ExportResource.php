@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Exports;
 
 use App\Enums\NavigationGroup;
-use App\Enums\Permission;
 use App\Filament\Exports\AccountExporter;
 use App\Filament\Exports\ActivityExporter;
 use App\Filament\Exports\ContactExporter;
@@ -16,6 +15,7 @@ use App\Filament\Resources\Exports\Pages\ListExports;
 use App\Filament\Resources\Exports\Tables\ExportsTable;
 use App\Models\Export;
 use App\Models\User;
+use App\Policies\ExportPolicy;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -23,10 +23,11 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Export history (module 18, decision D-13): read-only. A user sees their own
- * runs and downloads their own files; holders of `exports.view` see and
- * download every run. The rows are written by Filament's ExportAction and
- * pruned by retention only, files included.
+ * Export history (module 18, decisions D-4, D-13): read-only. A user sees
+ * their own runs and downloads their own files; holders of `exports.view` see
+ * and download other users' runs of the entities they reach at all level
+ * (ExportPolicy). The rows are written by Filament's ExportAction and pruned
+ * by retention only, files included.
  */
 final class ExportResource extends Resource
 {
@@ -41,6 +42,9 @@ final class ExportResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowDownTray;
 
     protected static ?int $navigationSort = 61;
+
+    /** Global search covers leads, contacts, accounts, deals and tasks only (plan section 3.8, decision A-8). */
+    protected static bool $isGloballySearchable = false;
 
     protected static ?string $recordTitleAttribute = 'file_name';
 
@@ -70,7 +74,11 @@ final class ExportResource extends Resource
     }
 
     /**
-     * Own runs always; every run for `exports.view` holders.
+     * Own runs always; other users' runs only of the exporters whose entity
+     * the viewer reviews (ExportPolicy::reviews: `exports.view` plus all-level
+     * reach), so the list never shows a run the viewer could not open. The
+     * reviewable exporters are resolved in PHP from the known classes, not
+     * per row.
      */
     public static function getEloquentQuery(): Builder
     {
@@ -81,11 +89,19 @@ final class ExportResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->can(Permission::ExportsView->value)) {
-            return $query;
-        }
+        $policy = app(ExportPolicy::class);
+        $reviewable = array_values(array_filter(
+            array_keys(self::entityOptions()),
+            static fn (string $exporter): bool => $policy->reviews($user, $exporter),
+        ));
 
-        return $query->where('user_id', $user->getKey());
+        return $query->where(static function (Builder $runs) use ($user, $reviewable): void {
+            $runs->where('user_id', $user->getKey());
+
+            if ($reviewable !== []) {
+                $runs->orWhereIn('exporter', $reviewable);
+            }
+        });
     }
 
     public static function getPages(): array

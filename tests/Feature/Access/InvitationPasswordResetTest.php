@@ -76,7 +76,7 @@ final class InvitationPasswordResetTest extends TestCase
                 'passwordConfirmation' => self::NEW_PASSWORD,
             ])
             ->call('resetPassword')
-            ->assertNotified();
+            ->assertNotified(__(Password::INVALID_USER));
 
         $disabled->refresh();
 

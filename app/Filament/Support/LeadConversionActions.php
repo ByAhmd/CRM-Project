@@ -50,7 +50,7 @@ final class LeadConversionActions
     {
         return Action::make('convert')
             ->label(__('leads.actions.convert'))
-            ->icon(Heroicon::OutlinedArrowRightCircle)
+            ->icon(Heroicon::OutlinedArrowPathRoundedSquare)
             ->color('success')
             ->modalHeading(__('leads.actions.convert_heading'))
             ->modalSubmitActionLabel(__('leads.actions.convert_submit'))
@@ -226,7 +226,16 @@ final class LeadConversionActions
             return null;
         }
 
-        $matches = app(DuplicateFinder::class)->contacts(email: $record->email, phone: null);
+        $viewer = auth()->user();
+
+        if (! $viewer instanceof User) {
+            return null;
+        }
+
+        // The finder is confined to the actor's reach, so a contact outside it
+        // is neither suggested nor named, and the five-match limit applies to
+        // contacts the actor may pick (D-4, A-11).
+        $matches = app(DuplicateFinder::class)->contacts(email: $record->email, phone: null, viewer: $viewer);
 
         if ($matches->isEmpty()) {
             return null;

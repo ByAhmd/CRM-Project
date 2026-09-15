@@ -23,7 +23,8 @@ use Throwable;
  * and a re-run after a failure never repeats a message. A send that fails
  * (a broken mailbox) is reported and does not stall the pass: the task is
  * stamped anyway, because the in-app entry is written before mail is
- * attempted. Only open tasks with an assignee qualify; the stamps are
+ * attempted. An assignee who may no longer sign in is skipped but the task is
+ * stamped all the same. Only open tasks with an assignee qualify; the stamps are
  * written quietly, outside the workflow guard, because they are
  * bookkeeping rather than a business change worth an audit row.
  */
@@ -87,6 +88,16 @@ final class TaskReminderService
                 $assignee = $task->assignee;
 
                 if (! $assignee instanceof User) {
+                    continue;
+                }
+
+                // An assignee who may no longer sign in (disabled, pending) is
+                // not told; the task is still stamped, so the pass stays
+                // idempotent and a later re-activation does not replay old
+                // reminders.
+                if (! $assignee->status->canAuthenticate()) {
+                    Task::withoutWorkflowGuard(static fn (): bool => $task->forceFill([$stamp => $now])->saveQuietly());
+
                     continue;
                 }
 

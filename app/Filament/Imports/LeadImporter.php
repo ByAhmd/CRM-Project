@@ -6,6 +6,7 @@ namespace App\Filament\Imports;
 
 use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
+use App\Enums\LeadStatusKind;
 use App\Filament\Imports\Concerns\ResolvesImportLookups;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldActions;
@@ -34,7 +35,7 @@ use Illuminate\Validation\Rule;
  * duplicate strategy decides whether it is updated or the row is refused.
  * A new lead is owned by the importer unless the owner column names someone
  * else, starts in the default status when the column is blank, and never
- * starts in the Converted status. An existing lead keeps its status: status
+ * starts in a Qualified or Converted status. An existing lead keeps its status: status
  * moves go through the workflow only (D-7).
  */
 final class LeadImporter extends Importer
@@ -53,25 +54,25 @@ final class LeadImporter extends Importer
                 ->label(__('imports.columns.lead.first_name'))
                 ->requiredMapping()
                 ->rules(['required', 'string', 'min:2', 'max:80'])
-                ->example('فهد'),
+                ->example(__('imports.examples.lead.first_name')),
 
             ImportColumn::make('last_name')
                 ->label(__('imports.columns.lead.last_name'))
                 ->requiredMapping()
                 ->rules(['required', 'string', 'min:2', 'max:80'])
-                ->example('القحطاني'),
+                ->example(__('imports.examples.lead.last_name')),
 
             ImportColumn::make('company_name')
                 ->label(__('imports.columns.lead.company_name'))
                 ->rules(['nullable', 'string', 'max:150'])
                 ->ignoreBlankState()
-                ->example('شركة الأفق'),
+                ->example(__('imports.examples.lead.company_name')),
 
             ImportColumn::make('job_title')
                 ->label(__('imports.columns.lead.job_title'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('مدير المشتريات'),
+                ->example(__('imports.examples.lead.job_title')),
 
             ImportColumn::make('email')
                 ->label(__('imports.columns.lead.email'))
@@ -95,19 +96,19 @@ final class LeadImporter extends Importer
                 ->label(__('imports.columns.lead.address_line'))
                 ->rules(['nullable', 'string', 'max:255'])
                 ->ignoreBlankState()
-                ->example('طريق الملك فهد'),
+                ->example(__('imports.examples.lead.address_line')),
 
             ImportColumn::make('city')
                 ->label(__('imports.columns.lead.city'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('الرياض'),
+                ->example(__('imports.examples.lead.city')),
 
             ImportColumn::make('region')
                 ->label(__('imports.columns.lead.region'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('منطقة الرياض'),
+                ->example(__('imports.examples.lead.region')),
 
             ImportColumn::make('country')
                 ->label(__('imports.columns.lead.country'))
@@ -131,7 +132,7 @@ final class LeadImporter extends Importer
 
                     $record->lead_source_id = $source?->getKey();
                 })
-                ->example('Website'),
+                ->example(__('imports.examples.lead.source')),
 
             ImportColumn::make('status')
                 ->label(__('imports.columns.lead.status'))
@@ -148,9 +149,14 @@ final class LeadImporter extends Importer
                         $importer->failRow('converted_status');
                     }
 
+                    // Qualification needs the note LeadStatusWorkflow records (D-7).
+                    if ($status?->kind === LeadStatusKind::Qualified) {
+                        $importer->failRow('qualified_status');
+                    }
+
                     $record->lead_status_id = $status?->getKey();
                 })
-                ->example('New'),
+                ->example(__('imports.examples.lead.status')),
 
             ImportColumn::make('priority')
                 ->label(__('imports.columns.lead.priority'))
@@ -169,13 +175,9 @@ final class LeadImporter extends Importer
                 ->label(__('imports.columns.lead.owner'))
                 ->rules(['nullable', 'email', 'max:190'])
                 ->ignoreBlankState()
-                ->fillRecordUsing(function (self $importer, Lead $record, ?string $state): void {
-                    $owner = $importer->resolveOwner($state, Lead::permissionGroup());
-
-                    if ($owner !== null) {
-                        $record->owner_id = $owner->getKey();
-                    }
-                })
+                // A new record is created for the named owner; an existing one is
+                // reassigned through RecordAssignmentService (D-4, A-20).
+                ->fillRecordUsing(fn (self $importer, Lead $record, ?string $state) => $importer->fillOwner($record, $state))
                 ->example('rep@example.com'),
 
             ImportColumn::make('tags')
@@ -183,13 +185,13 @@ final class LeadImporter extends Importer
                 ->rules(['nullable', 'string', 'max:500'])
                 ->ignoreBlankState()
                 ->fillRecordUsing(fn (self $importer, ?string $state) => $importer->rememberTags($state))
-                ->example('VIP|Enterprise'),
+                ->example(__('imports.examples.lead.tags')),
 
             ImportColumn::make('description')
                 ->label(__('imports.columns.lead.description'))
                 ->rules(['nullable', 'string', 'max:5000'])
                 ->ignoreBlankState()
-                ->example('Met at the Riyadh expo.'),
+                ->example(__('imports.examples.lead.description')),
 
             // One column per active definition of the entity, mapped by its
             // own label (D-9).
@@ -264,10 +266,7 @@ final class LeadImporter extends Importer
     {
         ImportExportActions::applyLocale($import->getOptions());
 
-        return __('imports.notifications.completed', [
-            'successful' => (string) $import->successful_rows,
-            'failed' => (string) $import->getFailedRowsCount(),
-        ]);
+        return self::completedNotificationBody($import);
     }
 
     /**

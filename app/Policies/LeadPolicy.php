@@ -12,7 +12,7 @@ use App\Policies\Concerns\ChecksPermissions;
 /**
  * Leads (D-4, D-7, D-13): permission + visibility scope through ChecksPermissions,
  * plus the lead verbs. A converted lead can no longer be edited, re-statused
- * or converted again.
+ * or converted again; a soft-deleted lead accepts no write but restore (D-13).
  */
 final class LeadPolicy
 {
@@ -29,7 +29,9 @@ final class LeadPolicy
             return false;
         }
 
-        return $user->can($this->permission('update')) && $this->reaches($user, $lead);
+        return ! $this->isTrashed($lead)
+            && $user->can($this->permission('update'))
+            && $this->reaches($user, $lead);
     }
 
     public function changeStatus(User $user, ?Lead $lead = null): bool
@@ -58,7 +60,9 @@ final class LeadPolicy
     /** Sending a templated email (D-10): the cross-cutting `email.send` permission plus reach over the record. */
     public function sendEmail(User $user, ?Lead $lead = null): bool
     {
-        return $user->can(Permission::EmailSend->value) && $this->reaches($user, $lead);
+        return ! $this->isTrashed($lead)
+            && $user->can(Permission::EmailSend->value)
+            && $this->reaches($user, $lead);
     }
 
     public function export(User $user): bool

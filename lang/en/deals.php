@@ -136,6 +136,8 @@ return [
         'close_reason_kind_mismatch' => 'The close reason does not match the outcome: pick a win reason for a won deal and a loss reason for a lost deal.',
         'pipeline_has_no_closed_stage' => 'The deal\'s pipeline has no won or lost stage.',
         'pipeline_has_no_open_stage' => 'The deal\'s pipeline has no open stage to reopen into.',
+        'line_total_too_large' => 'A line total cannot exceed :max. Lower the quantity or the unit price.',
+        'lines_total_too_large' => 'The lines add up to more than :max, the largest deal amount. Split the deal or lower the lines.',
     ],
 
     'empty' => [

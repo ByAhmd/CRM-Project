@@ -233,11 +233,11 @@ final class DealInfolist
         $minutes = intdiv($seconds % 3600, 60);
 
         if ($days > 0) {
-            return trans_choice('deals.history.days', $days).', '.trans_choice('deals.history.hours', $hours);
+            return trans_choice('deals.history.days', $days).__('common.separators.list').trans_choice('deals.history.hours', $hours);
         }
 
         if ($hours > 0) {
-            return trans_choice('deals.history.hours', $hours).', '.trans_choice('deals.history.minutes', $minutes);
+            return trans_choice('deals.history.hours', $hours).__('common.separators.list').trans_choice('deals.history.minutes', $minutes);
         }
 
         return trans_choice('deals.history.minutes', $minutes);

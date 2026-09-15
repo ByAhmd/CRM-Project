@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * Exports the rows of the table query it is launched from — already inside
  * the actor's visible scope — with the industry and enums rendered as labels
  * in the actor's locale, the parent and owner by name, tags joined, dates
- * as Y-m-d H:i. Free-text cells are protected against spreadsheet formula
+ * as Y-m-d H:i. All text cells are protected against spreadsheet formula
  * injection.
  */
 final class AccountExporter extends Exporter
@@ -38,29 +38,33 @@ final class AccountExporter extends Exporter
             ExportColumn::make('name')->label(__('exports.columns.account.name'))->preventFormulaInjection(),
             ExportColumn::make('type')
                 ->label(__('exports.columns.account.type'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
-            ExportColumn::make('industry.display_name')->label(__('exports.columns.account.industry')),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
+            ExportColumn::make('industry.display_name')->label(__('exports.columns.account.industry'))->preventFormulaInjection(),
             ExportColumn::make('size')
                 ->label(__('exports.columns.account.size'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
-            ExportColumn::make('website')->label(__('exports.columns.account.website')),
-            ExportColumn::make('email')->label(__('exports.columns.account.email')),
-            ExportColumn::make('phone')->label(__('exports.columns.account.phone')),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
+            ExportColumn::make('website')->label(__('exports.columns.account.website'))->preventFormulaInjection(),
+            ExportColumn::make('email')->label(__('exports.columns.account.email'))->preventFormulaInjection(),
+            ExportColumn::make('phone')->label(__('exports.columns.account.phone'))->preventFormulaInjection(),
             ExportColumn::make('address_line')->label(__('exports.columns.account.address_line'))->preventFormulaInjection(),
             ExportColumn::make('city')->label(__('exports.columns.account.city'))->preventFormulaInjection(),
             ExportColumn::make('region')->label(__('exports.columns.account.region'))->preventFormulaInjection(),
             ExportColumn::make('country')
                 ->label(__('exports.columns.account.country'))
-                ->formatStateUsing(fn (?string $state): ?string => ImportExportActions::country($state)),
-            ExportColumn::make('postal_code')->label(__('exports.columns.account.postal_code')),
+                ->formatStateUsing(fn (?string $state): ?string => ImportExportActions::country($state))
+                ->preventFormulaInjection(),
+            ExportColumn::make('postal_code')->label(__('exports.columns.account.postal_code'))->preventFormulaInjection(),
             ExportColumn::make('parent.name')->label(__('exports.columns.account.parent'))->preventFormulaInjection(),
-            ExportColumn::make('owner.name')->label(__('exports.columns.account.owner')),
+            ExportColumn::make('owner.name')->label(__('exports.columns.account.owner'))->preventFormulaInjection(),
             ExportColumn::make('customer_since')
                 ->label(__('exports.columns.account.customer_since'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::date($state)),
             ExportColumn::make('tags')
                 ->label(__('exports.columns.account.tags'))
-                ->state(fn (Account $record): array => $record->tags->map(fn (Model $tag): string => (string) $tag->getAttribute('display_name'))->all()),
+                ->state(fn (Account $record): array => $record->tags->map(fn (Model $tag): string => (string) $tag->getAttribute('display_name'))->all())
+                ->preventFormulaInjection(),
             ExportColumn::make('description')->label(__('exports.columns.account.description'))->preventFormulaInjection(),
             ExportColumn::make('created_at')
                 ->label(__('exports.columns.account.created_at'))
@@ -103,9 +107,11 @@ final class AccountExporter extends Exporter
     {
         ImportExportActions::applyLocale($export->getOptions());
 
-        return __('exports.notifications.completed', [
-            'successful' => (string) $export->successful_rows,
-            'failed' => (string) $export->getFailedRowsCount(),
-        ]);
+        $body = trans_choice('exports.notifications.completed', (int) $export->successful_rows);
+        $failed = $export->getFailedRowsCount();
+
+        return $failed > 0
+            ? $body.' '.trans_choice('exports.notifications.failed', $failed)
+            : $body;
     }
 }

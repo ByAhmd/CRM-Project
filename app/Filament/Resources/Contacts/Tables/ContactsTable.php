@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Contacts\Tables;
 
 use App\Enums\CustomFieldEntity;
 use App\Filament\Exports\ContactExporter;
+use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\EmailActions;
@@ -93,9 +94,10 @@ final class ContactsTable
             ])
             ->defaultSort('last_name')
             ->filters([
+                // Only the accounts the viewer may read are offered (D-4).
                 SelectFilter::make('account')
                     ->label(__('contacts.filters.account'))
-                    ->relationship('account', 'name')
+                    ->relationship('account', 'name', fn (Builder $query): Builder => $query->whereIn('accounts.id', AccountResource::getEloquentQuery()->select('accounts.id')))
                     ->searchable()
                     ->preload(),
 

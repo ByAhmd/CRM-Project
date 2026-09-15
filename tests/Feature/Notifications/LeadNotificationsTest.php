@@ -9,7 +9,6 @@ use App\Enums\LeadStatusKind;
 use App\Exceptions\Leads\InvalidLeadTransitionException;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\User;
 use App\Notifications\LeadConvertedNotification;
 use App\Services\Leads\ConversionRequest;
@@ -165,10 +164,5 @@ final class LeadNotificationsTest extends TestCase
         app(LeadStatusWorkflow::class)->transition($lead, $this->statusOfKind(LeadStatusKind::Qualified), $owner, 'Budget confirmed.');
 
         return $lead->refresh();
-    }
-
-    private function statusOfKind(LeadStatusKind $kind): LeadStatus
-    {
-        return LeadStatus::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

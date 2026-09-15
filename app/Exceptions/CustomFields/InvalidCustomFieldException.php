@@ -87,7 +87,7 @@ final class InvalidCustomFieldException extends RuntimeException
 
     public static function deleteHasValues(int $count): self
     {
-        return new self((string) __('custom_fields.validation.delete_has_values', ['count' => (string) $count]));
+        return new self(trans_choice('custom_fields.validation.delete_has_values', $count, ['count' => (string) $count]));
     }
 
     public static function unsupportedEntity(string $model): self

@@ -36,7 +36,7 @@ return [
         'kind_locked' => 'The kind of a system activity type cannot be changed.',
         'icon' => 'Shown on the timeline; defaults to the icon of the kind.',
         'color' => 'Badge colour on the timeline and in lists.',
-        'is_active' => 'Inactive types are not offered when logging an activity.',
+        'is_active' => 'Inactive types are not offered when logging an activity. A type that logged activities use cannot be deleted; deactivate it instead.',
         'sort' => 'Display order in lists; lowest first.',
     ],
 

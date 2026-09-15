@@ -105,7 +105,56 @@ final class ContactResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$theirs]);
 
         $this->actingAs($rep)->get(ContactResource::getUrl('view', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($rep)->get(ContactResource::getUrl('edit', ['record' => $mine]))->assertOk();
+        $this->actingAs($rep)->get(ContactResource::getUrl('edit', ['record' => $theirs]))->assertNotFound();
         $this->actingAs($this->readOnly())->get(ContactResource::getUrl('view', ['record' => $theirs]))->assertOk();
+    }
+
+    #[Test]
+    public function a_manager_reaches_the_team_contacts_but_not_another_teams(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $member = $this->salesRep($team);
+        $outsider = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
+        $inTeam = Contact::factory()->create(['owner_id' => $member->getKey()]);
+        $outside = Contact::factory()->create(['owner_id' => $outsider->getKey()]);
+
+        Livewire::actingAs($manager)
+            ->test(ListContacts::class)
+            ->assertCanSeeTableRecords([$inTeam])
+            ->assertCanNotSeeTableRecords([$outside]);
+
+        $this->actingAs($manager)->get(ContactResource::getUrl('view', ['record' => $inTeam]))->assertOk();
+        $this->actingAs($manager)->get(ContactResource::getUrl('edit', ['record' => $inTeam]))->assertOk();
+        $this->actingAs($manager)->get(ContactResource::getUrl('view', ['record' => $outside]))->assertNotFound();
+        $this->actingAs($manager)->get(ContactResource::getUrl('edit', ['record' => $outside]))->assertNotFound();
+    }
+
+    #[Test]
+    public function the_bulk_delete_soft_deletes_only_in_scope_contacts_and_is_not_offered_to_a_rep(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $member = $this->salesRep($team);
+        $outsider = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
+        $inTeam = Contact::factory()->create(['owner_id' => $member->getKey()]);
+        $outside = Contact::factory()->create(['owner_id' => $outsider->getKey()]);
+
+        // Livewire::actingAs switches the user for every component, so each actor's component runs to completion first.
+        Livewire::actingAs($member)
+            ->test(ListContacts::class)
+            ->assertTableBulkActionHidden('delete');
+
+        $this->assertNotSoftDeleted('contacts', ['id' => $inTeam->getKey()]);
+
+        Livewire::actingAs($manager)
+            ->test(ListContacts::class)
+            ->callTableBulkAction('delete', [$inTeam, $outside])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSoftDeleted('contacts', ['id' => $inTeam->getKey()]);
+        $this->assertNotSoftDeleted('contacts', ['id' => $outside->getKey()]);
     }
 
     #[Test]

@@ -233,7 +233,7 @@ final class SendEmailActionTest extends TestCase
             ->assertActionDataSet(['subject' => 'متابعة Khalid'])
             ->callMountedAction()
             ->assertHasNoActionErrors()
-            ->assertNotified();
+            ->assertNotified(__('email.notifications.sent', ['to' => 'khalid@harbi.test']));
 
         $activity = Activity::query()->latest('id')->firstOrFail();
 

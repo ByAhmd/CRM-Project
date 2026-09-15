@@ -28,6 +28,7 @@ return [
         'possible_duplicates' => 'This record may duplicate:',
         'lead' => 'lead :name',
         'contact' => 'existing contact :name',
+        'outside_reach' => 'A record with the same details already exists outside the records you can see; check with your manager before continuing.',
     ],
 
     'notifications' => [

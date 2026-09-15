@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Filament\Imports\Concerns;
 
+use App\Contracts\OwnedRecord;
+use App\Exceptions\Access\UnassignableUserException;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Tag;
 use App\Models\User;
+use App\Services\Access\RecordAssignmentService;
 use App\Services\Access\RecordVisibilityResolver;
 use BackedEnum;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
+use Filament\Actions\Imports\Models\Import;
 use Filament\Forms\Components\Select;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -22,7 +27,9 @@ use Illuminate\Support\Str;
  *
  * A CSV names things the way people write them: a status by its Arabic or
  * English name, a user by email, an enum by its value or its label, tags as a
- * pipe-separated list. Each resolver trims, compares case-insensitively and
+ * pipe-separated list. Each resolver trims, compares case-insensitively (the
+ * name and email columns use case-insensitive collations, so the indexed
+ * columns are compared as they are, never wrapped in LOWER()) and
  * either returns the row or fails the CSV row with a translated reason — a
  * failed row never stops the import, it lands in failed_import_rows.
  *
@@ -39,6 +46,14 @@ use Illuminate\Support\Str;
  * record, and names another owner only when the importer holds the
  * entity's `assign` verb. A refused row lands in failed_import_rows with
  * the translated reason; nothing is written.
+ *
+ * Reassignment (D-4, A-20): a new record is simply created for the owner the
+ * row names, as the create pages do. A row that names another owner for an
+ * EXISTING record is a change of owner, so it is never written as a column:
+ * the owner is kept aside while the row's other values are saved and then
+ * handed to RecordAssignmentService inside the same savepoint, which writes
+ * the `{entity}.assigned` audit event and notifies the new owner. A target
+ * the service refuses fails the row and rolls the whole row back.
  *
  * The importing user is the run's owner: ImportCsv authenticates the job as
  * that user before any row is processed, so audit rows carry the right causer.
@@ -59,6 +74,13 @@ trait ResolvesImportLookups
     protected ?array $pendingTagIds = null;
 
     /**
+     * The new owner an existing record's owner cell names, handed to
+     * RecordAssignmentService once the row is saved; null while the row
+     * changes no owner.
+     */
+    protected ?User $pendingOwner = null;
+
+    /**
      * @param  array<string, mixed>  $data
      */
     public function __invoke(array $data): void
@@ -66,8 +88,24 @@ trait ResolvesImportLookups
         ImportExportActions::applyLocale($this->options);
 
         $this->pendingTagIds = null;
+        $this->pendingOwner = null;
 
         parent::__invoke($data);
+    }
+
+    /**
+     * Saves the row and, when its owner cell reassigns an existing record,
+     * hands that change to RecordAssignmentService (audit + notification,
+     * D-4, A-20). Both run in one savepoint inside the chunk's transaction,
+     * so a refused reassignment leaves nothing of the row behind.
+     */
+    public function saveRecord(): void
+    {
+        DB::transaction(function (): void {
+            parent::saveRecord();
+
+            $this->reassignPendingOwner();
+        });
     }
 
     /** The duplicate-strategy option every importer offers (skip by default). */
@@ -185,6 +223,10 @@ trait ResolvesImportLookups
     }
 
     /**
+     * Matches the Arabic or the English name. The columns are compared as
+     * they are — their case-insensitive collation already ignores case — so
+     * the lookups' name indexes serve the query on every imported row.
+     *
      * @template TModel of Model
      *
      * @param  Builder<TModel>  $query
@@ -193,8 +235,8 @@ trait ResolvesImportLookups
     protected static function whereNamed(Builder $query, string $name): Builder
     {
         return $query->where(function (Builder $nested) use ($name): void {
-            $nested->whereRaw('LOWER(name_ar) = ?', [$name])
-                ->orWhereRaw('LOWER(name_en) = ?', [$name]);
+            $nested->where($nested->qualifyColumn('name_ar'), $name)
+                ->orWhere($nested->qualifyColumn('name_en'), $name);
         });
     }
 
@@ -224,9 +266,10 @@ trait ResolvesImportLookups
 
         $importer = $this->importingUser();
 
+        // The raw column (case-insensitive collation) keeps users_email_unique usable.
         $user = app(RecordVisibilityResolver::class)
             ->assignableUsers($importer, $permissionGroup)
-            ->whereRaw('LOWER(email) = ?', [$email])
+            ->where('email', $email)
             ->first();
 
         if (! $user instanceof User) {
@@ -238,6 +281,64 @@ trait ResolvesImportLookups
         }
 
         return $user;
+    }
+
+    /**
+     * Fills the owner column of a new record with the user the cell names
+     * (resolveOwner() checks reach and the `assign` verb). For an existing
+     * record the owner is kept for reassignPendingOwner(): a change of owner
+     * is never written straight to the column (D-4, A-20).
+     */
+    protected function fillOwner(Model&OwnedRecord $record, ?string $email): void
+    {
+        $owner = $this->resolveOwner($email, $record::permissionGroup());
+
+        if ($owner === null) {
+            return;
+        }
+
+        if ($record->exists) {
+            $currentOwnerId = $record->getAttribute($record::ownerColumn());
+
+            if ($currentOwnerId !== null && (int) $currentOwnerId === (int) $owner->getKey()) {
+                return; // the row names the owner the record already has
+            }
+
+            // A change of owner on this record is the policy's `assign` verb,
+            // exactly as the panel's owner field and assign actions require.
+            if (! $this->importingUser()->can('assign', $record)) {
+                $this->failRow('owner_out_of_reach', ['value' => (string) $owner->email]);
+            }
+
+            $this->pendingOwner = $owner;
+
+            return;
+        }
+
+        $record->setAttribute($record::ownerColumn(), $owner->getKey());
+    }
+
+    /**
+     * Reassigns the saved record to the owner its row named, through
+     * RecordAssignmentService with the importing user as the actor; an
+     * unchanged owner is left alone by the service. A refused target fails
+     * the row.
+     */
+    protected function reassignPendingOwner(): void
+    {
+        $owner = $this->pendingOwner;
+        $this->pendingOwner = null;
+        $record = $this->record;
+
+        if (! $owner instanceof User || ! $record instanceof OwnedRecord) {
+            return;
+        }
+
+        try {
+            app(RecordAssignmentService::class)->assign($record, $owner, $this->importingUser());
+        } catch (UnassignableUserException) {
+            $this->failRow('owner_out_of_reach', ['value' => (string) $owner->email]);
+        }
     }
 
     /**
@@ -354,6 +455,25 @@ trait ResolvesImportLookups
 
         $record->tags()->sync($this->pendingTagIds);
         $this->pendingTagIds = null;
+    }
+
+    /**
+     * The completion notification body: each count with its own plural form
+     * (Arabic has six, English two), the failed part only when rows failed.
+     * The caller applies the run's locale first.
+     */
+    protected static function completedNotificationBody(Import $import): string
+    {
+        $successful = (int) $import->successful_rows;
+        $failed = (int) $import->getFailedRowsCount();
+
+        $body = trans_choice('imports.notifications.completed', $successful, ['count' => (string) $successful]);
+
+        if ($failed > 0) {
+            $body .= ' '.trans_choice('imports.notifications.failed', $failed, ['count' => (string) $failed]);
+        }
+
+        return $body;
     }
 
     /**

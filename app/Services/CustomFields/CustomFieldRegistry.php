@@ -16,18 +16,20 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * The lookup every consumer of the engine goes through (decision D-9).
  *
- * Building a form, a table, a filter set, an importer or an exporter needs the
- * active definitions of one entity in sort order — several times per request.
- * The registry reads them once per instance and answers from memory
- * afterwards, so a page that resolves it once pays one query for all of its
- * schemas.
+ * Building a form, a table, a filter set, an action, an importer row or an
+ * exporter needs the active definitions of one entity in sort order — many
+ * times per request. The registry reads them once per instance and answers
+ * from memory afterwards.
  *
- * Memoisation is per instance on purpose: the container is not asked to treat
- * this as a singleton (the panel's provider is not the place for it and a
- * process-wide cache would go stale the moment an administrator saves a
- * definition). A caller that wants the saving resolves it once and passes the
- * instance around; a caller that resolves it per call simply pays a query per
- * call, and never reads a stale definition.
+ * The container binds it scoped (AppServiceProvider::register): one instance
+ * per HTTP request, per queued job and per console command, so every
+ * `app(CustomFieldRegistry::class)` of the same request shares the memo and a
+ * list page or an import pays one query per entity. It is never a
+ * process-wide cache: scoped instances are dropped between requests and jobs,
+ * and AppServiceProvider forgets the instance whenever a definition is saved
+ * or deleted, so a definition an administrator changes — or a test creates —
+ * is read afresh by the next consumer. Callers therefore resolve it from the
+ * container when they need it rather than holding on to an instance.
  *
  * The entity ↔ model mapping lives here rather than on CustomFieldEntity: the
  * enum is a shared, frozen contract, and only this module needs to translate

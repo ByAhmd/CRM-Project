@@ -28,6 +28,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 
 /**
  * The calendar (decision D-12): month, week, day and list views of the
@@ -52,6 +53,14 @@ final class Calendar extends Page
     protected static ?int $navigationSort = 30;
 
     protected string $view = 'filament.pages.calendar';
+
+    /**
+     * Whether the last range loaded held more than CalendarFeed::MAX_EVENTS
+     * entries, so only the earliest are shown; the view then asks the viewer
+     * to narrow the range. Locked so only events() can set it.
+     */
+    #[Locked]
+    public bool $truncated = false;
 
     /** The task form keys an edit modal is filled from (the assignee arrives as OwnerSelect's owner_id). */
     private const FORM_ATTRIBUTES = [
@@ -84,7 +93,8 @@ final class Calendar extends Page
 
     /**
      * The entries of one visible range, as FullCalendar event objects. The
-     * range is bounded so a crafted request cannot ask for years at once.
+     * range is bounded so a crafted request cannot ask for years at once,
+     * and so is the number of entries it returns (CalendarFeed::MAX_EVENTS).
      *
      * @return list<array<string, mixed>>
      */
@@ -102,8 +112,12 @@ final class Calendar extends Page
             throw ValidationException::withMessages(['end' => __('calendar.validation.range_too_large', ['days' => CalendarFeed::MAX_RANGE_DAYS])]);
         }
 
-        return app(CalendarFeed::class)
-            ->events($this->actor(), $from, $to, TaskResource::getEloquentQuery(), ActivityResource::getEloquentQuery())
+        $range = app(CalendarFeed::class)
+            ->range($this->actor(), $from, $to, TaskResource::getEloquentQuery(), ActivityResource::getEloquentQuery());
+
+        $this->truncated = $range->truncated;
+
+        return $range->events
             ->map(static fn (CalendarEvent $event): array => $event->toArray())
             ->all();
     }

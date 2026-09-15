@@ -29,6 +29,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Audit\ActivityLogPresenter;
 use App\Services\Audit\ActivityLogQuery;
+use App\Services\Notes\ReadableNoteScope;
 use App\Services\Settings\SettingsRepository;
 use DateTimeInterface;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -55,9 +56,12 @@ use InvalidArgumentException;
  * limit rather than losing them on the next page.
  *
  * Entries follow the subject's visibility: the viewer must be able to view
- * the subject, and nothing narrower is applied because notes, attachments
- * and logs belong to it and activities and tasks on a readable subject are
- * readable per their own policies. Links to other records are only produced
+ * the subject, and nothing narrower is applied to what belongs to it —
+ * attachments, logs and the notes written on it. Activities and tasks linked
+ * to the subject are shown as their own policies allow (a link to the
+ * subject is one of their reading paths). The one narrowing is an account's
+ * notes: those written on its contacts and deals keep the scope of that
+ * contact or deal (ReadableNoteScope). Links to other records are only produced
  * when the viewer may open them. Timeline entries are permanent because
  * their sources are (D-13): soft-deleted notes, tasks and attachments leave
  * the feed until they are restored, and the ledger never forgets.
@@ -77,6 +81,7 @@ final class TimelineReader
     public function __construct(
         private readonly ActivityLogQuery $ledger,
         private readonly SettingsRepository $settings,
+        private readonly ReadableNoteScope $readableNotes,
     ) {}
 
     /**
@@ -165,7 +170,7 @@ final class TimelineReader
     {
         return collect([
             ...$this->activities($subject, $viewer, $limit, $before, $at),
-            ...$this->notes($subject, $limit, $before, $at),
+            ...$this->notes($subject, $viewer, $limit, $before, $at),
             ...$this->tasks($subject, $viewer, $limit, $before, $at),
             ...$this->statusChanges($subject, $limit, $before, $at),
             ...$this->stageChanges($subject, $limit, $before, $at),
@@ -217,7 +222,10 @@ final class TimelineReader
         $query = Activity::query()
             ->where($column, $subject->getKey())
             ->whereNull('task_id')
-            ->with(['owner', 'type'])
+            // The linked records are what ActivityPolicy::view falls back to when the
+            // viewer does not reach the activity's owner; loading them here keeps the
+            // per-entry authorisation free of queries.
+            ->with(['owner', 'type', 'deal', 'lead', 'contact', 'account'])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id');
 
@@ -242,13 +250,17 @@ final class TimelineReader
 
     /**
      * Notes on the subject, at their creation time; edits live in the ledger.
+     * An account's feed also finds the notes written on its contacts and
+     * deals (NoteService copies the account onto them), so it keeps only those
+     * whose contact or deal the viewer may read (ReadableNoteScope, D-4).
      *
      * @return list<TimelineEntry>
      */
-    private function notes(Model $subject, int $limit, ?Carbon $before, ?Carbon $at): array
+    private function notes(Model $subject, User $viewer, int $limit, ?Carbon $before, ?Carbon $at): array
     {
         $query = Note::query()
             ->where(self::noteColumnFor($subject), $subject->getKey())
+            ->when($subject instanceof Account, fn (Builder $notes): Builder => $this->readableNotes->apply($notes, $viewer))
             ->with('author')
             ->orderByDesc('created_at')
             ->orderByDesc('id');
@@ -281,7 +293,8 @@ final class TimelineReader
             return [];
         }
 
-        $base = Task::query()->where($column, $subject->getKey())->with('assignee');
+        // The linked records serve TaskPolicy::view's fallback without a query per entry.
+        $base = Task::query()->where($column, $subject->getKey())->with(['assignee', 'deal', 'lead', 'contact', 'account']);
 
         $created = self::window((clone $base)->orderByDesc('created_at')->orderByDesc('id'), 'created_at', $limit, $before, $at)
             ->get()

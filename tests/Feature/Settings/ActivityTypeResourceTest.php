@@ -12,6 +12,7 @@ use App\Filament\Resources\ActivityTypes\Pages\CreateActivityType;
 use App\Filament\Resources\ActivityTypes\Pages\EditActivityType;
 use App\Filament\Resources\ActivityTypes\Pages\ListActivityTypes;
 use App\Filament\Resources\ActivityTypes\Schemas\ActivityTypeForm;
+use App\Models\Activity;
 use App\Models\ActivityType;
 use Database\Seeders\ActivityTypeSeeder;
 use Filament\Support\Icons\Heroicon;
@@ -287,6 +288,45 @@ final class ActivityTypeResourceTest extends TestCase
             [$third->getKey(), $first->getKey(), $second->getKey()],
             ActivityType::query()->orderBy('sort')->pluck('id')->all(),
         );
+    }
+
+    #[Test]
+    public function a_custom_type_used_by_a_logged_activity_is_never_deleted(): void
+    {
+        $this->seedLookups();
+        $admin = $this->admin();
+        $used = $this->makeActivityType('Site Visit', 'زيارة ميدانية', ['kind' => ActivityKind::Meeting, 'is_system' => false]);
+        $unused = $this->makeActivityType('Workshop', 'ورشة عمل', ['kind' => ActivityKind::Meeting, 'is_system' => false]);
+        Activity::factory()->create(['activity_type_id' => $used->getKey(), 'kind' => ActivityKind::Meeting, 'owner_id' => $admin->getKey()]);
+
+        $this->assertFalse($admin->can('delete', $used));
+        $this->assertTrue($admin->can('delete', $unused));
+
+        Livewire::actingAs($admin)
+            ->test(EditActivityType::class, ['record' => $used->getRouteKey()])
+            ->assertActionHidden('delete');
+
+        Livewire::actingAs($admin)
+            ->test(ListActivityTypes::class)
+            ->callTableBulkAction('delete', [$used, $unused]);
+
+        $this->assertDatabaseHas('activity_types', ['id' => $used->getKey()]);
+        $this->assertDatabaseMissing('activity_types', ['id' => $unused->getKey()]);
+    }
+
+    #[Test]
+    public function the_database_refuses_an_unknown_colour(): void
+    {
+        $this->expectException(QueryException::class);
+
+        ActivityType::query()->getConnection()->table('activity_types')->insert([
+            'name_ar' => 'لون غير معروف',
+            'name_en' => 'Unknown colour',
+            'kind' => ActivityKind::Other->value,
+            'color' => 'purple',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     #[Test]

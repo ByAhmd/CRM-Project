@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Leads\Schemas;
 use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Enums\LeadStatusKind;
+use App\Enums\Permission;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
@@ -28,9 +29,21 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Create / edit lead. The status is chosen on create only; afterwards it
  * changes through the "change status" action so every move is logged (D-7).
+ *
+ * A lead is never born Qualified or Converted: qualification needs the note
+ * LeadStatusWorkflow records, and conversion needs a qualified lead, so the
+ * initial status offers neither kind (CreateLead and LeadImporter refuse them
+ * server-side too).
  */
 final class LeadForm
 {
+    /**
+     * Status kinds a lead may only reach through the workflow (D-7).
+     *
+     * @var list<LeadStatusKind>
+     */
+    public const array RESERVED_INITIAL_KINDS = [LeadStatusKind::Qualified, LeadStatusKind::Converted];
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -68,7 +81,10 @@ final class LeadForm
                         Grid::make(2)->schema([
                             Select::make('lead_source_id')
                                 ->label(__('leads.fields.source'))
-                                ->relationship('source', LeadSource::localisedNameColumn(), fn (Builder $query): Builder => $query->where('is_active', true))
+                                ->relationship('source', LeadSource::localisedNameColumn(), fn (Builder $query, ?Lead $record): Builder => $query->where(
+                                    fn (Builder $nested): Builder => $nested->where('is_active', true)
+                                        ->when($record?->lead_source_id !== null, fn (Builder $current): Builder => $current->orWhereKey($record?->lead_source_id)),
+                                ))
                                 ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('display_name'))
                                 ->searchable()
                                 ->preload()
@@ -88,7 +104,7 @@ final class LeadForm
                             ->helperText(__('leads.helpers.initial_status'))
                             ->options(fn (): array => LeadStatus::query()
                                 ->where('is_active', true)
-                                ->where('kind', '!=', LeadStatusKind::Converted->value)
+                                ->whereNotIn('kind', array_map(static fn (LeadStatusKind $kind): string => $kind->value, self::RESERVED_INITIAL_KINDS))
                                 ->orderBy('sort')
                                 ->get()
                                 ->mapWithKeys(fn (LeadStatus $status): array => [$status->getKey() => $status->display_name])
@@ -111,7 +127,7 @@ final class LeadForm
                             ->minValue(0)
                             ->maxValue(100)
                             ->nullable()
-                            ->visible(fn (): bool => auth()->user()?->can('lead.assign') ?? false),
+                            ->visible(fn (): bool => auth()->user()?->can(Permission::LeadAssign->value) ?? false),
                     ])
                     ->columns(1),
 

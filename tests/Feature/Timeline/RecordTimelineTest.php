@@ -83,7 +83,7 @@ final class RecordTimelineTest extends TestCase
             ->assertSee(self::body(1))
             ->assertSee(__('timeline.titles.created'))
             ->assertDontSee(__('timeline.actions.load_more'))
-            ->assertDontSee(__('timeline.hints.capped', ['count' => 22]));
+            ->assertDontSee(trans_choice('timeline.hints.capped', 22, ['count' => 22]));
     }
 
     #[Test]
@@ -106,7 +106,7 @@ final class RecordTimelineTest extends TestCase
             ->assertSee(self::body(3))
             ->assertDontSee(self::body(2))
             ->assertDontSee(__('timeline.actions.load_more'))
-            ->assertSee(__('timeline.hints.capped', ['count' => RecordTimeline::MAX_PAGES]));
+            ->assertSee(trans_choice('timeline.hints.capped', RecordTimeline::MAX_PAGES, ['count' => RecordTimeline::MAX_PAGES]));
     }
 
     #[Test]

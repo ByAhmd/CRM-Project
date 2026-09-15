@@ -7,6 +7,7 @@ namespace Tests\Feature\ImportExport;
 use App\Enums\AccountType;
 use App\Enums\ActivityKind;
 use App\Enums\CompanySize;
+use App\Enums\CrmRole;
 use App\Enums\ForecastCategory;
 use App\Enums\LeadPriority;
 use App\Enums\LeadStatusKind;
@@ -142,12 +143,17 @@ final class ExportersTest extends TestCase
         $export->successful_rows = 2;
         $export->save();
 
+        $expected = [
+            'en' => '2 rows exported. 1 row failed.',
+            'ar' => 'صُدِّر صفّان. تعذّر تصدير صف واحد.',
+        ];
+
         foreach ([LeadExporter::class, ContactExporter::class, AccountExporter::class, DealExporter::class, TaskExporter::class, ActivityExporter::class] as $exporter) {
             foreach (['en', 'ar'] as $locale) {
                 $export->options([ImportExportActions::LOCALE_OPTION => $locale]);
 
                 $this->assertSame(
-                    __('exports.notifications.completed', ['successful' => '2', 'failed' => '1'], $locale),
+                    $expected[$locale],
                     $exporter::getCompletedNotificationBody($export),
                     "{$exporter} renders the {$locale} completion body regardless of the worker's locale",
                 );
@@ -155,6 +161,69 @@ final class ExportersTest extends TestCase
         }
 
         app()->setLocale((string) config('app.locale'));
+    }
+
+    #[Test]
+    public function the_completion_body_pluralises_the_counts_and_leaves_out_an_empty_failure_count(): void
+    {
+        $export = new Export;
+        $export->user()->associate($this->salesRep());
+        $export->exporter = LeadExporter::class;
+        $export->file_disk = ImportExportActions::FILE_DISK;
+        $export->file_name = 'test';
+
+        $cases = [
+            // total, successful, en, ar
+            [1, 1, '1 row exported.', 'صُدِّر صف واحد.'],
+            [5, 5, '5 rows exported.', 'صُدِّرت 5 صفوف.'],
+            [25, 25, '25 rows exported.', 'صُدِّر 25 صفاً.'],
+            [150, 150, '150 rows exported.', 'صُدِّر 150 صف.'],
+            [3, 0, 'No rows were exported. 3 rows failed.', 'لم يُصدَّر أي صف. تعذّر تصدير 3 صفوف.'],
+        ];
+
+        foreach ($cases as [$total, $successful, $english, $arabic]) {
+            $export->total_rows = $total;
+            $export->successful_rows = $successful;
+
+            $export->options([ImportExportActions::LOCALE_OPTION => 'en']);
+            $this->assertSame($english, LeadExporter::getCompletedNotificationBody($export));
+
+            $export->options([ImportExportActions::LOCALE_OPTION => 'ar']);
+            $this->assertSame($arabic, LeadExporter::getCompletedNotificationBody($export));
+        }
+
+        app()->setLocale((string) config('app.locale'));
+    }
+
+    #[Test]
+    public function every_user_controlled_text_cell_is_protected_against_formula_injection_while_numbers_stay_numbers(): void
+    {
+        $payload = '@SUM(A1:A9)';
+        $owner = $this->makeUser(CrmRole::SalesRep, ['name' => '=HYPERLINK("http://evil.example")']);
+        $tag = Tag::factory()->create(['name_en' => '+cmd', 'name_ar' => '+cmd']);
+        $lead = Lead::factory()->create([
+            'owner_id' => $owner->getKey(),
+            'email' => 'lead@example.com',
+            'phone' => '+966551234567',
+            'website' => $payload,
+            'postal_code' => "\t=1+1",
+        ]);
+        $lead->tags()->sync([$tag->getKey()]);
+
+        $cells = $this->cells(LeadExporter::class, $lead->fresh(), $owner, 'en');
+
+        $this->assertSame("'=HYPERLINK(\"http://evil.example\")", $cells['owner.name']);
+        $this->assertSame("'".$payload, $cells['website']);
+        $this->assertSame("'\t=1+1", $cells['postal_code']);
+        $this->assertSame("'+cmd", $cells['tags']);
+        $this->assertSame('+966551234567', $cells['phone'], 'a sign-led number is a number, not a formula');
+        $this->assertSame('lead@example.com', $cells['email']);
+        $this->assertSame((string) $lead->getKey(), (string) $cells['id']);
+
+        $task = Task::factory()->create(['assignee_id' => $owner->getKey(), 'created_by' => $owner->getKey()]);
+        $taskCells = $this->cells(TaskExporter::class, $task->fresh(), $owner, 'en');
+
+        $this->assertSame("'=HYPERLINK(\"http://evil.example\")", $taskCells['assignee.name']);
     }
 
     #[Test]

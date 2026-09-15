@@ -29,7 +29,7 @@ return [
     ],
 
     'helpers' => [
-        'manager' => 'Optional and informational; what a manager sees is decided by their role and team.',
+        'manager' => 'Optional. Chosen among the active members of this team; what a manager sees is decided by their role and team.',
         'is_active' => 'Inactive teams are not offered when assigning users.',
         'sort' => 'Display order in lists; lowest first.',
     ],
@@ -41,6 +41,8 @@ return [
 
     'validation' => [
         'name_unique' => 'A team with this name already exists.',
+        'name_ar_unique_trashed' => 'A deleted team has this Arabic name. Restore it from the deleted teams instead of creating it again.',
+        'name_en_unique_trashed' => 'A deleted team has this English name. Restore it from the deleted teams instead of creating it again.',
     ],
 
     'empty' => [

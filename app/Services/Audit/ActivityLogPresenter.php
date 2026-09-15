@@ -7,6 +7,7 @@ namespace App\Services\Audit;
 use App\Enums\ActivityLogEvent;
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Services\Settings\SettingsRepository;
 use App\Support\RecordLabel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -101,7 +102,7 @@ final class ActivityLogPresenter
             ['label' => __('activity.details.event'), 'value' => $this->actionLabel()],
             ['label' => __('activity.details.subject'), 'value' => $this->subjectLabel()],
             ['label' => __('activity.details.causer'), 'value' => $this->causerLabel()],
-            ['label' => __('activity.details.recorded_at'), 'value' => $this->log->created_at?->timezone((string) config('app.timezone'))->format('Y-m-d H:i:s') ?? '—'],
+            ['label' => __('activity.details.recorded_at'), 'value' => $this->log->created_at?->timezone(app(SettingsRepository::class)->timezone())->format('Y-m-d H:i:s') ?? '—'],
         ];
 
         return [...$rows, ...$this->changeRows(), ...$this->propertyRows()];
@@ -150,8 +151,22 @@ final class ActivityLogPresenter
         return $rows;
     }
 
+    /**
+     * A label specific to the audited model when one exists (an attachment's
+     * "size" is a file size, an account's is a company size), then the shared
+     * attribute label, then the raw key.
+     */
     private function attributeLabel(string $key): string
     {
+        if ($this->log->subject_type !== null) {
+            $subject = class_basename((string) $this->log->subject_type);
+            $translated = __('activity.subject_attributes.'.$subject.'.'.$key);
+
+            if (is_string($translated) && $translated !== 'activity.subject_attributes.'.$subject.'.'.$key) {
+                return $translated;
+            }
+        }
+
         $translated = __('activity.attributes.'.$key);
 
         return $translated === 'activity.attributes.'.$key ? $key : $translated;

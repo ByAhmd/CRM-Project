@@ -51,7 +51,7 @@ final class UpcomingFollowUpsWidget extends TableWidget
 
         return $table
             ->heading(__('dashboard.tables.upcoming_follow_ups'))
-            ->description(__('dashboard.tables.upcoming_follow_ups_description', ['days' => TaskMetrics::UPCOMING_DAYS]))
+            ->description(trans_choice('dashboard.tables.upcoming_follow_ups_description', TaskMetrics::UPCOMING_DAYS, ['days' => TaskMetrics::UPCOMING_DAYS]))
             ->query(static fn (): Builder => $metrics->upcomingFollowUpsQuery($viewer))
             ->columns([
                 TextColumn::make('title')

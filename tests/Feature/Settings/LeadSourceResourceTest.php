@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature\Settings;
 
 use App\Enums\ActivityLogEvent;
+use App\Enums\LeadScoringRuleKind;
 use App\Filament\Resources\LeadSources\LeadSourceResource;
 use App\Filament\Resources\LeadSources\Pages\CreateLeadSource;
 use App\Filament\Resources\LeadSources\Pages\EditLeadSource;
 use App\Filament\Resources\LeadSources\Pages\ListLeadSources;
+use App\Models\Deal;
+use App\Models\Lead;
+use App\Models\LeadScoringRule;
 use App\Models\LeadSource;
 use Database\Seeders\LeadSourceSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -292,6 +298,46 @@ final class LeadSourceResourceTest extends TestCase
 
         $this->assertSame(count(LeadSourceSeeder::defaults()), LeadSource::query()->count());
         $this->assertDatabaseHas('lead_sources', ['name_en' => 'Other', 'name_ar' => 'أخرى', 'sort' => 90]);
+    }
+
+    #[Test]
+    public function a_source_used_by_a_lead_a_deal_or_a_scoring_rule_is_never_deleted(): void
+    {
+        Queue::fake();
+        $this->seedLookups();
+        $admin = $this->admin();
+        $byLead = $this->makeLeadSource('Exhibition', 'معرض');
+        $byDeal = $this->makeLeadSource('Partner', 'شريك');
+        $byRule = $this->makeLeadSource('Webinar', 'ندوة عبر الإنترنت');
+        $unused = $this->makeLeadSource('Radio', 'إذاعة');
+
+        $lead = Lead::factory()->create(['lead_source_id' => $byLead->getKey(), 'owner_id' => $admin->getKey()]);
+        $lead->delete();
+        $deal = Deal::factory()->create(['lead_source_id' => $byDeal->getKey(), 'owner_id' => $admin->getKey()]);
+        $deal->delete();
+        LeadScoringRule::factory()->create(['kind' => LeadScoringRuleKind::Source, 'reference_id' => $byRule->getKey(), 'field' => null]);
+
+        foreach ([$byLead, $byDeal, $byRule] as $used) {
+            $this->assertFalse($admin->can('delete', $used), "{$used->name_en} is in use and must not be deletable.");
+
+            Livewire::actingAs($admin)
+                ->test(EditLeadSource::class, ['record' => $used->getRouteKey()])
+                ->assertActionHidden('delete');
+        }
+
+        $this->assertTrue($admin->can('delete', $unused));
+
+        Livewire::actingAs($admin)
+            ->test(ListLeadSources::class)
+            ->callTableBulkAction('delete', [$byLead, $byDeal, $byRule, $unused]);
+
+        $this->assertDatabaseHas('lead_sources', ['id' => $byLead->getKey()]);
+        $this->assertDatabaseHas('lead_sources', ['id' => $byDeal->getKey()]);
+        $this->assertDatabaseHas('lead_sources', ['id' => $byRule->getKey()]);
+        $this->assertDatabaseMissing('lead_sources', ['id' => $unused->getKey()]);
+
+        $this->expectException(QueryException::class);
+        $byRule->delete();
     }
 
     private function makeLeadSource(string $nameEn = 'Website', string $nameAr = 'الموقع الإلكتروني', int $sort = 0): LeadSource

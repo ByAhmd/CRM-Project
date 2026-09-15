@@ -151,6 +151,31 @@ final class CalendarPageTest extends TestCase
     }
 
     #[Test]
+    public function a_range_cut_at_the_event_cap_shows_the_translated_hint(): void
+    {
+        $rep = $this->salesRep();
+        $hint = __('calendar.texts.truncated', ['count' => CalendarFeed::MAX_EVENTS]);
+
+        // Model events are off while seeding (the observers add nothing the page reads).
+        Task::withoutEvents(fn () => Task::factory()->count(CalendarFeed::MAX_EVENTS + 1)->create([
+            'assignee_id' => $rep->getKey(),
+            'due_at' => '2026-09-10 10:00:00',
+        ]));
+
+        $page = Livewire::actingAs($rep)->test(Calendar::class)
+            ->assertSet('truncated', false)
+            ->assertDontSee($hint);
+
+        $page->call('events', '2026-09-01', '2026-10-01')
+            ->assertSet('truncated', true)
+            ->assertSee($hint);
+
+        $page->call('events', '2026-11-01', '2026-12-01')
+            ->assertSet('truncated', false)
+            ->assertDontSee($hint);
+    }
+
+    #[Test]
     public function events_refuses_a_range_wider_than_the_cap(): void
     {
         $page = $this->page($this->salesRep());

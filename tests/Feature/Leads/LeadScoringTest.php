@@ -14,6 +14,7 @@ use App\Models\LeadStatus;
 use App\Services\Leads\LeadScoringService;
 use App\Services\Leads\LeadStatusWorkflow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -118,5 +119,51 @@ final class LeadScoringTest extends TestCase
 
         $this->assertSame(45, $open->refresh()->score);
         $this->assertSame(20, $converted->refresh()->score);
+    }
+
+    #[Test]
+    public function the_activity_recency_points_are_withdrawn_by_the_daily_rescore_once_the_window_has_passed(): void
+    {
+        Queue::fake();
+        $this->travelTo(Carbon::parse('2026-09-06 10:00:00'));
+
+        LeadScoringRule::factory()->create(['kind' => LeadScoringRuleKind::ActivityRecency, 'field' => null, 'within_days' => 7, 'points' => 25]);
+        $lead = Lead::factory()->create(['last_activity_at' => now()->subDay()]);
+        $this->assertSame(25, $lead->refresh()->score);
+
+        // Still inside the window: the unchanged score is not written again.
+        $scoredAt = $lead->scored_at;
+        $this->travelTo(Carbon::parse('2026-09-09 10:00:00'));
+        (new RescoreLeads)->handle(app(LeadScoringService::class));
+        $this->assertSame(25, $lead->refresh()->score);
+        $this->assertEquals($scoredAt, $lead->scored_at);
+
+        // Eight days after the activity the rule no longer matches.
+        $this->travelTo(Carbon::parse('2026-09-13 10:00:00'));
+        (new RescoreLeads)->handle(app(LeadScoringService::class));
+        $this->assertSame(0, $lead->refresh()->score);
+    }
+
+    #[Test]
+    public function the_rescore_runs_in_batches_that_queue_their_continuation(): void
+    {
+        Queue::fake();
+        LeadScoringRule::factory()->create(['kind' => LeadScoringRuleKind::FieldFilled, 'field' => 'email', 'points' => 10]);
+        Lead::factory()->count(RescoreLeads::BATCH_SIZE + 2)->create(['email' => 'batch@example.com']);
+        $lastOfFirstBatch = (int) Lead::query()->orderBy('id')->skip(RescoreLeads::BATCH_SIZE - 1)->value('id');
+
+        LeadScoringRule::query()->update(['points' => 30]);
+        Queue::fake();
+
+        (new RescoreLeads)->handle(app(LeadScoringService::class));
+
+        Queue::assertPushed(RescoreLeads::class, 1);
+        Queue::assertPushed(RescoreLeads::class, fn (RescoreLeads $job): bool => $job->afterId === $lastOfFirstBatch && $job->uniqueId() === (string) $lastOfFirstBatch);
+        $this->assertSame(RescoreLeads::BATCH_SIZE, Lead::query()->where('score', 30)->count());
+
+        (new RescoreLeads($lastOfFirstBatch))->handle(app(LeadScoringService::class));
+
+        $this->assertSame(RescoreLeads::BATCH_SIZE + 2, Lead::query()->where('score', 30)->count());
+        Queue::assertPushed(RescoreLeads::class, 1);
     }
 }

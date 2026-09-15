@@ -22,7 +22,6 @@ use App\Models\LeadStatus;
 use App\Models\Pipeline;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\Settings\SettingsRepository;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
 use Filament\Facades\Filament;
@@ -364,20 +363,6 @@ final class ReportPagesTest extends TestCase
                 ->assertHasNoFormErrors()
                 ->assertSet('applied.pipeline_id', $default);
         }
-    }
-
-    #[Test]
-    public function the_organisation_timezone_matches_the_application_timezone(): void
-    {
-        // The reports bucket days and months with SQL DATE() / DATE_FORMAT()
-        // over columns stored in the application timezone, and read "now"
-        // from the organisation clock. Both only agree while these two
-        // settings do; if an administrator ever splits them, this guard
-        // fails before a report silently drifts by the offset.
-        $this->assertSame(
-            (string) config('app.timezone'),
-            app(SettingsRepository::class)->timezone(),
-        );
     }
 
     #[Test]

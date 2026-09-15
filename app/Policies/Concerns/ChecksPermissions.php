@@ -8,6 +8,7 @@ use App\Contracts\OwnedRecord;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Shared permission + scope lookups for policies over owned records (D-3, D-4).
@@ -26,6 +27,11 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Permanent deletion is never granted (D-13): soft-deleted records are kept
  * and restorable.
+ *
+ * A soft-deleted record is frozen until it is restored (D-13): `update` and
+ * every custom verb refuse it, as AttachmentPolicy and NotePolicy refuse new
+ * files and notes on it. Restoring is the one write it accepts, so the
+ * resources can still bind trashed records for the restore action.
  */
 trait ChecksPermissions
 {
@@ -48,7 +54,9 @@ trait ChecksPermissions
 
     public function update(User $user, (Model&OwnedRecord)|null $record = null): bool
     {
-        return $user->can($this->permission('update')) && $this->reaches($user, $record);
+        return ! $this->isTrashed($record)
+            && $user->can($this->permission('update'))
+            && $this->reaches($user, $record);
     }
 
     public function delete(User $user, (Model&OwnedRecord)|null $record = null): bool
@@ -84,7 +92,16 @@ trait ChecksPermissions
     /** A custom verb (`assign`, `convert`, `change_stage`, …) on a specific record. */
     protected function verb(User $user, string $verb, (Model&OwnedRecord)|null $record = null): bool
     {
-        return $user->can($this->permission($verb)) && $this->reaches($user, $record);
+        return ! $this->isTrashed($record) && $user->can($this->permission($verb)) && $this->reaches($user, $record);
+    }
+
+    /** Whether the record is soft-deleted, and so frozen until it is restored. */
+    protected function isTrashed(?Model $record): bool
+    {
+        return $record !== null
+            && in_array(SoftDeletes::class, class_uses_recursive($record), true)
+            && method_exists($record, 'trashed')
+            && $record->trashed() === true;
     }
 
     protected function permission(string $verb): string

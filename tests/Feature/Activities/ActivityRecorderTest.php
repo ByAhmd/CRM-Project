@@ -322,11 +322,6 @@ final class ActivityRecorderTest extends TestCase
         $this->assertSame(ActivityKind::Task, $activity->kind);
     }
 
-    private function typeOfKind(ActivityKind $kind): ActivityType
-    {
-        return ActivityType::query()->where('kind', $kind->value)->where('is_system', true)->firstOrFail();
-    }
-
     /**
      * @return array{?int, ?int, ?int, ?int}
      */

@@ -6,15 +6,18 @@ namespace App\Services\Tasks;
 
 use App\Enums\ActivityKind;
 use App\Enums\ActivityLogEvent;
+use App\Enums\Permission;
 use App\Enums\RecurrenceFrequency;
 use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
+use App\Exceptions\Access\UnassignableUserException;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordAssignmentService;
+use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Activities\ActivityRecorder;
 use App\Services\Activities\ActivitySubject;
 use App\Services\Audit\AuditLogger;
@@ -31,6 +34,10 @@ use Spatie\Activitylog\CauserResolver;
  * cancel, reopen and reschedule.
  *
  * - the assignee defaults to the actor and the creator is always the actor;
+ *   a task created for someone else (or for no one) needs `task.assign` and
+ *   a user within the actor's assignment reach (D-4), exactly as a later
+ *   reassignment does — the form offers only those users, and the service
+ *   re-checks rather than trusting it;
  * - a task may be linked to a lead, a contact, an account or a deal, or to
  *   nothing (a personal to-do) — the pickers only offer records the actor
  *   may read, and the ids are re-checked there;
@@ -59,6 +66,7 @@ final class TaskService
         private readonly TaskRecurrence $recurrence,
         private readonly RecordAssignmentService $assignment,
         private readonly CauserResolver $causers,
+        private readonly RecordVisibilityResolver $resolver,
     ) {}
 
     /**
@@ -67,6 +75,7 @@ final class TaskService
     public function create(array $data, User $actor): Task
     {
         $attributes = $this->attributes($data, null, $actor);
+        $this->assertAssignableOnCreate($attributes['assignee_id'], $actor);
 
         return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($attributes, $actor): Task {
             $task = new Task([
@@ -270,6 +279,28 @@ final class TaskService
         }
 
         Task::withoutWorkflowGuard(static fn (): bool => $task->forceFill($stamps)->save());
+    }
+
+    /**
+     * A new task handed to anyone but its creator is an assignment (D-4): the
+     * actor needs `task.assign`, and a named assignee must be within the
+     * actor's reach (RecordVisibilityResolver::assignableUsers — own team for
+     * a manager, everyone for an admin). Creating a task for oneself needs
+     * neither.
+     */
+    private function assertAssignableOnCreate(mixed $assigneeId, User $actor): void
+    {
+        if ($assigneeId !== null && (int) $assigneeId === (int) $actor->getKey()) {
+            return;
+        }
+
+        if (! $actor->can(Permission::TaskAssign->value)) {
+            throw UnassignableUserException::make();
+        }
+
+        if ($assigneeId !== null && ! $this->resolver->assignableUsers($actor, Task::permissionGroup())->whereKey((int) $assigneeId)->exists()) {
+            throw UnassignableUserException::make();
+        }
     }
 
     /**

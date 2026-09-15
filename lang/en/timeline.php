@@ -44,7 +44,6 @@ return [
 
     'fields' => [
         'by' => 'By',
-        'at' => 'At',
         'duration' => 'Time in previous stage',
         'pinned' => 'Pinned',
         'size' => 'Size',
@@ -77,7 +76,7 @@ return [
     ],
 
     'hints' => [
-        'capped' => 'Showing the latest :count entries. Older items remain in the activities, notes and history sections of the record.',
+        'capped' => '{1} Showing the latest entry only. Older items remain in the activities, notes and history sections of the record.|[2,*] Showing the latest :count entries. Older items remain in the activities, notes and history sections of the record.',
         'loading' => 'Loading the timeline…',
     ],
 

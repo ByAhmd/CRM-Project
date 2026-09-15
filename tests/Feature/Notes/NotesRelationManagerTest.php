@@ -91,7 +91,7 @@ final class NotesRelationManagerTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Draft');
+        $note = app(NoteService::class)->create($lead, $rep, 'Draft');
 
         Livewire::actingAs($rep)
             ->test(LeadNotesRelationManager::class, ['ownerRecord' => $lead, 'pageClass' => ViewLead::class])
@@ -113,8 +113,8 @@ final class NotesRelationManagerTest extends TestCase
         $rep = $this->salesRep();
         $support = $this->support();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $repNote = $this->service()->create($lead, $rep, 'Written by the rep');
-        $ownNote = $this->service()->create($lead, $support, 'Written by support');
+        $repNote = app(NoteService::class)->create($lead, $rep, 'Written by the rep');
+        $ownNote = app(NoteService::class)->create($lead, $support, 'Written by support');
 
         // Support holds note.update and reads every lead, but may not update the lead itself.
         $this->assertTrue($support->can('view', $lead));
@@ -145,7 +145,7 @@ final class NotesRelationManagerTest extends TestCase
         $manager = $this->salesManager($team);
         $rep = $this->salesRep($team);
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Rep wrote this');
+        $note = app(NoteService::class)->create($lead, $rep, 'Rep wrote this');
 
         $this->assertTrue($manager->can('update', $note));
 
@@ -163,7 +163,7 @@ final class NotesRelationManagerTest extends TestCase
     {
         $rep = $this->salesRep();
         $deal = Deal::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($deal, $rep, 'Pin me');
+        $note = app(NoteService::class)->create($deal, $rep, 'Pin me');
 
         $manager = Livewire::actingAs($rep)
             ->test(DealNotesRelationManager::class, ['ownerRecord' => $deal, 'pageClass' => ViewDeal::class])
@@ -187,7 +187,7 @@ final class NotesRelationManagerTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Delete me');
+        $note = app(NoteService::class)->create($lead, $rep, 'Delete me');
 
         $manager = Livewire::actingAs($rep)
             ->test(LeadNotesRelationManager::class, ['ownerRecord' => $lead, 'pageClass' => ViewLead::class])
@@ -235,7 +235,7 @@ final class NotesRelationManagerTest extends TestCase
         $rep = $this->salesRep();
         $other = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Private to the owner');
+        $note = app(NoteService::class)->create($lead, $rep, 'Private to the owner');
 
         $this->assertFalse($other->can('view', $lead));
         $this->assertFalse($other->can('view', $note));
@@ -258,7 +258,7 @@ final class NotesRelationManagerTest extends TestCase
         $rep = $this->salesRep();
         $readOnly = $this->readOnly();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Visible to everyone who reads the lead');
+        $note = app(NoteService::class)->create($lead, $rep, 'Visible to everyone who reads the lead');
 
         $this->actingAs($readOnly);
 
@@ -307,7 +307,7 @@ final class NotesRelationManagerTest extends TestCase
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
         $body = str_repeat('A long note. ', 20)."\nTHE END";
-        $note = $this->service()->create($lead, $rep, $body);
+        $note = app(NoteService::class)->create($lead, $rep, $body);
 
         $manager = Livewire::actingAs($rep)
             ->test(LeadNotesRelationManager::class, ['ownerRecord' => $lead, 'pageClass' => ViewLead::class])
@@ -338,11 +338,11 @@ final class NotesRelationManagerTest extends TestCase
         $ownDeal = Deal::factory()->create(['owner_id' => $owner->getKey(), 'account_id' => $account->getKey()]);
         $ownContact = Contact::factory()->create(['owner_id' => $owner->getKey(), 'account_id' => $account->getKey()]);
 
-        $foreignDealNote = $this->service()->create($foreignDeal, $other, 'SECRET deal pricing floor is 40k');
-        $foreignContactNote = $this->service()->create($foreignContact, $other, 'SECRET contact is leaving the company');
-        $accountNote = $this->service()->create($account, $other, 'Written on the account itself');
-        $ownDealNote = $this->service()->create($ownDeal, $owner, 'My own deal note');
-        $ownContactNote = $this->service()->create($ownContact, $owner, 'My own contact note');
+        $foreignDealNote = app(NoteService::class)->create($foreignDeal, $other, 'SECRET deal pricing floor is 40k');
+        $foreignContactNote = app(NoteService::class)->create($foreignContact, $other, 'SECRET contact is leaving the company');
+        $accountNote = app(NoteService::class)->create($account, $other, 'Written on the account itself');
+        $ownDealNote = app(NoteService::class)->create($ownDeal, $owner, 'My own deal note');
+        $ownContactNote = app(NoteService::class)->create($ownContact, $owner, 'My own contact note');
 
         $this->assertTrue($owner->can('view', $account));
         $this->assertFalse($owner->can('view', $foreignDeal));
@@ -376,13 +376,13 @@ final class NotesRelationManagerTest extends TestCase
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
 
         $this->travelTo(Carbon::parse('2026-09-01 09:00:00'));
-        $oldest = $this->service()->create($lead, $rep, 'Oldest');
+        $oldest = app(NoteService::class)->create($lead, $rep, 'Oldest');
 
         $this->travelTo(Carbon::parse('2026-09-02 09:00:00'));
-        $pinned = $this->service()->create($lead, $rep, 'Pinned', pinned: true);
+        $pinned = app(NoteService::class)->create($lead, $rep, 'Pinned', pinned: true);
 
         $this->travelTo(Carbon::parse('2026-09-03 09:00:00'));
-        $newest = $this->service()->create($lead, $rep, 'Newest');
+        $newest = app(NoteService::class)->create($lead, $rep, 'Newest');
 
         Livewire::actingAs($rep)
             ->test(LeadNotesRelationManager::class, ['ownerRecord' => $lead, 'pageClass' => ViewLead::class])
@@ -391,10 +391,5 @@ final class NotesRelationManagerTest extends TestCase
             ->assertCanSeeTableRecords([$oldest, $pinned, $newest], inOrder: true)
             ->sortTable('created_at', 'desc')
             ->assertCanSeeTableRecords([$newest, $pinned, $oldest], inOrder: true);
-    }
-
-    private function service(): NoteService
-    {
-        return app(NoteService::class);
     }
 }

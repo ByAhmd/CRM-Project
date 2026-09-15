@@ -6,7 +6,6 @@ namespace Tests\Feature\Deals;
 
 use App\Enums\CloseReasonKind;
 use App\Models\Deal;
-use App\Models\DealCloseReason;
 use App\Services\Deals\DealCloseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -100,10 +99,5 @@ final class DealPolicyTest extends TestCase
         $this->assertFalse($readOnly->can('update', $inTeam));
         $this->assertFalse($readOnly->can('changeStage', $inTeam));
         $this->assertFalse($readOnly->can('reopen', $outside));
-    }
-
-    private function reasonOfKind(CloseReasonKind $kind): DealCloseReason
-    {
-        return DealCloseReason::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

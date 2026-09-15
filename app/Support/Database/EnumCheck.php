@@ -42,7 +42,7 @@ final class EnumCheck
     {
         $constraint = self::name($table, $column);
 
-        if (self::isMariaDb()) {
+        if (DatabaseEngine::isMariaDb()) {
             DB::statement(sprintf('ALTER TABLE `%s` DROP CONSTRAINT IF EXISTS `%s`', $table, $constraint));
 
             return;
@@ -54,12 +54,5 @@ final class EnumCheck
     public static function name(string $table, string $column): string
     {
         return sprintf('%s_%s_check', $table, $column);
-    }
-
-    private static function isMariaDb(): bool
-    {
-        $version = (string) DB::selectOne('SELECT VERSION() AS version')->version;
-
-        return stripos($version, 'mariadb') !== false;
     }
 }

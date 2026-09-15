@@ -118,6 +118,7 @@ final class CustomFieldsTable
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make()
+                    ->successNotificationTitle(__('custom_fields.notifications.deleted'))
                     ->authorize(fn (CustomField $record): bool => auth()->user()?->can('delete', $record) ?? false)
                     ->disabled(fn (CustomField $record): bool => ! app(CustomFieldService::class)->isDeletable($record))
                     ->tooltip(fn (CustomField $record): ?string => app(CustomFieldService::class)->isDeletable($record)

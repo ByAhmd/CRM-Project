@@ -106,7 +106,7 @@ return [
         'deal.restored' => 'استعادة صفقة',
         'deal.assigned' => 'إسناد صفقة',
         'deal.stage_changed' => 'تغيير مرحلة صفقة',
-        'deal.won' => 'كسب صفقة',
+        'deal.won' => 'الفوز بصفقة',
         'deal.lost' => 'خسارة صفقة',
         'deal.reopened' => 'إعادة فتح صفقة',
         'activity.created' => 'تسجيل نشاط',
@@ -145,8 +145,8 @@ return [
         'LeadSource' => 'مصدر عميل محتمل',
         'LeadStatus' => 'حالة عميل محتمل',
         'Industry' => 'قطاع',
-        'Pipeline' => 'مسار بيع',
-        'PipelineStage' => 'مرحلة بيع',
+        'Pipeline' => 'مسار مبيعات',
+        'PipelineStage' => 'مرحلة مسار مبيعات',
         'ActivityType' => 'نوع نشاط',
         'DealCloseReason' => 'سبب إغلاق',
         'Competitor' => 'منافس',
@@ -166,6 +166,7 @@ return [
         'Attachment' => 'مرفق',
         'EmailTemplate' => 'قالب بريد',
         'NotificationPreference' => 'تفضيل إشعارات',
+        'CustomField' => 'حقل مخصص',
     ],
 
     'subject' => [
@@ -189,7 +190,7 @@ return [
         'icon' => 'الأيقونة',
         'sort' => 'الترتيب',
         'probability' => 'الاحتمالية',
-        'pipeline_id' => 'مسار البيع',
+        'pipeline_id' => 'مسار المبيعات',
         'code' => 'الرمز',
         'unit_price' => 'سعر الوحدة',
         'website' => 'الموقع الإلكتروني',
@@ -246,7 +247,7 @@ return [
         'close_reason_id' => 'سبب الإغلاق',
         'close_reason' => 'سبب الإغلاق',
         'lost_notes' => 'ملاحظات الخسارة',
-        'won_at' => 'تاريخ الكسب',
+        'won_at' => 'تاريخ الفوز',
         'lost_at' => 'تاريخ الخسارة',
         'contact_id' => 'جهة الاتصال',
         'lead_id' => 'العميل المحتمل',
@@ -275,7 +276,6 @@ return [
         'is_pinned' => 'مثبتة',
         'original_name' => 'اسم الملف',
         'mime_type' => 'نوع الملف',
-        'size' => 'الحجم',
         'description' => 'الوصف',
         'downloaded_by' => 'نزّله',
         'task_id' => 'المهمة',
@@ -293,6 +293,22 @@ return [
         'database' => 'داخل التطبيق',
         'mail' => 'البريد الإلكتروني',
         'preferences' => 'التفضيلات',
+        'key' => 'المفتاح',
+        'label_ar' => 'المسمى بالعربية',
+        'label_en' => 'المسمى بالإنجليزية',
+        'options' => 'الخيارات',
+        'is_required' => 'إلزامي',
+        'is_filterable' => 'قابل للتصفية',
+        'is_listed' => 'متاح كعمود',
+        'validation' => 'قيود التحقق',
+        'is_system' => 'نظامي',
+    ],
+
+    // Labels that differ for one audited model; checked before the shared attribute labels.
+    'subject_attributes' => [
+        'Attachment' => [
+            'size' => 'حجم الملف',
+        ],
     ],
 
     'values' => [

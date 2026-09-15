@@ -436,19 +436,4 @@ final class ContactCustomFieldsTest extends TestCase
             ->where('key', $key)
             ->firstOrFail();
     }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $state
-     * @return array<int, array<string, mixed>>
-     */
-    private function columnStateWith(array $state, string $name): array
-    {
-        foreach ($state as $index => $item) {
-            if (($item['name'] ?? null) === $name) {
-                $state[$index]['isToggled'] = true;
-            }
-        }
-
-        return $state;
-    }
 }

@@ -33,7 +33,7 @@ return [
 
     'helpers' => [
         'is_default' => 'New deals start in it. There is exactly one default pipeline and it cannot be deactivated or deleted; to change it, make another pipeline the default.',
-        'is_active' => 'Inactive pipelines are not offered when creating a deal; existing deals stay in them.',
+        'is_active' => 'Inactive pipelines are not offered when creating a deal; existing deals stay in them. A pipeline that holds deals cannot be deleted; deactivate it instead.',
         'sort' => 'Display order in lists; lowest first. Rows can also be dragged in the table.',
     ],
 
@@ -45,10 +45,13 @@ return [
 
     'validation' => [
         'name_unique' => 'A pipeline with this name already exists.',
+        'name_ar_unique_trashed' => 'A deleted pipeline has this Arabic name. Restore it from the deleted pipelines instead of creating it again.',
+        'name_en_unique_trashed' => 'A deleted pipeline has this English name. Restore it from the deleted pipelines instead of creating it again.',
         'default_cannot_be_unset' => 'The default pipeline cannot be unset; make another pipeline the default instead.',
         'default_cannot_be_deactivated' => 'The default pipeline cannot be deactivated; make another pipeline the default first.',
         'default_cannot_be_deleted' => 'The default pipeline cannot be deleted; make another pipeline the default first.',
         'deleted_cannot_be_default' => 'A deleted pipeline cannot be the default; restore it first.',
+        'in_use' => 'This pipeline holds deals and cannot be deleted; deactivate it instead.',
     ],
 
     'empty' => [
@@ -106,6 +109,7 @@ return [
             'default_must_be_open' => 'The default stage must be an Open stage.',
             'last_of_kind' => 'The only ":kind" stage of this pipeline cannot be deleted.',
             'probability_range' => 'The close probability must be between 0 and 100.',
+            'in_use' => 'This stage holds deals or appears in their stage history and cannot be deleted.',
         ],
 
         'empty' => [

@@ -6,7 +6,6 @@ declare(strict_types=1);
 return [
 
     'navigation' => [
-        'label' => 'Notes',
         'model' => 'Note',
         'plural_model' => 'Notes',
     ],

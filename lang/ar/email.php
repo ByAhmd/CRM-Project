@@ -70,6 +70,12 @@ return [
         'greeting' => 'عزيزي/عزيزتي :name،',
         'reply_hint' => 'يمكنك الرد على هذه الرسالة مباشرة للتواصل مع :name.',
         'footer' => ':organisation',
+        // The layout strings Laravel's mail views carry as JSON keys.
+        'hello' => 'مرحباً،',
+        'whoops' => 'عذراً، حدث خطأ.',
+        'regards' => 'مع التحية،',
+        'action_fallback' => 'إذا تعذّر عليك الضغط على زر «:action»، فانسخ الرابط التالي والصقه في متصفحك:',
+        'rights' => '© :year :name. جميع الحقوق محفوظة.',
     ],
 
 ];

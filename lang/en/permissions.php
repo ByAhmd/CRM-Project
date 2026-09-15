@@ -42,6 +42,7 @@ return [
         'export' => 'Export',
         'import' => 'Import',
         'merge' => 'Merge duplicates',
+        'set_type' => 'Set the lifecycle type by hand',
         'change_stage' => 'Change stage',
         'close' => 'Close (won / lost)',
         'download' => 'Download',

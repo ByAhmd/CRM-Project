@@ -35,7 +35,9 @@ use Illuminate\Validation\Rule;
  * (case-insensitive) or normalised email: the run's duplicate strategy
  * decides whether it is updated or the row is refused. A new account is
  * owned by the importer unless the owner column names someone else and is a
- * prospect unless the file says otherwise (D-6).
+ * prospect unless the file says otherwise (D-6); a type other than the one
+ * the account already has (prospect for a new one) needs `account.set_type`,
+ * otherwise the row is refused.
  */
 final class AccountImporter extends Importer
 {
@@ -53,7 +55,7 @@ final class AccountImporter extends Importer
                 ->label(__('imports.columns.account.name'))
                 ->requiredMapping()
                 ->rules(['required', 'string', 'min:2', 'max:150'])
-                ->example('شركة الأفق'),
+                ->example(__('imports.examples.account.name')),
 
             ImportColumn::make('type')
                 ->label(__('imports.columns.account.type'))
@@ -62,9 +64,20 @@ final class AccountImporter extends Importer
                 ->fillRecordUsing(function (self $importer, Account $record, ?string $state): void {
                     $type = $importer->resolveEnum(AccountType::class, $state);
 
-                    if ($type instanceof AccountType) {
-                        $record->type = $type;
+                    if (! $type instanceof AccountType) {
+                        return;
                     }
+
+                    // The lifecycle type follows the deals unless the importer may
+                    // set it by hand (D-6); a file that repeats the type the
+                    // account already has (a re-imported export) is accepted.
+                    $current = $record->exists ? $record->type : AccountType::Prospect;
+
+                    if ($type !== $current && ! $importer->importingUser()->can('setType', $record->exists ? $record : Account::class)) {
+                        $importer->failRow('type_forbidden', ['value' => (string) $type->getLabel()]);
+                    }
+
+                    $record->type = $type;
                 })
                 ->example('prospect'),
 
@@ -77,7 +90,7 @@ final class AccountImporter extends Importer
 
                     $record->industry_id = $industry?->getKey();
                 })
-                ->example('Technology'),
+                ->example(__('imports.examples.account.industry')),
 
             ImportColumn::make('size')
                 ->label(__('imports.columns.account.size'))
@@ -114,19 +127,19 @@ final class AccountImporter extends Importer
                 ->label(__('imports.columns.account.address_line'))
                 ->rules(['nullable', 'string', 'max:255'])
                 ->ignoreBlankState()
-                ->example('طريق الملك فهد'),
+                ->example(__('imports.examples.account.address_line')),
 
             ImportColumn::make('city')
                 ->label(__('imports.columns.account.city'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('الرياض'),
+                ->example(__('imports.examples.account.city')),
 
             ImportColumn::make('region')
                 ->label(__('imports.columns.account.region'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('منطقة الرياض'),
+                ->example(__('imports.examples.account.region')),
 
             ImportColumn::make('country')
                 ->label(__('imports.columns.account.country'))
@@ -150,19 +163,15 @@ final class AccountImporter extends Importer
 
                     $record->parent_account_id = $parent?->getKey();
                 })
-                ->example('مجموعة الأفق القابضة'),
+                ->example(__('imports.examples.account.parent')),
 
             ImportColumn::make('owner')
                 ->label(__('imports.columns.account.owner'))
                 ->rules(['nullable', 'email', 'max:190'])
                 ->ignoreBlankState()
-                ->fillRecordUsing(function (self $importer, Account $record, ?string $state): void {
-                    $owner = $importer->resolveOwner($state, Account::permissionGroup());
-
-                    if ($owner !== null) {
-                        $record->owner_id = $owner->getKey();
-                    }
-                })
+                // A new record is created for the named owner; an existing one is
+                // reassigned through RecordAssignmentService (D-4, A-20).
+                ->fillRecordUsing(fn (self $importer, Account $record, ?string $state) => $importer->fillOwner($record, $state))
                 ->example('rep@example.com'),
 
             ImportColumn::make('tags')
@@ -170,13 +179,13 @@ final class AccountImporter extends Importer
                 ->rules(['nullable', 'string', 'max:500'])
                 ->ignoreBlankState()
                 ->fillRecordUsing(fn (self $importer, ?string $state) => $importer->rememberTags($state))
-                ->example('VIP|Enterprise'),
+                ->example(__('imports.examples.account.tags')),
 
             ImportColumn::make('description')
                 ->label(__('imports.columns.account.description'))
                 ->rules(['nullable', 'string', 'max:5000'])
                 ->ignoreBlankState()
-                ->example('Regional distributor.'),
+                ->example(__('imports.examples.account.description')),
 
             // One column per active definition of the entity, mapped by its
             // own label (D-9).
@@ -247,10 +256,7 @@ final class AccountImporter extends Importer
     {
         ImportExportActions::applyLocale($import->getOptions());
 
-        return __('imports.notifications.completed', [
-            'successful' => (string) $import->successful_rows,
-            'failed' => (string) $import->getFailedRowsCount(),
-        ]);
+        return self::completedNotificationBody($import);
     }
 
     /**
@@ -267,7 +273,7 @@ final class AccountImporter extends Importer
         }
 
         $parent = $this->visible(Account::query())
-            ->whereRaw('LOWER(name) = ?', [$name])
+            ->where('accounts.name', $name)
             ->when($record->exists, fn (Builder $query): Builder => $query->whereKeyNot($record->getKey()))
             ->orderBy('id')
             ->first();
@@ -298,7 +304,8 @@ final class AccountImporter extends Importer
                 $query->whereRaw('1 = 0');
 
                 if ($name !== null) {
-                    $query->orWhereRaw('LOWER(name) = ?', [$name]);
+                    // The raw column (case-insensitive collation) keeps accounts_name_index usable.
+                    $query->orWhere('accounts.name', $name);
                 }
 
                 if ($email !== null) {

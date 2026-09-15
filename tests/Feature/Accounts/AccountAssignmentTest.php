@@ -91,7 +91,8 @@ final class AccountAssignmentTest extends TestCase
             ->test(ListAccounts::class)
             ->assertTableActionVisible('assign', $account)
             ->callTableAction('assign', $account, data: ['owner_id' => $manager->getKey()])
-            ->assertNotified();
+            ->assertHasNoTableActionErrors()
+            ->assertNotified(__('assignment.notifications.assigned', ['name' => $manager->name]));
 
         $this->assertSame($manager->getKey(), $account->refresh()->owner_id);
     }
@@ -103,18 +104,34 @@ final class AccountAssignmentTest extends TestCase
         $manager = $this->salesManager($team);
         $member = $this->salesRep($team);
         $outsider = $this->salesRep();
+        $support = $this->support();
         $admin = $this->admin();
 
         $inTeam = Account::factory()->create(['owner_id' => $member->getKey()]);
         $outside = Account::factory()->create(['owner_id' => $outsider->getKey()]);
 
-        // The manager may only reassign records inside their reach…
+        // Livewire::actingAs switches the user for every component, so each actor's component runs to completion first.
+
+        // The manager selects both records; only the one inside their reach is reassigned…
         $this->assertTrue($manager->can('assign', $inTeam));
         $this->assertFalse($manager->can('assign', $outside));
 
         Livewire::actingAs($manager)
             ->test(ListAccounts::class)
-            ->callTableBulkAction('assign', [$inTeam], data: ['owner_id' => $manager->getKey()]);
+            ->callTableBulkAction('assign', [$inTeam, $outside], data: ['owner_id' => $manager->getKey()])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSame($manager->getKey(), $inTeam->refresh()->owner_id);
+        $this->assertSame($outsider->getKey(), $outside->refresh()->owner_id);
+
+        // …a view_all actor lists both records but holds no account.assign, so the per-record authorisation skips both…
+        $this->assertFalse($support->can('assign', $inTeam));
+        $this->assertFalse($support->can('assign', $outside));
+
+        Livewire::actingAs($support)
+            ->test(ListAccounts::class)
+            ->assertCanSeeTableRecords([$inTeam, $outside])
+            ->callTableBulkAction('assign', [$inTeam, $outside], data: ['owner_id' => $support->getKey()]);
 
         $this->assertSame($manager->getKey(), $inTeam->refresh()->owner_id);
         $this->assertSame($outsider->getKey(), $outside->refresh()->owner_id);
@@ -122,10 +139,12 @@ final class AccountAssignmentTest extends TestCase
         // …while an admin reaches everything.
         Livewire::actingAs($admin)
             ->test(ListAccounts::class)
-            ->callTableBulkAction('assign', [$inTeam, $outside], data: ['owner_id' => $member->getKey()]);
+            ->callTableBulkAction('assign', [$inTeam, $outside], data: ['owner_id' => $member->getKey()])
+            ->assertHasNoTableBulkActionErrors();
 
         $this->assertSame($member->getKey(), $inTeam->refresh()->owner_id);
         $this->assertSame($member->getKey(), $outside->refresh()->owner_id);
+        $this->assertSame(0, ActivityLog::query()->where('description', ActivityLogEvent::AccountAssigned->value)->where('causer_id', $support->getKey())->count());
     }
 
     #[Test]

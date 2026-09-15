@@ -460,22 +460,4 @@ final class LeadCustomFieldsTest extends TestCase
             ->where('key', $key)
             ->firstOrFail();
     }
-
-    /**
-     * The table's column manager state with one toggleable column switched on
-     * — what the reader does through the columns dropdown.
-     *
-     * @param  array<int, array<string, mixed>>  $state
-     * @return array<int, array<string, mixed>>
-     */
-    private function columnStateWith(array $state, string $name): array
-    {
-        foreach ($state as $index => $item) {
-            if (($item['name'] ?? null) === $name) {
-                $state[$index]['isToggled'] = true;
-            }
-        }
-
-        return $state;
-    }
 }

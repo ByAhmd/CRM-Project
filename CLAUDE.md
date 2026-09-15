@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
 authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-13 owner, A-1 … A-15 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-13 owner, A-1 … A-21 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -49,15 +49,24 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   from `lang/ar/<module>.php` and `lang/en/<module>.php` with identical keys (parity test). Fixed sub-keys:
   `navigation`, `sections`, `fields`, `placeholders`, `helpers`, `validation`, `filters`, `actions`,
   `confirmations`, `notifications`, `empty`, `pages`. Arabic default, English fallback (D-5).
-- Theme: `resources/css/filament/admin/theme.css` only; tokens `--crm-*` in `:root` and `.dark`; logical CSS
+  Arabic glossary: pipeline «مسار المبيعات» (plural «مسارات المبيعات»), deal «صفقة», owner «المسؤول», administrator
+  «مدير النظام», prospect account «عميل مرتقب», won/lost «مكسوبة/مفقودة»; quotes « », digits 0-9, tanween written «اً»;
+  counted nouns use `trans_choice` (Arabic `{0}/{1}/{2}/[3,10]/[11,99]/[100,*]`, English `{1}/[2,*]`); Arabic text
+  uses «من … إلى …», never arrows between values; audit labels for one model go in
+  `activity.subject_attributes.<Model>.<key>`.
+- Theme: `resources/css/filament/admin/theme.css` only; tokens `--crm-*` in `:root` and `.dark`; Filament `--gray-*`
+  overrides must be full colour values (e.g. `var(--crm-*)`), never bare RGB triplets; logical CSS
   properties; no `[dir='ltr']` exceptions; Latin-only values wrapped `dir="ltr"`.
 - Audit: models with business meaning use `LogsActivity` with an explicit `logOnly` whitelist; service events go
   through `Services\Audit\<Domain>ActivityLogger` with an `ActivityLogEvent` case. Secrets never logged.
 - Notifications: Laravel notification classes wrapping Filament's database envelope; `via()` adds `mail` only
   when a real transport is configured and the user opted in.
 - Tests: `#[Test]` attribute, snake_case sentence names, `RefreshDatabase` on `crm_testing`,
-  `Filament::setCurrentPanel('admin')` before `Livewire::test`, fixtures from `Tests\Concerns\CreatesCrmFixtures`,
+  `Filament::setCurrentPanel('admin')` before `Livewire::test`, fixtures from `Tests\Concerns\CreatesCrmFixtures`
+  (upload bytes from `Tests\Concerns\BuildsUploadBytes`; never copy a helper into a test class), lazy loading prevented
+  for the whole suite,
   per-role authorisation matrices, negative visibility tests for every owned entity.
+  `tests/Feature/QualityPass/*` are permanent regression tests from the step-12 quality pass: never weaken or delete one.
 
 ## 4. Commands
 

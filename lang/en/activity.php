@@ -166,6 +166,7 @@ return [
         'Attachment' => 'Attachment',
         'EmailTemplate' => 'Email template',
         'NotificationPreference' => 'Notification preference',
+        'CustomField' => 'Custom field',
     ],
 
     'subject' => [
@@ -275,7 +276,6 @@ return [
         'is_pinned' => 'Pinned',
         'original_name' => 'File name',
         'mime_type' => 'File type',
-        'size' => 'Size',
         'description' => 'Description',
         'downloaded_by' => 'Downloaded by',
         'task_id' => 'Task',
@@ -293,6 +293,22 @@ return [
         'database' => 'In-app',
         'mail' => 'Email',
         'preferences' => 'Preferences',
+        'key' => 'Key',
+        'label_ar' => 'Label (Arabic)',
+        'label_en' => 'Label (English)',
+        'options' => 'Options',
+        'is_required' => 'Required',
+        'is_filterable' => 'Filterable',
+        'is_listed' => 'Available as a column',
+        'validation' => 'Validation rules',
+        'is_system' => 'System',
+    ],
+
+    // Labels that differ for one audited model; checked before the shared attribute labels.
+    'subject_attributes' => [
+        'Attachment' => [
+            'size' => 'File size',
+        ],
     ],
 
     'values' => [

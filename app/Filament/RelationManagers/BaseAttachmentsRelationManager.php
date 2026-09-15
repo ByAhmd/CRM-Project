@@ -19,6 +19,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -66,6 +67,7 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('original_name')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('uploader'))
             ->columns([
                 TextColumn::make('original_name')
                     ->label(__('attachments.fields.original_name'))
@@ -210,8 +212,17 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
         return ! $record->trashed() && $this->authorised('download', $record);
     }
 
+    /**
+     * Every row belongs to the owner record, so it is handed to the row as its
+     * attachable before AttachmentPolicy reads it: the morph is never queried
+     * once per row.
+     */
     private function authorised(string $ability, Attachment $record): bool
     {
+        if (! $record->relationLoaded('attachable')) {
+            $record->setRelation('attachable', $this->getOwnerRecord());
+        }
+
         $user = auth()->user();
 
         return $user instanceof User && $user->can($ability, $record);

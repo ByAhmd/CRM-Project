@@ -426,9 +426,4 @@ final class ActivityResourceTest extends TestCase
             'deal_id' => $deal->getKey(),
         ], $subject->foreignKeys());
     }
-
-    private function typeOfKind(ActivityKind $kind): ActivityType
-    {
-        return ActivityType::query()->where('kind', $kind->value)->where('is_system', true)->firstOrFail();
-    }
 }

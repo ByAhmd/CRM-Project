@@ -8,6 +8,7 @@ use App\Enums\NavigationGroup;
 use App\Filament\Auth\Pages\RequestPasswordReset;
 use App\Filament\Auth\Pages\ResetPassword;
 use App\Http\Middleware\SecurityHeaders;
+use App\Services\Settings\SettingsRepository;
 use App\Support\Filament\FilamentLanguageMenuItems;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
@@ -20,6 +21,7 @@ use Filament\Navigation\NavigationGroup as FilamentNavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -35,6 +37,18 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  */
 final class AdminPanelProvider extends PanelProvider
 {
+    /**
+     * Every Filament date-time column, entry and picker renders (and a picker
+     * reads its input) in the organisation timezone from General Settings,
+     * the same zone the calendar and the reports use; values stay stored in
+     * app.timezone. The closure is resolved on use, so a changed setting takes
+     * effect on the next render and nothing touches the database at boot.
+     */
+    public function boot(): void
+    {
+        FilamentTimezone::set(static fn (): string => app(SettingsRepository::class)->timezone());
+    }
+
     public function panel(Panel $panel): Panel
     {
         return $panel

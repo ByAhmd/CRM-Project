@@ -133,8 +133,39 @@ final class LeadResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$theirs]);
 
         $this->actingAs($rep)->get(LeadResource::getUrl('view', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($rep)->get(LeadResource::getUrl('edit', ['record' => $mine]))->assertOk();
+        $this->actingAs($rep)->get(LeadResource::getUrl('edit', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($manager)->get(LeadResource::getUrl('edit', ['record' => $theirs]))->assertNotFound();
         $this->actingAs($this->readOnly())->get(LeadResource::getUrl('view', ['record' => $theirs]))->assertOk();
         $this->actingAs($this->readOnly())->get(LeadResource::getUrl('create'))->assertForbidden();
+    }
+
+    #[Test]
+    public function the_bulk_delete_soft_deletes_only_in_scope_leads_and_is_not_offered_to_a_rep(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $member = $this->salesRep($team);
+        $outsider = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
+        $inTeam = Lead::factory()->create(['owner_id' => $member->getKey()]);
+        $outside = Lead::factory()->create(['owner_id' => $outsider->getKey()]);
+
+        // Livewire::actingAs switches the user for every component, so each actor's component runs to completion first.
+        Livewire::actingAs($member)
+            ->test(ListLeads::class)
+            ->set('activeTab', 'all')
+            ->assertTableBulkActionHidden('delete');
+
+        $this->assertNotSoftDeleted('leads', ['id' => $inTeam->getKey()]);
+
+        Livewire::actingAs($manager)
+            ->test(ListLeads::class)
+            ->set('activeTab', 'all')
+            ->callTableBulkAction('delete', [$inTeam, $outside])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSoftDeleted('leads', ['id' => $inTeam->getKey()]);
+        $this->assertNotSoftDeleted('leads', ['id' => $outside->getKey()]);
     }
 
     #[Test]
@@ -230,8 +261,10 @@ final class LeadResourceTest extends TestCase
 
         $this->assertSoftDeleted('leads', ['id' => $lead->getKey()]);
 
+        // A soft-deleted lead is frozen (D-13): it is restored from its view page, not edited.
         Livewire::actingAs($admin)
-            ->test(EditLead::class, ['record' => $lead->getRouteKey()])
+            ->test(ViewLead::class, ['record' => $lead->getRouteKey()])
+            ->assertActionVisible('restore')
             ->callAction('restore');
 
         $this->assertNull($lead->refresh()->deleted_at);

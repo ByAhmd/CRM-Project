@@ -8,15 +8,23 @@ use App\Listeners\ActivateInvitedUser;
 use App\Listeners\PersistUserLocale;
 use App\Listeners\RecordAuthActivity;
 use App\Models\ActivityLog;
+use App\Models\CustomField;
 use App\Observers\ActivityLogAppendOnlyObserver;
+use App\Policies\ExportPolicy;
+use App\Policies\ImportPolicy;
+use App\Services\CustomFields\CustomFieldRegistry;
 use App\Services\Leads\LeadScoringService;
 use BezhanSalleh\LanguageSwitch\Events\LocaleChanged;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
+use Filament\Actions\Exports\Models\Export as FilamentExport;
+use Filament\Actions\Imports\Importer;
+use Filament\Actions\Imports\Models\Import as FilamentImport;
 use Filament\Forms\Components\FileUpload;
 use Filament\Tables\Table;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -29,12 +37,21 @@ final class AppServiceProvider extends ServiceProvider
         // the rule observer all see the same instance, so a rule change refreshes
         // the cache every path reads from.
         $this->app->singleton(LeadScoringService::class);
+
+        // One custom-field definition memo per request or queued job: every
+        // form, table, filter, action, importer row and exporter of the same
+        // request reads the definitions once. Scoped instances are dropped
+        // between requests and jobs, and registerCustomFieldRegistryFlush()
+        // drops it the moment a definition changes, so nothing reads stale.
+        $this->app->scoped(CustomFieldRegistry::class);
     }
 
     public function boot(): void
     {
         $this->configureModels();
         $this->configureSecurity();
+        $this->configureImportExportAuthorisation();
+        $this->registerCustomFieldRegistryFlush();
         $this->registerAuditing();
         $this->registerListeners();
         $this->configureLanguageSwitch();
@@ -64,6 +81,36 @@ final class AppServiceProvider extends ServiceProvider
         if ($this->app->isProduction()) {
             URL::forceScheme('https');
         }
+    }
+
+    /**
+     * Filament's export-download and failed-rows-download routes bind
+     * Filament's own Export / Import models and run under the plain `web`
+     * group; they authorise through Gate::getPolicyFor() of the bound class.
+     * Registering the application policies for the base classes makes those
+     * routes enforce the same owner / reviewer scope and account status as the
+     * history screens (D-4, D-11, D-13).
+     *
+     * The failed-rows CSV reproduces every uploaded cell, so it is written with
+     * formula cells neutralised (CWE-1236) for every importer.
+     */
+    private function configureImportExportAuthorisation(): void
+    {
+        Gate::policy(FilamentExport::class, ExportPolicy::class);
+        Gate::policy(FilamentImport::class, ImportPolicy::class);
+
+        Importer::preventFormulaInjection();
+    }
+
+    /** A saved, deleted or restored definition is read afresh by the next consumer (D-9). */
+    private function registerCustomFieldRegistryFlush(): void
+    {
+        $flush = function (): void {
+            $this->app->forgetInstance(CustomFieldRegistry::class);
+        };
+
+        CustomField::saved($flush);
+        CustomField::deleted($flush);
     }
 
     private function registerAuditing(): void

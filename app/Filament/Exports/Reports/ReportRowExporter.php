@@ -138,9 +138,22 @@ final class ReportRowExporter
         return $cells;
     }
 
-    /** A text cell a spreadsheet will never evaluate: leading formula characters are neutralised. */
+    /**
+     * A text cell a spreadsheet will never evaluate (CWE-1236): a value that
+     * starts with = + - @ TAB or CR is prefixed with a quote. A sign-led
+     * numeric string such as "-5" is a number to a spreadsheet, not a formula,
+     * and is left unchanged, as Filament's export columns do.
+     */
     private static function text(string $value): string
     {
-        return $value !== '' && str_contains('=+-@', $value[0]) ? "'".$value : $value;
+        if ($value === '') {
+            return $value;
+        }
+
+        if (in_array($value[0], ['-', '+'], true) && is_numeric($value)) {
+            return $value;
+        }
+
+        return in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
     }
 }

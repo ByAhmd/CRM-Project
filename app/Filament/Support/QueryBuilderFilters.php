@@ -9,6 +9,7 @@ use App\Enums\CompanySize;
 use App\Enums\DealStatus;
 use App\Enums\ForecastCategory;
 use App\Enums\LeadPriority;
+use App\Filament\Resources\Accounts\AccountResource;
 use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Deal;
@@ -101,10 +102,7 @@ final class QueryBuilderFilters
             self::text('city', nullable: true),
             self::text('country', nullable: true),
             BooleanConstraint::make('is_primary')->label(__('query_builder.fields.is_primary')),
-            RelationshipConstraint::make('account')
-                ->label(__('query_builder.fields.account'))
-                ->emptyable()
-                ->selectable(IsRelatedToOperator::make()->titleAttribute('name')->multiple()->searchable()->preload()),
+            self::account(),
             self::owner(Contact::permissionGroup()),
             self::tags(),
             self::date('created_at'),
@@ -140,10 +138,7 @@ final class QueryBuilderFilters
             self::select('forecast_category', ForecastCategory::class),
             self::lookup('pipeline', Pipeline::localisedNameColumn()),
             self::lookup('stage', PipelineStage::localisedNameColumn()),
-            RelationshipConstraint::make('account')
-                ->label(__('query_builder.fields.account'))
-                ->emptyable()
-                ->selectable(IsRelatedToOperator::make()->titleAttribute('name')->multiple()->searchable()->preload()),
+            self::account(),
             self::owner(Deal::permissionGroup()),
             self::tags(),
             self::date('expected_close_date', nullable: true),
@@ -205,6 +200,29 @@ final class QueryBuilderFilters
                     ->multiple()
                     ->searchable()
                     ->preload(),
+            );
+    }
+
+    /**
+     * The account picker offers only the accounts the actor may read (D-4):
+     * the rule narrows a list that is already scoped, but the option names
+     * themselves must not reveal accounts outside the actor's reach.
+     */
+    private static function account(): RelationshipConstraint
+    {
+        return RelationshipConstraint::make('account')
+            ->label(__('query_builder.fields.account'))
+            ->emptyable()
+            ->selectable(
+                IsRelatedToOperator::make()
+                    ->titleAttribute('name')
+                    ->multiple()
+                    ->searchable()
+                    ->preload()
+                    ->modifyRelationshipQueryUsing(fn (Builder $query): Builder => $query->whereIn(
+                        $query->qualifyColumn('id'),
+                        AccountResource::getEloquentQuery()->select('accounts.id'),
+                    )),
             );
     }
 

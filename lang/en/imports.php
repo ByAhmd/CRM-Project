@@ -109,6 +109,56 @@ return [
         ],
     ],
 
+    // The example row of the downloadable CSV template, written in the downloader's language.
+    // Lookup names match the seeded rows so the example imports as it is.
+    'examples' => [
+        'lead' => [
+            'first_name' => 'Fahad',
+            'last_name' => 'Al-Qahtani',
+            'company_name' => 'Horizon Company',
+            'job_title' => 'Procurement Manager',
+            'address_line' => 'King Fahd Road',
+            'city' => 'Riyadh',
+            'region' => 'Riyadh Region',
+            'source' => 'Website',
+            'status' => 'New',
+            'tags' => 'VIP|Enterprise',
+            'description' => 'Met at the Riyadh expo.',
+        ],
+        'contact' => [
+            'first_name' => 'Noura',
+            'last_name' => 'Al-Otaibi',
+            'account' => 'Horizon Company',
+            'job_title' => 'Marketing Manager',
+            'department' => 'Marketing',
+            'address_line' => 'King Fahd Road',
+            'city' => 'Riyadh',
+            'region' => 'Riyadh Region',
+            'tags' => 'VIP|Enterprise',
+            'description' => 'Prefers email in the morning.',
+        ],
+        'account' => [
+            'name' => 'Horizon Company',
+            'industry' => 'Technology',
+            'address_line' => 'King Fahd Road',
+            'city' => 'Riyadh',
+            'region' => 'Riyadh Region',
+            'parent' => 'Horizon Holding Group',
+            'tags' => 'VIP|Enterprise',
+            'description' => 'Regional distributor.',
+        ],
+        'deal' => [
+            'title' => 'Computer equipment supply',
+            'account' => 'Horizon Company',
+            'contact' => 'Noura Al-Otaibi',
+            'pipeline' => 'Sales',
+            'stage' => 'Qualification',
+            'source' => 'Website',
+            'tags' => 'VIP|Enterprise',
+            'description' => 'Renewal of the 2025 contract.',
+        ],
+    ],
+
     'options' => [
         'duplicate_strategy' => [
             'skip' => 'Skip duplicates',
@@ -118,7 +168,7 @@ return [
 
     'helpers' => [
         'duplicate_strategy' => 'A duplicate is an existing record you can see with the same email or phone (accounts: the same name or email; deals: the same title on the same account).',
-        'failed_rows' => 'The first :limit failed rows are shown here; the download holds every failed row with its reason.',
+        'failed_rows' => '{1} The first failed row is shown here; the download holds every failed row with its reason.|[2,*] The first :limit failed rows are shown here; the download holds every failed row with its reason.',
     ],
 
     'statuses' => [
@@ -128,7 +178,8 @@ return [
     ],
 
     'notifications' => [
-        'completed' => ':successful rows imported, :failed rows failed.',
+        'completed' => '{0} No rows were imported.|{1} 1 row imported.|[2,*] :count rows imported.',
+        'failed' => '{0} No rows failed.|{1} 1 row failed.|[2,*] :count rows failed.',
     ],
 
     'validation' => [
@@ -136,9 +187,11 @@ return [
         'update_forbidden' => 'You are not allowed to update record #:id.',
         'create_forbidden' => 'You are not allowed to create records of this type; the row was not imported.',
         'converted_status' => 'The converted status is set by converting the lead, not by importing.',
+        'qualified_status' => 'A lead cannot be imported as qualified: import it in an initial status, then qualify it with a qualification note.',
+        'type_forbidden' => 'You are not allowed to set the account type ":value" by hand; a prospect becomes a customer when its first deal is won.',
         'owner_out_of_reach' => 'The owner ":value" is not a user you can assign to.',
         'unknown_lookup' => 'Unknown value ":value".',
-        'account_not_found' => 'The account ":value" does not exist or is outside your reach.',
+        'account_not_found' => 'The account ":value" does not exist or is outside the records you can access.',
         'stage_not_open' => 'The stage ":value" is a closed stage; a deal must start in an open stage.',
         'stage_outside_pipeline' => 'The stage ":value" belongs to another pipeline.',
         'pipeline_unavailable' => 'No default pipeline with an open stage is configured; ask an administrator.',

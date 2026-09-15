@@ -20,9 +20,9 @@ use InvalidArgumentException;
  * with the enum defaults (bell on, mail off) wherever the user has no row.
  * Only rows that differ from what is stored are written, and every change
  * is audited on the user with the entries that moved. channelsFor() is the
- * single answer every notification's via() relies on: the bell when the
- * preference allows it, mail only when a real transport exists AND the user
- * opted in.
+ * single answer every notification's via() relies on: nothing at all for an
+ * account that may not sign in, otherwise the bell when the preference allows
+ * it, mail only when a real transport exists AND the user opted in.
  */
 final class NotificationPreferenceService
 {
@@ -63,6 +63,12 @@ final class NotificationPreferenceService
      */
     public function channelsFor(User $user, NotificationEvent $event): array
     {
+        // A switched-off or not yet activated account lost panel access (D-11):
+        // it receives nothing, neither the bell nor mail.
+        if (! $user->status->canAuthenticate()) {
+            return [];
+        }
+
         $row = NotificationPreference::query()
             ->where('user_id', $user->getKey())
             ->where('event', $event->value)

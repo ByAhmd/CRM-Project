@@ -24,11 +24,16 @@ use Illuminate\Support\Collection;
  * of the activity list is deliberately not used here, so a rep's report
  * counts what the rep logged, not what colleagues logged on shared records.
  *
- * Time buckets are computed in SQL with DATE(occurred_at): stored dates are
- * in the application timezone, which is the organisation timezone (D-8), so
- * no offset conversion is needed. Weeks are folded from the daily rows in
- * PHP on the organisation's week start (SettingsRepository), and both series
- * are zero-filled across the period.
+ * Time buckets are folded in PHP in the organisation timezone (A-19): that
+ * timezone is a runtime setting (D-8) which may differ from the application
+ * timezone every stored date is in; SQL DATE() would name the day in the
+ * latter, and CONVERT_TZ() needs MySQL timezone tables the shared host does
+ * not have (D-1). The period's activities are read in id batches (moment and
+ * kind only) and each moment is placed by comparing it with the first
+ * instant of every organisation day of the period. Weeks are folded from the
+ * days on the organisation's week start, and both series are zero-filled
+ * across the period. The owner grouping has no time bucket and stays an SQL
+ * aggregate.
  */
 final class ActivityReport
 {
@@ -50,6 +55,9 @@ final class ActivityReport
 
     private const COLORS = ['calls' => 'info', 'meetings' => 'primary', 'emails' => 'warning', 'notes' => 'gray', 'other' => 'success'];
 
+    /** Activities read per batch when a time series folds the moments in PHP. */
+    private const BATCH_SIZE = 2000;
+
     public function __construct(
         private readonly RecordVisibilityResolver $visibility,
         private readonly SettingsRepository $settings,
@@ -61,8 +69,12 @@ final class ActivityReport
     public function rows(User $viewer, ReportFilters $filters): Collection
     {
         $groupBy = $this->groupBy($filters);
-        $timeSeries = $groupBy !== self::GROUP_OWNER;
-        $groupColumn = $timeSeries ? 'DATE(activities.occurred_at)' : 'activities.owner_id';
+
+        if ($groupBy !== self::GROUP_OWNER) {
+            return $this->timeRows($groupBy, $this->dailyAggregates($viewer, $filters), $filters);
+        }
+
+        $groupColumn = 'activities.owner_id';
 
         $query = $this->query($viewer, $filters)->selectRaw("{$groupColumn} AS group_key");
 
@@ -78,7 +90,7 @@ final class ActivityReport
         $aggregates = [];
 
         foreach ($query->toBase()->get() as $aggregate) {
-            $key = $timeSeries ? (string) $aggregate->group_key : (int) ($aggregate->group_key ?? 0);
+            $key = (int) ($aggregate->group_key ?? 0);
 
             $aggregates[$key] = [
                 'calls' => (int) $aggregate->calls,
@@ -90,7 +102,7 @@ final class ActivityReport
             ];
         }
 
-        return $timeSeries ? $this->timeRows($groupBy, $aggregates, $filters) : $this->ownerRows($aggregates);
+        return $this->ownerRows($aggregates);
     }
 
     /**
@@ -178,6 +190,79 @@ final class ActivityReport
     private function query(User $viewer, ReportFilters $filters): Builder
     {
         return $filters->period($filters->scope($viewer, $this->visibility, Activity::query()), 'activities.occurred_at');
+    }
+
+    /**
+     * The period's activities counted per kind for each organisation day
+     * that has any, keyed by Y-m-d in the organisation timezone.
+     *
+     * @return array<string, array<string, int>>
+     */
+    private function dailyAggregates(User $viewer, ReportFilters $filters): array
+    {
+        $timezone = $this->settings->timezone();
+        $appTimezone = (string) config('app.timezone');
+        $columns = array_flip(array_map(static fn (ActivityKind $kind): string => $kind->value, self::KINDS));
+        $days = [];
+        $starts = [];
+
+        $day = CarbonImmutable::parse($filters->fromDate($timezone), $timezone);
+        $last = CarbonImmutable::parse($filters->toDate($timezone), $timezone);
+
+        while ($day->lessThanOrEqualTo($last)) {
+            $days[] = $day->toDateString();
+            $starts[] = $day->setTimezone($appTimezone)->format('Y-m-d H:i:s');
+            $day = $day->addDay();
+        }
+
+        $aggregates = [];
+        $activities = $this->query($viewer, $filters)
+            ->select(['activities.id', 'activities.occurred_at', 'activities.kind'])
+            ->toBase()
+            ->lazyById(self::BATCH_SIZE, 'activities.id', 'id');
+
+        foreach ($activities as $activity) {
+            $index = self::bucketIndex($starts, (string) $activity->occurred_at);
+
+            if ($index === null) {
+                continue;
+            }
+
+            $key = $days[$index];
+            $column = $columns[(string) $activity->kind] ?? 'other';
+            $aggregates[$key] ??= ['calls' => 0, 'meetings' => 0, 'emails' => 0, 'notes' => 0, 'other' => 0, 'total' => 0];
+            $aggregates[$key][$column]++;
+            $aggregates[$key]['total']++;
+        }
+
+        return $aggregates;
+    }
+
+    /**
+     * The bucket a stored moment (application timezone, Y-m-d H:i:s) falls
+     * in: the last bucket starting at or before it, found by binary search
+     * over the ascending bucket starts; null before the first one.
+     *
+     * @param  list<string>  $starts
+     */
+    private static function bucketIndex(array $starts, string $moment): ?int
+    {
+        $low = 0;
+        $high = count($starts) - 1;
+        $found = null;
+
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+
+            if (strcmp($starts[$middle], $moment) <= 0) {
+                $found = $middle;
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+
+        return $found;
     }
 
     /**

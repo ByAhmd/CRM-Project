@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Contacts\Pages;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\OwnerSelect;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Contacts\ContactService;
@@ -32,6 +33,9 @@ final class EditContact extends EditRecord
      * @var array<string, mixed>
      */
     private array $customFieldState = [];
+
+    /** The owner the form submitted, or false when the actor may not reassign (D-4). */
+    private int|false|null $submittedOwnerId = false;
 
     protected function getHeaderActions(): array
     {
@@ -66,6 +70,12 @@ final class EditContact extends EditRecord
         // against the saved record by afterSave() (D-9).
         unset($data[CustomFieldsSchema::STATE_PATH]);
 
+        // A change of owner is a reassignment (audit row + notification, D-4),
+        // handed to RecordAssignmentService by afterSave().
+        $record = $this->getRecord();
+        assert($record instanceof Contact);
+        $this->submittedOwnerId = OwnerSelect::pull($data, $record);
+
         return $data;
     }
 
@@ -75,6 +85,10 @@ final class EditContact extends EditRecord
         assert($record instanceof Contact);
 
         app(ContactService::class)->enforcePrimaryRule($record);
+
+        $ownerId = $this->submittedOwnerId;
+        $this->submittedOwnerId = false;
+        OwnerSelect::reassign($record, $ownerId);
 
         $this->persistCustomFields($record);
     }

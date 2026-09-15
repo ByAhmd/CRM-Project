@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace Tests\Feature\ImportExport;
 
+use App\Enums\Permission;
+use App\Filament\Exports\LeadExporter;
+use App\Filament\Imports\LeadImporter;
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Filament\Resources\Activities\Pages\ListActivities;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Deals\Pages\ListDeals;
 use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
+use App\Filament\Support\ImportExportActions;
 use App\Models\Lead;
+use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
@@ -50,11 +56,29 @@ final class ImportExportActionsTest extends TestCase
     }
 
     #[Test]
+    public function the_import_and_export_actions_are_rate_limited_per_user(): void
+    {
+        // Plan section 7: heavy actions carry rateLimit(); each start queues work on the shared host (D-1).
+        $this->actingAs($this->salesManager());
+
+        $this->assertSame(ImportExportActions::IMPORT_RATE_LIMIT, ImportExportActions::import(LeadImporter::class, Lead::class)->getRateLimit());
+        $this->assertSame(ImportExportActions::EXPORT_RATE_LIMIT, ImportExportActions::export(LeadExporter::class, Lead::class)->getRateLimit());
+        $this->assertSame(ImportExportActions::EXPORT_RATE_LIMIT, ImportExportActions::exportBulk(LeadExporter::class, Lead::class)->getRateLimit());
+    }
+
+    #[Test]
     public function the_export_actions_are_offered_to_export_holders_and_hidden_from_everyone_else_on_every_list(): void
     {
         $rep = $this->salesRep();
-        $readOnly = $this->readOnly();
-        $support = $this->support();
+
+        // A reader of every list who holds no export key (buildable through the Roles resource, D-3).
+        $withoutExport = User::factory()->create();
+        $withoutExport->syncRoles([]);
+        $withoutExport->syncPermissions([
+            Permission::LeadViewAny->value, Permission::ContactViewAny->value, Permission::AccountViewAny->value,
+            Permission::DealViewAny->value, Permission::TaskViewAny->value, Permission::ActivityViewAny->value,
+        ]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         foreach ([ListLeads::class, ListContacts::class, ListAccounts::class, ListDeals::class, ListTasks::class, ListActivities::class] as $page) {
             Livewire::actingAs($rep)
@@ -62,14 +86,22 @@ final class ImportExportActionsTest extends TestCase
                 ->assertActionVisible(TestAction::make('export')->table())
                 ->assertActionVisible(TestAction::make('export')->table()->bulk());
 
-            Livewire::actingAs($readOnly)
+            // The action follows the entity's `{entity}.export` key alone (the role matrix decides who holds it).
+            Livewire::actingAs($withoutExport)
                 ->test($page)
                 ->assertActionHidden(TestAction::make('export')->table())
                 ->assertActionHidden(TestAction::make('export')->table()->bulk());
+        }
 
-            Livewire::actingAs($support)
-                ->test($page)
-                ->assertActionHidden(TestAction::make('export')->table());
+        foreach ([$this->readOnly(), $this->support()] as $reader) {
+            foreach ([ListLeads::class, ListContacts::class, ListAccounts::class, ListDeals::class, ListTasks::class, ListActivities::class] as $page) {
+                $model = $page::getResource()::getModel();
+                $component = Livewire::actingAs($reader)->test($page);
+
+                $reader->can('export', $model)
+                    ? $component->assertActionVisible(TestAction::make('export')->table())
+                    : $component->assertActionHidden(TestAction::make('export')->table());
+            }
         }
     }
 

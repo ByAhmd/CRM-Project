@@ -13,4 +13,9 @@ return [
         'empty' => '—',
     ],
 
+    // Joins the items of a list inside a sentence in the reader's language.
+    'separators' => [
+        'list' => ', ',
+    ],
+
 ];

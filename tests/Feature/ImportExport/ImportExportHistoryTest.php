@@ -47,17 +47,22 @@ final class ImportExportHistoryTest extends TestCase
     }
 
     #[Test]
-    public function a_user_sees_only_their_own_imports_and_exports_while_a_reviewer_sees_every_run(): void
+    public function a_user_sees_only_their_own_imports_and_exports_while_an_organisation_wide_reviewer_sees_every_run(): void
     {
-        $manager = $this->salesManager();
+        $admin = $this->admin();
+        $manager = $this->salesManager($this->makeTeam());
         $rep = $this->importingRep();
         $other = $this->importingRep();
         $mine = $this->makeImport($rep);
         $theirs = $this->makeImport($other);
+        $managersImport = $this->makeImport($manager);
         $myExport = $this->makeExport($rep);
         $theirExport = $this->makeExport($other);
+        $managersExport = $this->makeExport($manager);
 
+        $this->assertTrue($admin->can(Permission::ImportsView->value));
         $this->assertTrue($manager->can(Permission::ImportsView->value));
+        $this->assertFalse($manager->can('lead.view_all'), 'precondition: the manager is team-scoped');
         $this->assertFalse($rep->can(Permission::ImportsView->value));
 
         Livewire::actingAs($rep)
@@ -65,28 +70,46 @@ final class ImportExportHistoryTest extends TestCase
             ->assertCanSeeTableRecords([$mine])
             ->assertCanNotSeeTableRecords([$theirs]);
 
+        Livewire::actingAs($admin)
+            ->test(ListImports::class)
+            ->assertCanSeeTableRecords([$mine, $theirs, $managersImport]);
+
+        // exports.view / imports.view open other users' runs only for the
+        // entities the holder reaches at all level (D-4, D-13).
         Livewire::actingAs($manager)
             ->test(ListImports::class)
-            ->assertCanSeeTableRecords([$mine, $theirs]);
+            ->assertCanSeeTableRecords([$managersImport])
+            ->assertCanNotSeeTableRecords([$mine, $theirs]);
 
         Livewire::actingAs($rep)
             ->test(ListExports::class)
             ->assertCanSeeTableRecords([$myExport])
             ->assertCanNotSeeTableRecords([$theirExport]);
 
+        Livewire::actingAs($admin)
+            ->test(ListExports::class)
+            ->assertCanSeeTableRecords([$myExport, $theirExport, $managersExport]);
+
         Livewire::actingAs($manager)
             ->test(ListExports::class)
-            ->assertCanSeeTableRecords([$myExport, $theirExport]);
+            ->assertCanSeeTableRecords([$managersExport])
+            ->assertCanNotSeeTableRecords([$myExport, $theirExport]);
 
         $this->actingAs($other)->get(ImportResource::getUrl('view', ['record' => $mine]))->assertNotFound();
-        $this->actingAs($manager)->get(ImportResource::getUrl('view', ['record' => $mine]))->assertOk();
+        $this->actingAs($manager)->get(ImportResource::getUrl('view', ['record' => $mine]))->assertNotFound();
+        $this->actingAs($admin)->get(ImportResource::getUrl('view', ['record' => $mine]))->assertOk();
+
+        $this->assertFalse($manager->can('view', $mine));
+        $this->assertFalse($manager->can('view', $myExport));
+        $this->assertTrue($admin->can('view', $mine));
+        $this->assertTrue($admin->can('view', $myExport));
     }
 
     #[Test]
     public function the_view_page_shows_the_failed_rows_and_offers_their_download_to_the_owner_and_to_a_reviewer(): void
     {
         $rep = $this->importingRep();
-        $manager = $this->salesManager();
+        $reviewer = $this->admin();
         $import = $this->makeImport($rep, ['total_rows' => 3, 'processed_rows' => 3, 'successful_rows' => 1]);
         $clean = $this->makeImport($rep, ['total_rows' => 1, 'processed_rows' => 1, 'successful_rows' => 1]);
 
@@ -111,7 +134,7 @@ final class ImportExportHistoryTest extends TestCase
             ->callAction('downloadFailedRows')
             ->assertFileDownloaded();
 
-        Livewire::actingAs($manager)
+        Livewire::actingAs($reviewer)
             ->test(ViewImport::class, ['record' => $import->getRouteKey()])
             ->assertActionVisible('downloadFailedRows')
             ->callAction('downloadFailedRows')
@@ -128,7 +151,8 @@ final class ImportExportHistoryTest extends TestCase
     {
         $rep = $this->salesRep();
         $manager = $this->salesManager();
-        $readOnly = $this->readOnly();
+        // A reader holding no import or export permission at all.
+        $readOnly = $this->userWithPermissions(null, [Permission::LeadViewAny, Permission::LeadViewAll]);
 
         $this->actingAs($rep);
         $this->assertFalse(ImportResource::canAccess(), 'a rep holds no import permission');
@@ -154,7 +178,8 @@ final class ImportExportHistoryTest extends TestCase
         Storage::fake('local');
         $rep = $this->salesRep();
         $other = $this->salesRep();
-        $manager = $this->salesManager();
+        $reviewer = $this->admin();
+        $manager = $this->salesManager($this->makeTeam());
         $export = $this->makeExport($rep);
         $fileless = $this->makeExport($rep, ['file_name' => 'export-gone-leads']);
         $this->writeFiles($export);
@@ -169,7 +194,7 @@ final class ImportExportHistoryTest extends TestCase
             ->callAction(TestAction::make('download_csv')->table($export))
             ->assertFileDownloaded($export->file_name.'.csv');
 
-        Livewire::actingAs($manager)
+        Livewire::actingAs($reviewer)
             ->test(ListExports::class)
             ->assertCanSeeTableRecords([$export])
             ->assertActionVisible(TestAction::make('download_csv')->table($export))
@@ -179,6 +204,17 @@ final class ImportExportHistoryTest extends TestCase
         Livewire::actingAs($other)
             ->test(ListExports::class)
             ->assertCanNotSeeTableRecords([$export]);
+
+        Livewire::actingAs($manager)
+            ->test(ListExports::class)
+            ->assertCanNotSeeTableRecords([$export]);
+
+        $url = route('filament.exports.download', ['export' => $export->getKey(), 'format' => 'csv'], false);
+
+        $this->actingAs($rep)->get($url)->assertOk();
+        $this->actingAs($reviewer)->get($url)->assertOk();
+        $this->actingAs($manager)->get($url)->assertForbidden();
+        $this->actingAs($other)->get($url)->assertForbidden();
     }
 
     #[Test]

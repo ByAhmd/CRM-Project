@@ -38,12 +38,14 @@ final class UserInvitationNotification extends Notification
     {
         $url = Filament::getPanel('admin')->getResetPasswordUrl($this->token, $notifiable);
 
+        $minutes = (int) config('auth.passwords.users.expire', 60);
+
         return (new MailMessage)
-            ->subject(__('users.invitation.subject', ['app' => config('app.name')]))
+            ->subject(__('users.invitation.subject', ['app' => __('app.name')]))
             ->greeting(__('users.invitation.greeting', ['name' => $notifiable->name]))
-            ->line(__('users.invitation.intro', ['inviter' => $this->invitedBy, 'app' => config('app.name')]))
+            ->line(__('users.invitation.intro', ['inviter' => $this->invitedBy, 'app' => __('app.name')]))
             ->action(__('users.invitation.action'), $url)
-            ->line(__('users.invitation.expiry', ['count' => config('auth.passwords.users.expire', 60)]))
+            ->line(trans_choice('users.invitation.expiry', $minutes, ['count' => $minutes]))
             ->line(__('users.invitation.ignore'));
     }
 }

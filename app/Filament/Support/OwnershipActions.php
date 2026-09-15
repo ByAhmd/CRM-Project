@@ -61,7 +61,7 @@ final class OwnershipActions
                     }
                 }
 
-                Notification::make()->title(__('assignment.notifications.bulk_done', ['count' => $records->count()]))->success()->send();
+                Notification::make()->title(trans_choice('assignment.notifications.bulk_done', $records->count(), ['count' => $records->count()]))->success()->send();
             });
     }
 

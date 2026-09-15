@@ -231,7 +231,7 @@ final class EmailActions
         $text = trim($rendered->subject."\n\n".$rendered->body);
 
         if ($rendered->hasUnknownTags()) {
-            $text .= "\n\n".__('email.helpers.unknown_tags', ['tags' => implode(', ', $rendered->unknownTags)]);
+            $text .= "\n\n".__('email.helpers.unknown_tags', ['tags' => implode(__('common.separators.list'), $rendered->unknownTags)]);
         }
 
         if (EmailSendService::subjectIsTooLong($rendered->subject)) {

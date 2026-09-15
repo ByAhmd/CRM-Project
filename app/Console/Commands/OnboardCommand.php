@@ -6,11 +6,9 @@ namespace App\Console\Commands;
 
 use App\Enums\CrmRole;
 use App\Enums\UserStatus;
-use App\Models\Role;
 use App\Models\User;
 use App\Services\Access\RoleService;
-use Database\Seeders\RolesAndPermissionsSeeder;
-use Database\Seeders\SettingsSeeder;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -24,9 +22,14 @@ use function Laravel\Prompts\text;
  * Creates the first super administrator (decisions D-11, A-12).
  *
  * Accounts are invite-only, so somebody has to exist before anybody can be
- * invited. Runs the reference seeders first if they have not been run, then
- * creates an ACTIVE super admin with the given password. Refuses to run once a
- * super admin exists: further users are invited from the panel.
+ * invited. Always runs the production-safe reference seed first
+ * (DatabaseSeeder: roles and permissions, settings, lead sources and
+ * statuses, industries, the default pipeline and its stages, the system
+ * activity types, close reasons and email templates) — every seeder is
+ * idempotent and never overwrites an administrator's edits, so a fresh install
+ * is usable the moment the admin signs in and a re-run repairs missing
+ * reference rows. Then creates an ACTIVE super admin with the given password,
+ * refusing once a super admin exists: further users are invited from the panel.
  *
  * Operator-facing CLI output is plain English; user-facing strings are governed
  * by the bilingual rule, deploy logs are read by engineers.
@@ -42,11 +45,8 @@ final class OnboardCommand extends Command
 
     public function handle(RoleService $roles): int
     {
-        if (Role::query()->where('name', CrmRole::SuperAdmin->value)->doesntExist()) {
-            $this->components->info('Seeding roles, permissions and settings…');
-            $this->call('db:seed', ['--class' => RolesAndPermissionsSeeder::class, '--force' => true]);
-            $this->call('db:seed', ['--class' => SettingsSeeder::class, '--force' => true]);
-        }
+        $this->components->info('Seeding reference data (roles, permissions, settings, lookups, pipeline, activity types, templates)…');
+        $this->call('db:seed', ['--class' => DatabaseSeeder::class, '--force' => true]);
 
         if (User::query()->role(CrmRole::SuperAdmin->value)->exists()) {
             $this->components->error('A super administrator already exists. Invite further users from the panel.');

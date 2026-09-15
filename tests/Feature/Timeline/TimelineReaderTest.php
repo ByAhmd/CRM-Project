@@ -20,9 +20,7 @@ use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\DealCloseReason;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\Note;
-use App\Models\PipelineStage;
 use App\Models\User;
 use App\Services\Access\RecordAssignmentService;
 use App\Services\Activities\ActivityRecorder;
@@ -536,21 +534,5 @@ final class TimelineReaderTest extends TestCase
     private function reader(): TimelineReader
     {
         return app(TimelineReader::class);
-    }
-
-    private function statusOfKind(LeadStatusKind $kind): LeadStatus
-    {
-        return LeadStatus::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
-    }
-
-    private function stageOfKind(Deal $deal, StageKind $kind, int $position = 0): PipelineStage
-    {
-        return PipelineStage::query()
-            ->where('pipeline_id', $deal->pipeline_id)
-            ->where('kind', $kind->value)
-            ->orderBy('sort')
-            ->orderBy('id')
-            ->skip($position)
-            ->firstOrFail();
     }
 }

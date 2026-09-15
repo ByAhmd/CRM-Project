@@ -22,6 +22,7 @@ final class EditCustomField extends EditRecord
     {
         return [
             DeleteAction::make()
+                ->successNotificationTitle(__('custom_fields.notifications.deleted'))
                 ->disabled(fn (CustomField $record): bool => ! app(CustomFieldService::class)->isDeletable($record))
                 ->tooltip(fn (CustomField $record): ?string => app(CustomFieldService::class)->isDeletable($record)
                     ? null
@@ -78,6 +79,11 @@ final class EditCustomField extends EditRecord
 
             throw new Halt;
         }
+    }
+
+    protected function getSavedNotificationTitle(): string
+    {
+        return __('custom_fields.notifications.saved');
     }
 
     protected function getRedirectUrl(): string

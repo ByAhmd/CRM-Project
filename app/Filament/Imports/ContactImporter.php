@@ -52,13 +52,13 @@ final class ContactImporter extends Importer
                 ->label(__('imports.columns.contact.first_name'))
                 ->requiredMapping()
                 ->rules(['required', 'string', 'min:2', 'max:80'])
-                ->example('نورة'),
+                ->example(__('imports.examples.contact.first_name')),
 
             ImportColumn::make('last_name')
                 ->label(__('imports.columns.contact.last_name'))
                 ->requiredMapping()
                 ->rules(['required', 'string', 'min:2', 'max:80'])
-                ->example('العتيبي'),
+                ->example(__('imports.examples.contact.last_name')),
 
             ImportColumn::make('account')
                 ->label(__('imports.columns.contact.account'))
@@ -67,19 +67,19 @@ final class ContactImporter extends Importer
                 ->fillRecordUsing(function (self $importer, Contact $record, ?string $state): void {
                     $record->account_id = $importer->resolveAccount($state)?->getKey();
                 })
-                ->example('شركة الأفق'),
+                ->example(__('imports.examples.contact.account')),
 
             ImportColumn::make('job_title')
                 ->label(__('imports.columns.contact.job_title'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('مديرة التسويق'),
+                ->example(__('imports.examples.contact.job_title')),
 
             ImportColumn::make('department')
                 ->label(__('imports.columns.contact.department'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('التسويق'),
+                ->example(__('imports.examples.contact.department')),
 
             ImportColumn::make('email')
                 ->label(__('imports.columns.contact.email'))
@@ -123,19 +123,19 @@ final class ContactImporter extends Importer
                 ->label(__('imports.columns.contact.address_line'))
                 ->rules(['nullable', 'string', 'max:255'])
                 ->ignoreBlankState()
-                ->example('طريق الملك فهد'),
+                ->example(__('imports.examples.contact.address_line')),
 
             ImportColumn::make('city')
                 ->label(__('imports.columns.contact.city'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('الرياض'),
+                ->example(__('imports.examples.contact.city')),
 
             ImportColumn::make('region')
                 ->label(__('imports.columns.contact.region'))
                 ->rules(['nullable', 'string', 'max:100'])
                 ->ignoreBlankState()
-                ->example('منطقة الرياض'),
+                ->example(__('imports.examples.contact.region')),
 
             ImportColumn::make('country')
                 ->label(__('imports.columns.contact.country'))
@@ -154,13 +154,9 @@ final class ContactImporter extends Importer
                 ->label(__('imports.columns.contact.owner'))
                 ->rules(['nullable', 'email', 'max:190'])
                 ->ignoreBlankState()
-                ->fillRecordUsing(function (self $importer, Contact $record, ?string $state): void {
-                    $owner = $importer->resolveOwner($state, Contact::permissionGroup());
-
-                    if ($owner !== null) {
-                        $record->owner_id = $owner->getKey();
-                    }
-                })
+                // A new record is created for the named owner; an existing one is
+                // reassigned through RecordAssignmentService (D-4, A-20).
+                ->fillRecordUsing(fn (self $importer, Contact $record, ?string $state) => $importer->fillOwner($record, $state))
                 ->example('rep@example.com'),
 
             ImportColumn::make('tags')
@@ -168,13 +164,13 @@ final class ContactImporter extends Importer
                 ->rules(['nullable', 'string', 'max:500'])
                 ->ignoreBlankState()
                 ->fillRecordUsing(fn (self $importer, ?string $state) => $importer->rememberTags($state))
-                ->example('VIP|Enterprise'),
+                ->example(__('imports.examples.contact.tags')),
 
             ImportColumn::make('description')
                 ->label(__('imports.columns.contact.description'))
                 ->rules(['nullable', 'string', 'max:5000'])
                 ->ignoreBlankState()
-                ->example('Prefers email in the morning.'),
+                ->example(__('imports.examples.contact.description')),
 
             // One column per active definition of the entity, mapped by its
             // own label (D-9).
@@ -248,10 +244,7 @@ final class ContactImporter extends Importer
     {
         ImportExportActions::applyLocale($import->getOptions());
 
-        return __('imports.notifications.completed', [
-            'successful' => (string) $import->successful_rows,
-            'failed' => (string) $import->getFailedRowsCount(),
-        ]);
+        return self::completedNotificationBody($import);
     }
 
     /**
@@ -267,7 +260,8 @@ final class ContactImporter extends Importer
             return null;
         }
 
-        $account = $this->visible(Account::query())->whereRaw('LOWER(name) = ?', [$name])->orderBy('id')->first();
+        // The raw column (case-insensitive collation) keeps accounts_name_index usable.
+        $account = $this->visible(Account::query())->where('accounts.name', $name)->orderBy('id')->first();
 
         if (! $account instanceof Account) {
             $this->failRow('account_not_found', ['value' => $raw]);

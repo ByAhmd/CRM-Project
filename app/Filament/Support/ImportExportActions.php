@@ -20,8 +20,9 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Filament's actions are the engine; this class adds what the CRM needs on
  * top: the policy gate (`import` / `export` verb of the entity's policy), the
- * size limits, the private disk for export files and the locale the run is
- * rendered in. Filament queues the jobs; production drains the database
+ * size limits, the per-user rate limits (plan section 7: an import or an
+ * export queues heavy work on a shared host, D-1), the private disk for
+ * export files and the locale the run is rendered in. Filament queues the jobs; production drains the database
  * queue through the scheduler (D-1) and tests run them inline (sync).
  *
  * Scope (D-13): the export action exports the table's own query, which every
@@ -37,6 +38,12 @@ final class ImportExportActions
     /** The option carrying the actor's locale into the queued job. */
     public const LOCALE_OPTION = 'locale';
 
+    /** Imports one user may start per minute; Filament refuses the rest with its throttle notice. */
+    public const IMPORT_RATE_LIMIT = 5;
+
+    /** Exports (whole list or selection) one user may start per minute. */
+    public const EXPORT_RATE_LIMIT = 10;
+
     /**
      * @param  class-string<Importer>  $importer
      * @param  class-string<Model>  $model
@@ -48,6 +55,7 @@ final class ImportExportActions
             ->label(fn (ImportAction $action): string => __('imports.actions.import', ['label' => $action->getPluralModelLabel()]))
             ->authorize(fn (): bool => auth()->user()?->can('import', $model) ?? false)
             ->options(fn (): array => [self::LOCALE_OPTION => app()->getLocale()])
+            ->rateLimit(self::IMPORT_RATE_LIMIT)
             ->chunkSize(100)
             ->maxRows(5000);
     }
@@ -156,6 +164,7 @@ final class ImportExportActions
             ->options(fn (): array => [self::LOCALE_OPTION => app()->getLocale()])
             ->formats([ExportFormat::Csv, ExportFormat::Xlsx])
             ->fileDisk(self::FILE_DISK)
+            ->rateLimit(self::EXPORT_RATE_LIMIT)
             ->chunkSize(500)
             ->maxRows(20000);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Filament\Exports\Reports\ReportRowExporter;
 use App\Filament\Support\ImportExportActions;
+use App\Jobs\RescoreLeads;
 use App\Models\Export;
 use App\Models\Import;
 use Illuminate\Support\Facades\Schedule;
@@ -65,6 +66,23 @@ Schedule::command('tasks:notify-overdue')
 */
 Schedule::command('leads:notify-stale')
     ->dailyAt('07:00')
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Lead scores (D-7)
+|--------------------------------------------------------------------------
+|
+| A stored score is recomputed when the lead or a scoring rule is saved;
+| nothing else moves it as time passes, so an activity-recency rule would
+| keep its points long after the window closed. Once a day, before the
+| working morning, every open lead is rescored. RescoreLeads is unique and
+| works in batches that each fit the queue drain, so a slow night never
+| stacks runs.
+|
+*/
+Schedule::job(new RescoreLeads)
+    ->dailyAt('03:00')
     ->onOneServer();
 
 /*

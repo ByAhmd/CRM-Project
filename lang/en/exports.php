@@ -168,7 +168,8 @@ return [
     ],
 
     'notifications' => [
-        'completed' => ':successful rows exported, :failed rows failed.',
+        'completed' => '{0} No rows were exported.|{1} :count row exported.|[2,*] :count rows exported.',
+        'failed' => '{0} No rows failed.|{1} :count row failed.|[2,*] :count rows failed.',
     ],
 
     'actions' => [

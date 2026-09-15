@@ -10,8 +10,8 @@ namespace App\Enums;
  * The value is the row in spatie's `permissions` table. Policies and Filament
  * gates only ever reference a case of this enum, never a literal string, so a
  * typo cannot silently grant or deny access. RolesAndPermissionsSeeder creates
- * a row for every case and PermissionMatrixDriftTest asserts that nothing is
- * missing or stale.
+ * a row for every case; RoleSeedingTest asserts that nothing is missing or
+ * stale and PermissionMatrixTest pins what the seeded roles answer.
  *
  * Naming: `{entity}.{verb}`. For owned entities the three view verbs are
  * cumulative levels resolved by RecordVisibilityResolver (D-4):
@@ -58,6 +58,7 @@ enum Permission: string
     case AccountRestore = 'account.restore';
     case AccountAssign = 'account.assign';
     case AccountMerge = 'account.merge';
+    case AccountSetType = 'account.set_type';
     case AccountExport = 'account.export';
     case AccountImport = 'account.import';
 
@@ -81,6 +82,7 @@ enum Permission: string
     case ActivityViewAll = 'activity.view_all';
     case ActivityCreate = 'activity.create';
     case ActivityDelete = 'activity.delete';
+    case ActivityAssign = 'activity.assign';
     case ActivityExport = 'activity.export';
 
     // Tasks

@@ -22,6 +22,12 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class AttachmentPolicy
 {
+    /** The panel is gated by the subject's `view` (canViewForRecord); the list itself is open. */
+    public function viewAny(User $user): bool
+    {
+        return true;
+    }
+
     public function view(User $user, Attachment $attachment): bool
     {
         return $this->download($user, $attachment);

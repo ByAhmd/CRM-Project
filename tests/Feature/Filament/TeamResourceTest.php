@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Filament;
 
 use App\Enums\ActivityLogEvent;
+use App\Enums\CrmRole;
+use App\Enums\UserStatus;
 use App\Filament\Resources\Teams\Pages\CreateTeam;
 use App\Filament\Resources\Teams\Pages\EditTeam;
 use App\Filament\Resources\Teams\Pages\ListTeams;
@@ -46,14 +48,13 @@ final class TeamResourceTest extends TestCase
     public function a_team_is_created_with_both_names_and_audited(): void
     {
         $admin = $this->admin();
-        $manager = $this->salesManager();
 
         Livewire::actingAs($admin)
             ->test(CreateTeam::class)
+            ->assertFormFieldHidden('manager_user_id')
             ->fillForm([
                 'name_ar' => 'فريق الشرقية',
                 'name_en' => 'Eastern Team',
-                'manager_user_id' => $manager->getKey(),
                 'is_active' => true,
                 'sort' => 2,
             ])
@@ -62,8 +63,82 @@ final class TeamResourceTest extends TestCase
 
         $team = Team::query()->where('name_en', 'Eastern Team')->firstOrFail();
 
-        $this->assertSame($manager->getKey(), $team->manager_user_id);
+        $this->assertNull($team->manager_user_id);
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TeamCreated->value, 'subject_id' => $team->getKey()]);
+    }
+
+    #[Test]
+    public function the_manager_is_chosen_among_the_active_members_of_the_team(): void
+    {
+        $admin = $this->admin();
+        $team = $this->makeTeam();
+        $member = $this->salesManager($team);
+        $outsider = $this->salesManager();
+        $disabledMember = $this->makeUser(CrmRole::SalesManager, ['status' => UserStatus::Disabled], $team);
+
+        Livewire::actingAs($admin)
+            ->test(EditTeam::class, ['record' => $team->getRouteKey()])
+            ->fillForm(['manager_user_id' => $outsider->getKey()])
+            ->call('save')
+            ->assertHasFormErrors(['manager_user_id']);
+
+        Livewire::actingAs($admin)
+            ->test(EditTeam::class, ['record' => $team->getRouteKey()])
+            ->fillForm(['manager_user_id' => $disabledMember->getKey()])
+            ->call('save')
+            ->assertHasFormErrors(['manager_user_id']);
+
+        Livewire::actingAs($admin)
+            ->test(EditTeam::class, ['record' => $team->getRouteKey()])
+            ->fillForm(['manager_user_id' => $member->getKey()])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($member->getKey(), $team->refresh()->manager_user_id);
+    }
+
+    #[Test]
+    public function a_manager_stored_before_the_membership_rule_stays_valid_on_an_unrelated_edit(): void
+    {
+        $admin = $this->admin();
+        $outsider = $this->salesManager();
+        $team = $this->makeTeam(manager: $outsider);
+
+        Livewire::actingAs($admin)
+            ->test(EditTeam::class, ['record' => $team->getRouteKey()])
+            ->fillForm(['sort' => 7])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $team->refresh();
+        $this->assertSame(7, (int) $team->sort);
+        $this->assertSame($outsider->getKey(), $team->manager_user_id);
+    }
+
+    #[Test]
+    public function a_deleted_namesake_is_a_translated_validation_error_on_create_and_on_edit(): void
+    {
+        $admin = $this->admin();
+        $this->makeTeam('Eastern Team', 'فريق الشرقية')->delete();
+        $live = $this->makeTeam('Western Team', 'فريق الغربية');
+
+        Livewire::actingAs($admin)
+            ->test(CreateTeam::class)
+            ->fillForm(['name_ar' => 'فريق الشرقية', 'name_en' => 'Eastern Team', 'is_active' => true, 'sort' => 1])
+            ->call('create')
+            ->assertHasFormErrors([
+                'name_ar' => [__('teams.validation.name_ar_unique_trashed')],
+                'name_en' => [__('teams.validation.name_en_unique_trashed')],
+            ]);
+
+        Livewire::actingAs($admin)
+            ->test(EditTeam::class, ['record' => $live->getRouteKey()])
+            ->fillForm(['name_en' => 'Eastern Team'])
+            ->call('save')
+            ->assertHasFormErrors(['name_en' => [__('teams.validation.name_en_unique_trashed')]]);
+
+        $this->assertSame(1, Team::withTrashed()->where('name_en', 'Eastern Team')->count());
+        $this->assertSame('Western Team', $live->refresh()->name_en);
     }
 
     #[Test]

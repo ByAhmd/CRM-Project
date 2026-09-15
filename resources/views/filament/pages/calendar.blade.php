@@ -2,6 +2,8 @@
     use App\Enums\ActivityKind;
     use App\Enums\TaskPriority;
     use App\Enums\TaskStatus;
+    use App\Services\Tasks\CalendarFeed;
+    use Filament\Support\Icons\Heroicon;
 @endphp
 
 <x-filament-panels::page>
@@ -31,6 +33,17 @@
                 </x-filament::badge>
             </div>
         </div>
+
+        {{-- Set by events() when the loaded range held more than CalendarFeed::MAX_EVENTS entries. --}}
+        @if ($truncated)
+            <x-filament::callout
+                color="warning"
+                :icon="Heroicon::OutlinedExclamationTriangle"
+                :description="__('calendar.texts.truncated', ['count' => CalendarFeed::MAX_EVENTS])"
+                role="status"
+                class="fi-crm-calendar-truncated"
+            />
+        @endif
 
         {{--
             The module registers the `crmCalendar` Alpine component before

@@ -13,13 +13,13 @@ use App\Exceptions\Deals\InvalidDealTransitionException;
 use App\Models\Account;
 use App\Models\ActivityLog;
 use App\Models\Deal;
-use App\Models\DealCloseReason;
 use App\Models\DealStageLog;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Services\Deals\DealCloseService;
 use App\Services\Deals\DealStageWorkflow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
@@ -37,6 +37,9 @@ final class DealCloseTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // A fixed instant away from midnight, so "the day the deal was won" cannot roll over mid-test.
+        $this->travelTo(Carbon::parse('2026-03-15 10:00:00', 'Asia/Riyadh'));
 
         $this->seedAccess();
         $this->seedLookups();
@@ -118,7 +121,7 @@ final class DealCloseTest extends TestCase
         $this->assertSame(AccountType::Customer, $account->type);
         $this->assertTrue($account->isCustomer());
         $this->assertNotNull($account->customer_since);
-        $this->assertTrue($account->customer_since->isSameDay(today()));
+        $this->assertSame('2026-03-15', $account->customer_since->toDateString());
 
         $audit = ActivityLog::query()->where('description', ActivityLogEvent::AccountBecameCustomer->value)->latest('id')->firstOrFail();
         $this->assertSame($account->getKey(), (int) $audit->subject_id);
@@ -301,31 +304,5 @@ final class DealCloseTest extends TestCase
         }
 
         $this->assertSame(DealStatus::Open, $deal->refresh()->status);
-    }
-
-    private function stageOfKind(Deal $deal, StageKind $kind): PipelineStage
-    {
-        return PipelineStage::query()
-            ->where('pipeline_id', $deal->pipeline_id)
-            ->where('kind', $kind->value)
-            ->orderBy('sort')
-            ->firstOrFail();
-    }
-
-    /** The n-th Open stage of the deal's pipeline, in pipeline order (0 = the default stage). */
-    private function openStage(Deal $deal, int $position): PipelineStage
-    {
-        return PipelineStage::query()
-            ->where('pipeline_id', $deal->pipeline_id)
-            ->where('kind', StageKind::Open->value)
-            ->orderBy('sort')
-            ->orderBy('id')
-            ->skip($position)
-            ->firstOrFail();
-    }
-
-    private function reasonOfKind(CloseReasonKind $kind): DealCloseReason
-    {
-        return DealCloseReason::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

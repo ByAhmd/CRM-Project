@@ -11,7 +11,8 @@ use App\Policies\Concerns\ChecksPermissions;
 /**
  * Deals (D-4, D-8, D-13): permission + visibility scope through ChecksPermissions,
  * plus the deal verbs. A closed deal is frozen — it is reopened first, and
- * reopening is the `close` verb applied in reverse.
+ * reopening is the `close` verb applied in reverse. A soft-deleted deal accepts
+ * no write but restore (D-13); the verbs refuse it through verb().
  */
 final class DealPolicy
 {
@@ -28,7 +29,9 @@ final class DealPolicy
             return false;
         }
 
-        return $user->can($this->permission('update')) && $this->reaches($user, $deal);
+        return ! $this->isTrashed($deal)
+            && $user->can($this->permission('update'))
+            && $this->reaches($user, $deal);
     }
 
     public function changeStage(User $user, ?Deal $deal = null): bool

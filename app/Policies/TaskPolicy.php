@@ -20,8 +20,10 @@ use Illuminate\Database\Eloquent\Model;
  * someone else is assigned. Writing needs the `task.*` key plus the actor's
  * reach over the assignee; the status verbs are `update` under their own
  * names, and a completed or cancelled task stays editable so it can be
- * reopened. There is no `task.restore` key: restoring undoes a delete, so it
- * is granted with `task.delete`. Permanent deletion is never granted.
+ * reopened. A soft-deleted task is frozen: `update`, and with it the status
+ * verbs, refuse it until it is restored (D-13). There is no `task.restore`
+ * key: restoring undoes a delete, so it is granted with `task.delete`.
+ * Permanent deletion is never granted.
  */
 final class TaskPolicy
 {

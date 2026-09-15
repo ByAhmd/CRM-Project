@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Model;
  * Exports the rows of the table query it is launched from — already inside
  * the actor's visible scope — with lookups and enums rendered as labels in
  * the actor's locale, the owner by name, tags joined, dates as Y-m-d H:i.
- * Free-text cells are protected against spreadsheet formula injection.
+ * All text cells are protected against spreadsheet formula injection.
  */
 final class LeadExporter extends Exporter
 {
@@ -38,28 +38,31 @@ final class LeadExporter extends Exporter
             ExportColumn::make('last_name')->label(__('exports.columns.lead.last_name'))->preventFormulaInjection(),
             ExportColumn::make('company_name')->label(__('exports.columns.lead.company_name'))->preventFormulaInjection(),
             ExportColumn::make('job_title')->label(__('exports.columns.lead.job_title'))->preventFormulaInjection(),
-            ExportColumn::make('email')->label(__('exports.columns.lead.email')),
-            ExportColumn::make('phone')->label(__('exports.columns.lead.phone')),
-            ExportColumn::make('website')->label(__('exports.columns.lead.website')),
+            ExportColumn::make('email')->label(__('exports.columns.lead.email'))->preventFormulaInjection(),
+            ExportColumn::make('phone')->label(__('exports.columns.lead.phone'))->preventFormulaInjection(),
+            ExportColumn::make('website')->label(__('exports.columns.lead.website'))->preventFormulaInjection(),
             ExportColumn::make('address_line')->label(__('exports.columns.lead.address_line'))->preventFormulaInjection(),
             ExportColumn::make('city')->label(__('exports.columns.lead.city'))->preventFormulaInjection(),
             ExportColumn::make('region')->label(__('exports.columns.lead.region'))->preventFormulaInjection(),
             ExportColumn::make('country')
                 ->label(__('exports.columns.lead.country'))
-                ->formatStateUsing(fn (?string $state): ?string => ImportExportActions::country($state)),
-            ExportColumn::make('postal_code')->label(__('exports.columns.lead.postal_code')),
-            ExportColumn::make('status.display_name')->label(__('exports.columns.lead.status')),
-            ExportColumn::make('source.display_name')->label(__('exports.columns.lead.source')),
+                ->formatStateUsing(fn (?string $state): ?string => ImportExportActions::country($state))
+                ->preventFormulaInjection(),
+            ExportColumn::make('postal_code')->label(__('exports.columns.lead.postal_code'))->preventFormulaInjection(),
+            ExportColumn::make('status.display_name')->label(__('exports.columns.lead.status'))->preventFormulaInjection(),
+            ExportColumn::make('source.display_name')->label(__('exports.columns.lead.source'))->preventFormulaInjection(),
             ExportColumn::make('priority')
                 ->label(__('exports.columns.lead.priority'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('effective_score')
                 ->label(__('exports.columns.lead.score'))
                 ->state(fn (Lead $record): int => $record->effective_score),
-            ExportColumn::make('owner.name')->label(__('exports.columns.lead.owner')),
+            ExportColumn::make('owner.name')->label(__('exports.columns.lead.owner'))->preventFormulaInjection(),
             ExportColumn::make('tags')
                 ->label(__('exports.columns.lead.tags'))
-                ->state(fn (Lead $record): array => $record->tags->map(fn (Model $tag): string => (string) $tag->getAttribute('display_name'))->all()),
+                ->state(fn (Lead $record): array => $record->tags->map(fn (Model $tag): string => (string) $tag->getAttribute('display_name'))->all())
+                ->preventFormulaInjection(),
             ExportColumn::make('qualified_at')
                 ->label(__('exports.columns.lead.qualified_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
@@ -108,9 +111,11 @@ final class LeadExporter extends Exporter
     {
         ImportExportActions::applyLocale($export->getOptions());
 
-        return __('exports.notifications.completed', [
-            'successful' => (string) $export->successful_rows,
-            'failed' => (string) $export->getFailedRowsCount(),
-        ]);
+        $body = trans_choice('exports.notifications.completed', (int) $export->successful_rows);
+        $failed = $export->getFailedRowsCount();
+
+        return $failed > 0
+            ? $body.' '.trans_choice('exports.notifications.failed', $failed)
+            : $body;
     }
 }

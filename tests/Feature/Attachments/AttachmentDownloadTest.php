@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\BuildsUploadBytes;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
@@ -26,6 +27,7 @@ use Tests\TestCase;
  */
 final class AttachmentDownloadTest extends TestCase
 {
+    use BuildsUploadBytes;
     use CreatesCrmFixtures;
     use RefreshDatabase;
 
@@ -280,11 +282,6 @@ final class AttachmentDownloadTest extends TestCase
         $this->scratchFiles[] = $path;
 
         return app(AttachmentStorage::class)->store(new UploadedFile($path, $name, null, null, true), $lead, $uploader);
-    }
-
-    private function pdfBytes(): string
-    {
-        return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
     }
 
     private function firstAuditProperties(Attachment $attachment): ?string

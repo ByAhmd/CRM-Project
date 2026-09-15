@@ -10,9 +10,13 @@ use App\Services\Access\RoleService;
 
 /**
  * User administration is one permission, users.manage (decision D-3); there is
- * no per-record scope on users. Two guards sit above it:
+ * no per-record scope on users. Guards sit above it:
+ * - a super admin account is edited, invited, deleted or restored only by a
+ *   holder of roles.manage (A-12: admin = everything except role
+ *   administration, so users.manage never reaches a super admin);
  * - nobody deletes or disables their own account;
- * - the last active super admin cannot be deleted (demotion is refused by RoleService).
+ * - the last active super admin cannot be deleted (demotion and switching off
+ *   are refused by RoleService).
  * Permanent deletion is never offered (D-13).
  */
 final class UserPolicy
@@ -34,29 +38,41 @@ final class UserPolicy
 
     public function update(User $user, ?User $target = null): bool
     {
-        return $this->viewAny($user);
+        if (! $this->viewAny($user)) {
+            return false;
+        }
+
+        return $target === null || $this->administers($user, $target);
     }
 
     public function delete(User $user, ?User $target = null): bool
     {
+        if (! $this->viewAny($user)) {
+            return false;
+        }
+
         if ($target === null) {
-            return $this->viewAny($user);
+            return true;
         }
 
         if ($target->is($user)) {
             return false;
         }
 
-        if (app(RoleService::class)->isLastActiveSuperAdmin($target)) {
+        if (! $this->administers($user, $target)) {
             return false;
         }
 
-        return $this->viewAny($user);
+        return ! app(RoleService::class)->isLastActiveSuperAdmin($target);
     }
 
     public function restore(User $user, ?User $target = null): bool
     {
-        return $this->viewAny($user);
+        if (! $this->viewAny($user)) {
+            return false;
+        }
+
+        return $target === null || $this->administers($user, $target);
     }
 
     public function forceDelete(User $user, ?User $target = null): bool
@@ -82,5 +98,11 @@ final class UserPolicy
     public function invite(User $user, User $target): bool
     {
         return $this->update($user, $target);
+    }
+
+    /** Any target that is not a super admin; a super admin only for roles.manage holders. */
+    private function administers(User $user, User $target): bool
+    {
+        return ! $target->isSuperAdmin() || app(RoleService::class)->mayAdministerSuperAdmins($user);
     }
 }

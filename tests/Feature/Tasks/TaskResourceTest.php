@@ -254,6 +254,8 @@ final class TaskResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$theirs]);
 
         $this->actingAs($rep)->get(TaskResource::getUrl('view', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($rep)->get(TaskResource::getUrl('edit', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($rep)->get(TaskResource::getUrl('edit', ['record' => $mine]))->assertOk();
         $this->actingAs($other)->get(TaskResource::getUrl('view', ['record' => $theirs]))->assertOk();
     }
 
@@ -413,7 +415,7 @@ final class TaskResourceTest extends TestCase
             ->set('activeTab', 'all')
             ->callTableBulkAction('complete', [$inTeam, $alreadyDone, $outside])
             ->assertHasNoTableBulkActionErrors()
-            ->assertNotified(__('tasks.notifications.bulk_completed', ['count' => 2]));
+            ->assertNotified(trans_choice('tasks.notifications.bulk_completed', 2, ['count' => 2]));
 
         $this->assertSame(TaskStatus::Completed, $inTeam->refresh()->status);
         $this->assertSame(TaskStatus::Completed, $outside->refresh()->status);

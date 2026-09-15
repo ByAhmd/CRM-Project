@@ -128,9 +128,67 @@ final class UserInvitationTest extends TestCase
             ->assertTableActionVisible('resendInvitation', $pending)
             ->assertTableActionHidden('resendInvitation', $active)
             ->callTableAction('resendInvitation', $pending)
-            ->assertNotified();
+            ->assertNotified(__('users.invitation.sent_title'));
 
         Notification::assertSentTo($pending, UserInvitationNotification::class);
         Notification::assertNotSentTo($active, UserInvitationNotification::class);
+    }
+
+    #[Test]
+    public function inviting_the_email_of_a_deleted_account_asks_to_restore_it_instead(): void
+    {
+        Notification::fake();
+
+        $admin = $this->admin();
+        $this->makeUser(CrmRole::SalesRep, ['email' => 'former@example.com'])->delete();
+
+        Livewire::actingAs($admin)
+            ->test(CreateUser::class)
+            ->fillForm([
+                'name' => 'Former Colleague',
+                'email' => 'former@example.com',
+                'locale' => 'en',
+                'roles' => [CrmRole::SalesRep->value],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['email']);
+
+        $this->assertSame(1, User::withTrashed()->where('email', 'former@example.com')->count());
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function only_a_role_administrator_invites_a_super_admin(): void
+    {
+        Notification::fake();
+
+        $superAdmin = $this->superAdmin();
+        $admin = $this->admin();
+
+        Livewire::actingAs($admin)
+            ->test(CreateUser::class)
+            ->fillForm([
+                'name' => 'Shadow Owner',
+                'email' => 'shadow@example.com',
+                'locale' => 'en',
+                'roles' => [CrmRole::SuperAdmin->value],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['roles.0']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'shadow@example.com']);
+
+        Livewire::actingAs($superAdmin)
+            ->test(CreateUser::class)
+            ->fillForm([
+                'name' => 'Second Owner',
+                'email' => 'owner@example.com',
+                'locale' => 'en',
+                'roles' => [CrmRole::SuperAdmin->value],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertTrue(User::query()->where('email', 'owner@example.com')->firstOrFail()->isSuperAdmin());
     }
 }

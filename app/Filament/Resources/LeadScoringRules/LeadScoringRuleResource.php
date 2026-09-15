@@ -28,6 +28,9 @@ final class LeadScoringRuleResource extends Resource
 
     protected static ?int $navigationSort = 13;
 
+    /** Global search covers leads, contacts, accounts, deals and tasks only (plan section 3.8, decision A-8). */
+    protected static bool $isGloballySearchable = false;
+
     public static function getNavigationGroup(): NavigationGroup
     {
         return NavigationGroup::Settings;
