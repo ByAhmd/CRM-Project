@@ -16,6 +16,7 @@ use App\Filament\Support\TaskActions;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Settings\SettingsRepository;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -137,8 +138,8 @@ final class TasksTable
                         DatePicker::make('until')->label(__('tasks.filters.due_until'))->native(false),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->whereDate('due_at', '>=', $data['from']))
-                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->whereDate('due_at', '<=', $data['until'])))
+                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->where('due_at', '>=', app(SettingsRepository::class)->startOfOrganisationDay((string) $data['from'])))
+                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->where('due_at', '<=', app(SettingsRepository::class)->endOfOrganisationDay((string) $data['until']))))
                     ->indicateUsing(fn (array $data): array => array_filter([
                         filled($data['from'] ?? null) ? __('tasks.filters.due_from').': '.$data['from'] : null,
                         filled($data['until'] ?? null) ? __('tasks.filters.due_until').': '.$data['until'] : null,

@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Imports\Tables;
 
 use App\Filament\Resources\Imports\ImportResource;
 use App\Models\Import;
+use App\Services\Settings\SettingsRepository;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables\Columns\TextColumn;
@@ -93,8 +94,8 @@ final class ImportsTable
                         DatePicker::make('until')->label(__('imports.filters.until'))->native(false),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $data['from']))
-                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $data['until'])))
+                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->where('created_at', '>=', app(SettingsRepository::class)->startOfOrganisationDay((string) $data['from'])))
+                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->where('created_at', '<=', app(SettingsRepository::class)->endOfOrganisationDay((string) $data['until']))))
                     ->indicateUsing(fn (array $data): array => array_filter([
                         filled($data['from'] ?? null) ? __('imports.filters.from').': '.$data['from'] : null,
                         filled($data['until'] ?? null) ? __('imports.filters.until').': '.$data['until'] : null,

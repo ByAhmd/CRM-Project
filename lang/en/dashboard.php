@@ -66,7 +66,7 @@ return [
         'my_tasks_today' => 'My tasks today',
         'my_tasks_today_description' => ':today due today · :overdue overdue',
         'upcoming_follow_ups' => 'Upcoming follow-ups',
-        'upcoming_follow_ups_description' => 'Follow-ups, calls and meetings in the next :days days',
+        'upcoming_follow_ups_description' => '{1} Follow-ups, calls and meetings in the next day|[2,*] Follow-ups, calls and meetings in the next :days days',
         'stale_deals' => 'Stale deals',
         'stale_deals_description' => 'Open deals without activity for :days days',
         'columns' => [

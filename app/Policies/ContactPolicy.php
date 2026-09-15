@@ -11,6 +11,7 @@ use App\Policies\Concerns\ChecksPermissions;
 
 /**
  * Contacts (D-4, D-6, D-13): permission + visibility scope through ChecksPermissions.
+ * A soft-deleted contact accepts no write but restore (D-13).
  */
 final class ContactPolicy
 {
@@ -34,7 +35,9 @@ final class ContactPolicy
     /** Sending a templated email (D-10): the cross-cutting `email.send` permission plus reach over the record. */
     public function sendEmail(User $user, ?Contact $contact = null): bool
     {
-        return $user->can(Permission::EmailSend->value) && $this->reaches($user, $contact);
+        return ! $this->isTrashed($contact)
+            && $user->can(Permission::EmailSend->value)
+            && $this->reaches($user, $contact);
     }
 
     public function export(User $user): bool

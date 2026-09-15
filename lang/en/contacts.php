@@ -50,6 +50,10 @@ return [
         'trashed' => 'Deleted',
     ],
 
+    'validation' => [
+        'account_out_of_reach' => 'That company does not exist or is outside the records you can access.',
+    ],
+
     'empty' => [
         'heading' => 'No contacts yet',
         'description' => 'Add the first contact or create one from a company page.',

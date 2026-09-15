@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Deals\Pages;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\OwnerSelect;
 use App\Models\Deal;
 use App\Models\User;
 use App\Services\Deals\DealAmountCalculator;
@@ -36,6 +37,9 @@ final class EditDeal extends EditRecord
      * @var array<string, mixed>
      */
     private array $customFieldState = [];
+
+    /** The owner the form submitted, or false when the actor may not reassign (D-4). */
+    private int|false|null $submittedOwnerId = false;
 
     protected function getHeaderActions(): array
     {
@@ -70,6 +74,12 @@ final class EditDeal extends EditRecord
         // against the saved record by afterSave() (D-9).
         unset($data[CustomFieldsSchema::STATE_PATH]);
 
+        // A change of owner is a reassignment (audit row + notification, D-4),
+        // handed to RecordAssignmentService by afterSave().
+        $record = $this->getRecord();
+        assert($record instanceof Deal);
+        $this->submittedOwnerId = OwnerSelect::pull($data, $record);
+
         return $data;
     }
 
@@ -87,6 +97,10 @@ final class EditDeal extends EditRecord
         }
 
         app(DealAmountCalculator::class)->recalculate($record);
+
+        $ownerId = $this->submittedOwnerId;
+        $this->submittedOwnerId = false;
+        OwnerSelect::reassign($record, $ownerId);
 
         $this->persistCustomFields($record);
     }

@@ -29,6 +29,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\BuildsUploadBytes;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
@@ -41,6 +42,7 @@ use Tests\TestCase;
  */
 final class AttachmentsRelationManagerTest extends TestCase
 {
+    use BuildsUploadBytes;
     use CreatesCrmFixtures;
     use RefreshDatabase;
 
@@ -352,20 +354,5 @@ final class AttachmentsRelationManagerTest extends TestCase
     private function diskName(): string
     {
         return (string) config('crm.attachments.disk');
-    }
-
-    private function pdfBytes(): string
-    {
-        return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
-    }
-
-    private function pngBytes(): string
-    {
-        return (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', true);
-    }
-
-    private function executableBytes(): string
-    {
-        return "MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00".str_repeat("\x00", 100).'This program cannot be run in DOS mode.';
     }
 }

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Deals\DealCloseService;
 use App\Services\Settings\PipelineService;
+use App\Services\Settings\SettingsRepository;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
 use App\Services\Statistics\Reports\WinLossReport;
@@ -140,6 +141,32 @@ final class WinLossReportTest extends TestCase
         $this->assertSame([0, 0, 3], $chart['datasets'][0]['data']);
         $this->assertSame([0, 1, 1], $chart['datasets'][1]['data']);
         $this->assertSame(['success', 'danger'], array_column($chart['datasets'], 'color'));
+    }
+
+    #[Test]
+    public function the_months_are_the_organisation_timezone_months_when_it_differs_from_the_application_timezone(): void
+    {
+        // A-19: buckets are folded in PHP in the organisation timezone, which General Settings may change (D-8).
+        app(SettingsRepository::class)->update([SettingsRepository::TIMEZONE => 'Asia/Tokyo'], $this->admin);
+
+        // 20:30 on 30 Sep in Riyadh (the application timezone) is 02:30 on 1 Oct in Tokyo.
+        $this->travelTo(Carbon::parse('2026-09-30 20:30:00'));
+        app(DealCloseService::class)->win(Deal::factory()->create(['owner_id' => $this->repA->getKey(), 'amount' => 800]), $this->w1, $this->repA);
+        $this->travelTo(Carbon::parse('2026-10-05 12:00:00'));
+
+        $filters = ReportFilters::resolve(
+            ['from' => '2026-09-01', 'to' => '2026-10-31'],
+            $this->admin,
+            app(RecordVisibilityResolver::class),
+            Deal::permissionGroup(),
+            app(SettingsRepository::class)->timezone(),
+        );
+
+        $months = $this->report()->monthly($this->admin, $filters);
+
+        $this->assertSame(['2026-09', '2026-10'], $months->map(fn (ReportRow $row): string => (string) $row->meta['month'])->all());
+        $this->assertSame(['won_count' => 3, 'won_amount' => 6000.0, 'lost_count' => 1, 'lost_amount' => 500.0], $months->get(0)?->values);
+        $this->assertSame(['won_count' => 1, 'won_amount' => 800.0, 'lost_count' => 0, 'lost_amount' => 0.0], $months->get(1)?->values);
     }
 
     #[Test]

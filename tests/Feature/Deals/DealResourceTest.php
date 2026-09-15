@@ -8,7 +8,6 @@ use App\Enums\AccountType;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CloseReasonKind;
 use App\Enums\DealStatus;
-use App\Enums\StageKind;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
 use App\Filament\Resources\Accounts\RelationManagers\DealsRelationManager;
 use App\Filament\Resources\Deals\DealResource;
@@ -19,9 +18,7 @@ use App\Filament\Resources\Deals\Pages\ViewDeal;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
 use App\Models\Account;
 use App\Models\Deal;
-use App\Models\DealCloseReason;
 use App\Models\DealStageLog;
-use App\Models\PipelineStage;
 use App\Models\Product;
 use App\Services\Deals\DealCloseService;
 use App\Services\Settings\SettingsRepository;
@@ -265,8 +262,39 @@ final class DealResourceTest extends TestCase
 
         $this->actingAs($rep)->get(DealResource::getUrl('view', ['record' => $mine]))->assertOk();
         $this->actingAs($rep)->get(DealResource::getUrl('view', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($rep)->get(DealResource::getUrl('edit', ['record' => $mine]))->assertOk();
+        $this->actingAs($rep)->get(DealResource::getUrl('edit', ['record' => $theirs]))->assertNotFound();
+        $this->actingAs($manager)->get(DealResource::getUrl('edit', ['record' => $theirs]))->assertNotFound();
         $this->actingAs($this->readOnly())->get(DealResource::getUrl('view', ['record' => $theirs]))->assertOk();
         $this->actingAs($this->readOnly())->get(DealResource::getUrl('create'))->assertForbidden();
+    }
+
+    #[Test]
+    public function the_bulk_delete_soft_deletes_only_in_scope_deals_and_is_not_offered_to_a_rep(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $member = $this->salesRep($team);
+        $outsider = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
+        $inTeam = Deal::factory()->create(['owner_id' => $member->getKey()]);
+        $outside = Deal::factory()->create(['owner_id' => $outsider->getKey()]);
+
+        // Livewire::actingAs switches the user for every component, so each actor's component runs to completion first.
+        Livewire::actingAs($member)
+            ->test(ListDeals::class)
+            ->set('activeTab', 'all')
+            ->assertTableBulkActionHidden('delete');
+
+        $this->assertNotSoftDeleted('deals', ['id' => $inTeam->getKey()]);
+
+        Livewire::actingAs($manager)
+            ->test(ListDeals::class)
+            ->set('activeTab', 'all')
+            ->callTableBulkAction('delete', [$inTeam, $outside])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSoftDeleted('deals', ['id' => $inTeam->getKey()]);
+        $this->assertNotSoftDeleted('deals', ['id' => $outside->getKey()]);
     }
 
     #[Test]
@@ -418,7 +446,8 @@ final class DealResourceTest extends TestCase
             ->test(ViewDeal::class, ['record' => $deal->getRouteKey()])
             ->assertActionVisible('assign')
             ->callAction('assign', data: ['owner_id' => $manager->getKey()])
-            ->assertNotified();
+            ->assertHasNoActionErrors()
+            ->assertNotified(__('assignment.notifications.assigned', ['name' => $manager->name]));
 
         $this->assertSame($manager->getKey(), $deal->refresh()->owner_id);
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::DealAssigned->value, 'subject_id' => $deal->getKey()]);
@@ -452,10 +481,10 @@ final class DealResourceTest extends TestCase
         $this->assertSame('1 minute', DealInfolist::formatDuration(60));
 
         app()->setLocale('ar');
-        $this->assertSame('يوم واحد, ساعة واحدة', DealInfolist::formatDuration(90000));
-        $this->assertSame('يومان, 0 ساعة', DealInfolist::formatDuration(172800));
-        $this->assertSame('3 ساعات, 5 دقائق', DealInfolist::formatDuration(11100));
-        $this->assertSame('12 يوماً, 0 ساعة', DealInfolist::formatDuration(12 * 86400));
+        $this->assertSame('يوم واحد، ساعة واحدة', DealInfolist::formatDuration(90000));
+        $this->assertSame('يومان، 0 ساعة', DealInfolist::formatDuration(172800));
+        $this->assertSame('3 ساعات، 5 دقائق', DealInfolist::formatDuration(11100));
+        $this->assertSame('12 يوماً، 0 ساعة', DealInfolist::formatDuration(12 * 86400));
     }
 
     #[Test]
@@ -513,28 +542,13 @@ final class DealResourceTest extends TestCase
 
         $this->assertSoftDeleted('deals', ['id' => $deal->getKey()]);
 
+        // A soft-deleted deal is frozen (D-13): it is restored from its view page, not edited.
         Livewire::actingAs($admin)
-            ->test(EditDeal::class, ['record' => $deal->getRouteKey()])
+            ->test(ViewDeal::class, ['record' => $deal->getRouteKey()])
+            ->assertActionVisible('restore')
             ->callAction('restore');
 
         $this->assertNull($deal->refresh()->deleted_at);
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::DealRestored->value, 'subject_id' => $deal->getKey()]);
-    }
-
-    /** The n-th Open stage of the deal's pipeline, in pipeline order (0 = the default stage). */
-    private function openStage(Deal $deal, int $position): PipelineStage
-    {
-        return PipelineStage::query()
-            ->where('pipeline_id', $deal->pipeline_id)
-            ->where('kind', StageKind::Open->value)
-            ->orderBy('sort')
-            ->orderBy('id')
-            ->skip($position)
-            ->firstOrFail();
-    }
-
-    private function reasonOfKind(CloseReasonKind $kind): DealCloseReason
-    {
-        return DealCloseReason::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

@@ -53,7 +53,7 @@ final class NoteMentionTest extends TestCase
         $owner = $this->makeUser(CrmRole::SalesRep, ['name' => 'Lead Owner', 'locale' => 'ar'], $team);
         $lead = Lead::factory()->create(['owner_id' => $owner->getKey(), 'first_name' => 'Huda', 'last_name' => 'Salem']);
 
-        $note = $this->service()->create($lead, $manager, 'Please call Huda back before Thursday.', false, [$owner->getKey(), $manager->getKey()]);
+        $note = app(NoteService::class)->create($lead, $manager, 'Please call Huda back before Thursday.', false, [$owner->getKey(), $manager->getKey()]);
 
         Notification::assertSentToTimes($owner, NoteMentionNotification::class, 1);
         Notification::assertNotSentTo($manager, NoteMentionNotification::class);
@@ -92,7 +92,7 @@ final class NoteMentionTest extends TestCase
         $this->assertFalse($teammate->can('view', $lead));
         $this->assertFalse($outsider->can('view', $lead));
 
-        $this->service()->create($lead, $manager, 'Loop in whoever can help.', false, [$owner->getKey(), $teammate->getKey(), $outsider->getKey(), 999999]);
+        app(NoteService::class)->create($lead, $manager, 'Loop in whoever can help.', false, [$owner->getKey(), $teammate->getKey(), $outsider->getKey(), 999999]);
 
         Notification::assertSentToTimes($owner, NoteMentionNotification::class, 1);
         Notification::assertNotSentTo($teammate, NoteMentionNotification::class);
@@ -108,14 +108,14 @@ final class NoteMentionTest extends TestCase
         $admin = $this->admin();
         $deal = Deal::factory()->create(['owner_id' => $rep->getKey()]);
 
-        $this->service()->create($deal, $rep, 'Rep note', false, [$support->getKey(), $admin->getKey()]);
+        app(NoteService::class)->create($deal, $rep, 'Rep note', false, [$support->getKey(), $admin->getKey()]);
 
         Notification::assertNothingSent();
 
         $this->assertTrue($support->can('view', $deal));
         $this->assertFalse($other->can('view', $deal));
 
-        $this->service()->create($deal, $admin, 'Admin note', false, [$support->getKey(), $other->getKey(), $rep->getKey()]);
+        app(NoteService::class)->create($deal, $admin, 'Admin note', false, [$support->getKey(), $other->getKey(), $rep->getKey()]);
 
         Notification::assertSentToTimes($support, NoteMentionNotification::class, 1);
         Notification::assertSentToTimes($rep, NoteMentionNotification::class, 1);
@@ -132,16 +132,16 @@ final class NoteMentionTest extends TestCase
         $manager = $this->salesManager($team);
         $owner = $this->salesRep($team);
         $lead = Lead::factory()->create(['owner_id' => $owner->getKey()]);
-        $note = $this->service()->create($lead, $manager, 'Original');
+        $note = app(NoteService::class)->create($lead, $manager, 'Original');
 
         Notification::assertNothingSent();
 
-        $this->service()->update($note, $manager, 'Original', [$owner->getKey()]);
+        app(NoteService::class)->update($note, $manager, 'Original', [$owner->getKey()]);
 
         Notification::assertSentToTimes($owner, NoteMentionNotification::class, 1);
         $this->assertNull($note->refresh()->edited_at);
 
-        $this->service()->update($note, $manager, 'Revised', [$owner->getKey()]);
+        app(NoteService::class)->update($note, $manager, 'Revised', [$owner->getKey()]);
 
         Notification::assertSentToTimes($owner, NoteMentionNotification::class, 2);
         $this->assertSame('Revised', $note->refresh()->body);
@@ -223,10 +223,5 @@ final class NoteMentionTest extends TestCase
         $select = $schema->getFlatFields(withHidden: true)['mentions'] ?? null;
         $this->assertInstanceOf(Select::class, $select);
         $this->assertSame([], $select->getOptions());
-    }
-
-    private function service(): NoteService
-    {
-        return app(NoteService::class);
     }
 }

@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Notifications;
 
+use App\Jobs\RescoreLeads;
 use Illuminate\Console\Scheduling\CallbackEvent;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
  * The scheduler entries the notification module depends on (decisions D-1,
  * D-13, plan section 3.6): the queue drain, the task passes, the stale-lead
- * pass, the upload prune and the audit retention — each pinned to one
+ * pass, the lead rescore, the upload prune and the audit retention — each pinned to one
  * server, so a deploy cannot silently lose or double one.
  */
 final class SchedulerWiringTest extends TestCase
@@ -71,6 +73,32 @@ final class SchedulerWiringTest extends TestCase
     }
 
     #[Test]
+    public function the_lead_rescore_is_queued_daily_on_one_server(): void
+    {
+        $event = $this->callbackEvent(RescoreLeads::class);
+
+        $this->assertSame('0 3 * * *', $event->expression);
+        $this->assertTrue($event->onOneServer);
+    }
+
+    #[Test]
+    public function the_upload_prune_removes_only_parked_files_older_than_a_day(): void
+    {
+        $disk = Storage::fake((string) config('crm.attachments.disk'));
+        $disk->put('tmp/7/stale.pdf', 'stale');
+        $disk->put('tmp/7/fresh.pdf', 'fresh');
+        $disk->put('leads/1/kept.pdf', 'kept');
+        touch($disk->path('tmp/7/stale.pdf'), now()->subDays(2)->getTimestamp());
+        touch($disk->path('leads/1/kept.pdf'), now()->subDays(30)->getTimestamp());
+
+        $this->callbackEvent('attachments:prune-temporary')->run(app());
+
+        $disk->assertMissing('tmp/7/stale.pdf');
+        $disk->assertExists('tmp/7/fresh.pdf');
+        $disk->assertExists('leads/1/kept.pdf');
+    }
+
+    #[Test]
     public function the_audit_ledger_and_the_failed_jobs_are_pruned_weekly_on_one_server(): void
     {
         $clean = $this->commandEvent('activitylog:clean --days='.config('crm.audit.retention_days').' --force');
@@ -94,6 +122,17 @@ final class SchedulerWiringTest extends TestCase
         }
 
         $this->assertSame($commands, array_values(array_unique($commands)));
+    }
+
+    private function callbackEvent(string $description): CallbackEvent
+    {
+        foreach (app(Schedule::class)->events() as $event) {
+            if ($event instanceof CallbackEvent && $event->description === $description) {
+                return $event;
+            }
+        }
+
+        $this->fail(sprintf('"%s" is not scheduled.', $description));
     }
 
     private function commandEvent(string $needle): Event

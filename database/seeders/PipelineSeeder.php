@@ -37,7 +37,7 @@ final class PipelineSeeder extends Seeder
             ['name_en' => 'Proposal', 'name_ar' => 'العرض', 'kind' => StageKind::Open, 'probability' => 30, 'color' => BadgeColor::Info, 'is_default' => false],
             ['name_en' => 'Negotiation', 'name_ar' => 'التفاوض', 'kind' => StageKind::Open, 'probability' => 60, 'color' => BadgeColor::Warning, 'is_default' => false],
             ['name_en' => 'Won', 'name_ar' => 'مكسوبة', 'kind' => StageKind::Won, 'probability' => 100, 'color' => BadgeColor::Success, 'is_default' => false],
-            ['name_en' => 'Lost', 'name_ar' => 'خاسرة', 'kind' => StageKind::Lost, 'probability' => 0, 'color' => BadgeColor::Danger, 'is_default' => false],
+            ['name_en' => 'Lost', 'name_ar' => 'مفقودة', 'kind' => StageKind::Lost, 'probability' => 0, 'color' => BadgeColor::Danger, 'is_default' => false],
         ];
     }
 

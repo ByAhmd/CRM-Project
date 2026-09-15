@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  * Exports the rows of the table query it is launched from — already inside
  * the actor's visible scope — with the type by name and enums as labels in
  * the actor's locale, the owner by name, the linked records by their
- * labels, dates as Y-m-d H:i. Free-text cells are protected against
+ * labels, dates as Y-m-d H:i. All text cells are protected against
  * spreadsheet formula injection.
  */
 final class ActivityExporter extends Exporter
@@ -37,13 +37,15 @@ final class ActivityExporter extends Exporter
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
             ExportColumn::make('kind')
                 ->label(__('exports.columns.activity.kind'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
-            ExportColumn::make('type.display_name')->label(__('exports.columns.activity.type')),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
+            ExportColumn::make('type.display_name')->label(__('exports.columns.activity.type'))->preventFormulaInjection(),
             ExportColumn::make('subject')->label(__('exports.columns.activity.subject'))->preventFormulaInjection(),
             ExportColumn::make('body')->label(__('exports.columns.activity.body'))->preventFormulaInjection(),
             ExportColumn::make('direction')
                 ->label(__('exports.columns.activity.direction'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('duration_minutes')->label(__('exports.columns.activity.duration_minutes')),
             ExportColumn::make('outcome')->label(__('exports.columns.activity.outcome'))->preventFormulaInjection(),
             ExportColumn::make('related')
@@ -60,8 +62,8 @@ final class ActivityExporter extends Exporter
                 ->preventFormulaInjection(),
             ExportColumn::make('account.name')->label(__('exports.columns.activity.account'))->preventFormulaInjection(),
             ExportColumn::make('deal.title')->label(__('exports.columns.activity.deal'))->preventFormulaInjection(),
-            ExportColumn::make('owner.name')->label(__('exports.columns.activity.owner')),
-            ExportColumn::make('creator.name')->label(__('exports.columns.activity.created_by')),
+            ExportColumn::make('owner.name')->label(__('exports.columns.activity.owner'))->preventFormulaInjection(),
+            ExportColumn::make('creator.name')->label(__('exports.columns.activity.created_by'))->preventFormulaInjection(),
             ExportColumn::make('created_at')
                 ->label(__('exports.columns.activity.created_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
@@ -82,9 +84,11 @@ final class ActivityExporter extends Exporter
     {
         ImportExportActions::applyLocale($export->getOptions());
 
-        return __('exports.notifications.completed', [
-            'successful' => (string) $export->successful_rows,
-            'failed' => (string) $export->getFailedRowsCount(),
-        ]);
+        $body = trans_choice('exports.notifications.completed', (int) $export->successful_rows);
+        $failed = $export->getFailedRowsCount();
+
+        return $failed > 0
+            ? $body.' '.trans_choice('exports.notifications.failed', $failed)
+            : $body;
     }
 }

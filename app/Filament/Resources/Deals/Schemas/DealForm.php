@@ -7,7 +7,7 @@ namespace App\Filament\Resources\Deals\Schemas;
 use App\Enums\CustomFieldEntity;
 use App\Enums\ForecastCategory;
 use App\Enums\StageKind;
-use App\Filament\Resources\Accounts\AccountResource;
+use App\Filament\Resources\Accounts\Schemas\AccountForm;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\CustomFieldActions;
@@ -15,10 +15,12 @@ use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\TagsSelect;
 use App\Models\Account;
 use App\Models\Deal;
+use App\Models\DealProduct;
 use App\Models\LeadSource;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\Product;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -33,6 +35,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Livewire\Component;
 
 /**
@@ -47,6 +50,12 @@ use Livewire\Component;
  */
 final class DealForm
 {
+    /** The largest value DECIMAL(14,2) holds: deals.amount, deal_products.unit_price and line_total. */
+    public const float MAX_AMOUNT = 999999999999.99;
+
+    /** The largest value DECIMAL(12,2) holds: deal_products.quantity. */
+    public const float MAX_QUANTITY = 9999999999.99;
+
     public static function configure(Schema $schema, bool $withAccount = true): Schema
     {
         return $schema
@@ -61,7 +70,7 @@ final class DealForm
                         Grid::make(2)->schema([
                             Select::make('account_id')
                                 ->label(__('deals.fields.account'))
-                                ->relationship('account', 'name', fn (Builder $query, ?Deal $record): Builder => self::constrainAccounts($query, $record))
+                                ->relationship('account', 'name', fn (Builder $query, ?Deal $record): Builder => AccountForm::constrainToPickableAccounts($query, $record?->account_id))
                                 ->searchable()
                                 ->preload()
                                 ->nullable()
@@ -82,7 +91,10 @@ final class DealForm
 
                         Select::make('lead_source_id')
                             ->label(__('deals.fields.source'))
-                            ->relationship('source', LeadSource::localisedNameColumn(), fn (Builder $query): Builder => $query->where('is_active', true))
+                            ->relationship('source', LeadSource::localisedNameColumn(), fn (Builder $query, ?Deal $record): Builder => $query->where(
+                                fn (Builder $nested): Builder => $nested->where('is_active', true)
+                                    ->when($record?->lead_source_id !== null, fn (Builder $current): Builder => $current->orWhereKey($record?->lead_source_id)),
+                            ))
                             ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('display_name'))
                             ->searchable()
                             ->preload()
@@ -144,6 +156,8 @@ final class DealForm
                                 ->helperText(__('deals.helpers.amount'))
                                 ->numeric()
                                 ->minValue(0)
+                                ->maxValue(self::MAX_AMOUNT)
+                                ->rule('decimal:0,2')
                                 ->step(0.01)
                                 ->default(0)
                                 ->required()
@@ -188,12 +202,7 @@ final class DealForm
                                 Grid::make(2)->schema([
                                     Select::make('product_id')
                                         ->label(__('deals.fields.product'))
-                                        ->options(fn (): array => Product::query()
-                                            ->where('is_active', true)
-                                            ->orderBy(Product::localisedNameColumn())
-                                            ->get()
-                                            ->mapWithKeys(fn (Product $product): array => [$product->getKey() => $product->display_name])
-                                            ->all())
+                                        ->options(fn (?Model $record): array => self::productOptions($record instanceof DealProduct ? $record->product_id : null))
                                         ->required()
                                         ->searchable()
                                         ->native(false)
@@ -217,6 +226,7 @@ final class DealForm
                                         ->label(__('deals.fields.quantity'))
                                         ->numeric()
                                         ->minValue(0.01)
+                                        ->maxValue(self::MAX_QUANTITY)
                                         ->default(1)
                                         ->required()
                                         ->live(onBlur: true)
@@ -226,6 +236,8 @@ final class DealForm
                                         ->label(__('deals.fields.unit_price'))
                                         ->numeric()
                                         ->minValue(0)
+                                        ->maxValue(self::MAX_AMOUNT)
+                                        ->rule('decimal:0,2')
                                         ->default(0)
                                         ->required()
                                         ->live(onBlur: true)
@@ -246,6 +258,13 @@ final class DealForm
                                         ->extraAttributes(['dir' => 'ltr']),
                                 ]),
                             ])
+                            ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                $message = self::linesOverflow($value);
+
+                                if ($message !== null) {
+                                    $fail($message);
+                                }
+                            })
                             ->orderColumn('sort')
                             ->reorderableWithButtons()
                             ->collapsible()
@@ -358,28 +377,65 @@ final class DealForm
     }
 
     /**
-     * The accounts the actor may see (D-4), plus the deal's current account so
-     * an existing choice outside the actor's scope still validates on edit.
+     * The active products, plus the line's own product even when it has since
+     * been deactivated or soft-deleted, so an unrelated edit of the deal keeps
+     * its existing lines valid (design section 6, D-13).
      *
-     * @template TModel of Model
-     *
-     * @param  Builder<TModel>  $query
-     * @return Builder<TModel>
+     * @return array<int, string>
      */
-    private static function constrainAccounts(Builder $query, ?Deal $record): Builder
+    private static function productOptions(?int $currentProductId): array
     {
-        return $query->where(function (Builder $query) use ($record): void {
-            $query->whereIn('accounts.id', AccountResource::getEloquentQuery()->select('accounts.id'));
+        return Product::withTrashed()
+            ->where(function (Builder $query) use ($currentProductId): void {
+                $query->where(fn (Builder $active): Builder => $active->where('is_active', true)->whereNull('deleted_at'));
 
-            if ($record?->account_id !== null) {
-                $query->orWhere('accounts.id', $record->account_id);
-            }
-        });
+                if ($currentProductId !== null) {
+                    $query->orWhereKey($currentProductId);
+                }
+            })
+            ->orderBy(Product::localisedNameColumn())
+            ->get()
+            ->mapWithKeys(fn (Product $product): array => [$product->getKey() => $product->display_name])
+            ->all();
     }
 
     /**
-     * The contacts of the chosen account, else the contacts the actor may see
-     * (D-4); the deal's current contact always stays valid.
+     * A translated refusal when a line total, or the sum of the lines that
+     * becomes the deal amount, would not fit DECIMAL(14,2) (D-8); null when
+     * every figure fits. Each input is bounded on its own field; this catches
+     * the products of inputs that fit.
+     */
+    private static function linesOverflow(mixed $lines): ?string
+    {
+        if (! is_array($lines)) {
+            return null;
+        }
+
+        $sum = 0.0;
+
+        foreach ($lines as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $total = (float) self::lineTotal($line['quantity'] ?? 0, $line['unit_price'] ?? 0, $line['discount_percent'] ?? 0);
+
+            if ($total > self::MAX_AMOUNT) {
+                return __('deals.validation.line_total_too_large', ['max' => number_format(self::MAX_AMOUNT, 2, '.', ',')]);
+            }
+
+            $sum += $total;
+        }
+
+        return $sum > self::MAX_AMOUNT
+            ? __('deals.validation.lines_total_too_large', ['max' => number_format(self::MAX_AMOUNT, 2, '.', ',')])
+            : null;
+    }
+
+    /**
+     * The contacts the actor may see (D-4), narrowed to the chosen account
+     * when there is one; the deal's current contact always stays valid, even
+     * when it is outside that scope or soft-deleted.
      *
      * @template TModel of Model
      *
@@ -388,16 +444,20 @@ final class DealForm
      */
     private static function constrainContacts(Builder $query, ?int $accountId, ?Deal $record): Builder
     {
-        return $query->where(function (Builder $query) use ($accountId, $record): void {
-            if ($accountId !== null) {
-                $query->where('contacts.account_id', $accountId);
-            } else {
-                $query->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'));
-            }
+        return $query
+            ->withoutGlobalScope(SoftDeletingScope::class)
+            ->where(function (Builder $query) use ($accountId, $record): void {
+                $query->where(function (Builder $offered) use ($accountId): void {
+                    $offered->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'));
 
-            if ($record?->contact_id !== null) {
-                $query->orWhere('contacts.id', $record->contact_id);
-            }
-        });
+                    if ($accountId !== null) {
+                        $offered->where('contacts.account_id', $accountId);
+                    }
+                });
+
+                if ($record?->contact_id !== null) {
+                    $query->orWhere('contacts.id', $record->contact_id);
+                }
+            });
     }
 }

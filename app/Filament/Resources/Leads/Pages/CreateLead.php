@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Leads\Pages;
 
 use App\Filament\Resources\Leads\LeadResource;
+use App\Filament\Resources\Leads\Schemas\LeadForm;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Models\LeadStatus;
 use App\Models\User;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -38,6 +40,8 @@ final class CreateLead extends CreateRecord
         $data['owner_id'] = $data['owner_id'] ?? auth()->id();
         $data['lead_status_id'] = $data['lead_status_id'] ?? LeadStatus::query()->where('is_default', true)->value('id');
 
+        $this->refuseReservedInitialStatus($data['lead_status_id']);
+
         $custom = $data[CustomFieldsSchema::STATE_PATH] ?? null;
         $this->customFieldState = is_array($custom) ? $custom : [];
 
@@ -61,6 +65,27 @@ final class CreateLead extends CreateRecord
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
+    }
+
+    /**
+     * A lead is never created in a Qualified or Converted status (D-7): the
+     * qualification note and the conversion are the workflow's, so a crafted
+     * status id is refused here even though the Select does not offer it.
+     */
+    private function refuseReservedInitialStatus(mixed $statusId): void
+    {
+        $kind = $statusId === null ? null : LeadStatus::query()->whereKey((int) $statusId)->first()?->kind;
+
+        if (! in_array($kind, LeadForm::RESERVED_INITIAL_KINDS, true)) {
+            return;
+        }
+
+        Notification::make()
+            ->danger()
+            ->title(__('leads.validation.initial_status_reserved'))
+            ->send();
+
+        $this->halt();
     }
 
     /** The submitted values, once the record has an id (D-9). */

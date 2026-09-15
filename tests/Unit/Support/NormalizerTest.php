@@ -36,6 +36,7 @@ final class NormalizerTest extends TestCase
             'foreign double zero' => ['0044 20 7946 0958', '+442079460958'],
             'landline with zero' => ['0112345678', '+966112345678'],
             'unparseable digits kept' => ['12345', '+12345'],
+            'long international number kept whole' => ['+'.str_repeat('9', 25), '+'.str_repeat('9', 25)],
             'empty' => ['', null],
             'null' => [null, null],
             'no digits' => ['abc', null],
@@ -47,5 +48,15 @@ final class NormalizerTest extends TestCase
     public function phones_are_normalised_to_e164(?string $input, ?string $expected): void
     {
         $this->assertSame($expected, Normalizer::phone($input));
+    }
+
+    #[Test]
+    public function the_longest_phone_a_form_accepts_fits_the_phone_normalized_column(): void
+    {
+        // Forms and importers cap phone and mobile at 30 characters; the
+        // phone_normalized columns are VARCHAR(32).
+        foreach ([str_repeat('9', 30), '+'.str_repeat('9', 29), '00'.str_repeat('9', 28)] as $input) {
+            $this->assertLessThanOrEqual(32, strlen((string) Normalizer::phone($input)), $input);
+        }
     }
 }

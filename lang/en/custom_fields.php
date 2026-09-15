@@ -78,7 +78,7 @@ return [
         'options_forbidden' => 'This field type does not take choices.',
         'invalid_option' => 'The choice :value is empty, too long or repeated.',
         'validation_not_supported' => 'This field type does not support the :key constraint.',
-        'delete_has_values' => 'This field holds :count values. Deactivate it instead of deleting it.',
+        'delete_has_values' => '{1} This field holds :count value. Deactivate it instead of deleting it.|[2,*] This field holds :count values. Deactivate it instead of deleting it.',
         'unsupported_entity' => 'The :model records do not carry custom fields.',
         'value_required' => ':label is required.',
         'value_invalid' => 'The value of :label is not valid.',
@@ -98,7 +98,6 @@ return [
     'empty' => [
         'heading' => 'No custom fields',
         'description' => 'Add a field to capture what your business tracks beyond the built-in ones.',
-        'no_fields' => 'No custom fields are defined for this entity.',
     ],
 
 ];

@@ -162,8 +162,8 @@ final class DealsTable
                         DatePicker::make('until')->label(__('deals.filters.expected_close_until'))->native(false),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->whereDate('expected_close_date', '>=', $data['from']))
-                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->whereDate('expected_close_date', '<=', $data['until'])))
+                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->where('expected_close_date', '>=', $data['from']))
+                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->where('expected_close_date', '<=', $data['until'])))
                     ->indicateUsing(fn (array $data): array => array_filter([
                         filled($data['from'] ?? null) ? __('deals.filters.expected_close_from').': '.$data['from'] : null,
                         filled($data['until'] ?? null) ? __('deals.filters.expected_close_until').': '.$data['until'] : null,

@@ -58,7 +58,7 @@ return [
         'greeting' => 'Hello :name,',
         'intro' => ':inviter has invited you to :app. Use the button below to set your password and activate your account.',
         'action' => 'Set my password',
-        'expiry' => 'This link expires in :count minutes. If it has expired, request a new one from the sign-in page.',
+        'expiry' => '{1} This link expires in :count minute. If it has expired, request a new one from the sign-in page.|[2,*] This link expires in :count minutes. If it has expired, request a new one from the sign-in page.',
         'ignore' => 'If you were not expecting this invitation, you can ignore this message.',
         'resend' => 'Resend invitation',
         'resend_heading' => 'Resend the invitation?',
@@ -69,8 +69,12 @@ return [
 
     'validation' => [
         'email_unique' => 'This email is already used by another account.',
+        'email_unique_trashed' => 'This email belongs to a deleted account. Restore that account from the deleted users instead of inviting it again.',
         'roles_required' => 'Choose at least one role.',
         'last_super_admin' => 'This cannot be completed: this is the only active super administrator.',
+        'super_admin_membership' => 'Only a super administrator may grant or remove the super administrator role, or change a super administrator\'s account.',
+        'self_status' => 'You cannot disable your own account or set it back to pending.',
+        'pending_by_invitation' => 'An account becomes pending only through an invitation; choose active or disabled.',
     ],
 
     'empty' => [

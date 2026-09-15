@@ -8,6 +8,9 @@ use App\Enums\ActivityLogEvent;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use DateTimeInterface;
+use Illuminate\Container\Attributes\Scoped;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +19,14 @@ use Illuminate\Support\Facades\DB;
  *
  * Values are cached as one array (file cache locally, shared cache in
  * production); every write invalidates it and is audited with before/after.
+ *
+ * The array is also kept in memory for the life of the instance, which the
+ * container scopes to one request or one queued job: a list rendering a money
+ * or date cell per row reads the cache store once, not once per cell, and a
+ * long-running worker still sees a change made between two jobs. Every writer
+ * here clears the memory with the cache.
  */
+#[Scoped]
 final class SettingsRepository
 {
     private const CACHE_KEY = 'crm.settings';
@@ -28,6 +38,9 @@ final class SettingsRepository
     public const WEEK_STARTS_ON = 'general.week_starts_on';
 
     public const ORGANISATION_NAME = 'general.organisation_name';
+
+    /** @var array<string, mixed>|null */
+    private ?array $values = null;
 
     public function __construct(
         private readonly AuditLogger $audit,
@@ -63,12 +76,32 @@ final class SettingsRepository
      */
     public function all(): array
     {
+        if ($this->values !== null) {
+            return $this->values;
+        }
+
         /** @var array<string, mixed> $all */
         $all = Cache::remember(self::CACHE_KEY, now()->addHours(12), static function (): array {
             return Setting::query()->pluck('value', 'key')->all();
         });
 
-        return $all;
+        return $this->values = $all;
+    }
+
+    /**
+     * The first moment of a calendar day of the organisation (a date picked in
+     * a filter), in the application timezone the datetime columns are stored
+     * in — so a range filter compares the raw, indexed column.
+     */
+    public function startOfOrganisationDay(string|DateTimeInterface $date): Carbon
+    {
+        return $this->organisationDay($date)->startOfDay()->setTimezone((string) config('app.timezone'));
+    }
+
+    /** The last moment of a calendar day of the organisation, in the application timezone. */
+    public function endOfOrganisationDay(string|DateTimeInterface $date): Carbon
+    {
+        return $this->organisationDay($date)->endOfDay()->setTimezone((string) config('app.timezone'));
     }
 
     /**
@@ -94,7 +127,7 @@ final class SettingsRepository
                 $changes[$key] = ['old' => $old, 'new' => $value];
             }
 
-            Cache::forget(self::CACHE_KEY);
+            $this->forget();
 
             if ($changes !== []) {
                 $this->audit->record(ActivityLogEvent::SettingsUpdated, null, $actor, [
@@ -122,6 +155,20 @@ final class SettingsRepository
             );
         }
 
+        $this->forget();
+    }
+
+    private function forget(): void
+    {
         Cache::forget(self::CACHE_KEY);
+        $this->values = null;
+    }
+
+    /** The calendar date alone, placed in the organisation timezone. */
+    private function organisationDay(string|DateTimeInterface $date): Carbon
+    {
+        $day = $date instanceof DateTimeInterface ? $date->format('Y-m-d') : substr(trim($date), 0, 10);
+
+        return Carbon::parse($day, $this->timezone());
     }
 }

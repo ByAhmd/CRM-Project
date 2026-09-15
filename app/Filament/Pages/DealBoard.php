@@ -40,6 +40,9 @@ final class DealBoard extends Page
 {
     public const CARDS_PER_PAGE = 25;
 
+    /** "Load more" stops here: one column never renders more than MAX_PAGES × CARDS_PER_PAGE cards. */
+    public const MAX_PAGES = 20;
+
     public const CLOSED_WINDOW_DAYS = 90;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedViewColumns;
@@ -151,9 +154,19 @@ final class DealBoard extends Page
             });
     }
 
+    /**
+     * Shows one more page of cards in a column. The stage id comes from the
+     * browser, so a stage that is not on the current board is ignored (it
+     * would only grow the locked array serialised into every snapshot), and
+     * the column stops growing at MAX_PAGES pages, as RecordTimeline does.
+     */
     public function loadMore(int $stageId): void
     {
-        $this->limits[$stageId] = $this->limitFor($stageId) + self::CARDS_PER_PAGE;
+        if ($this->pipelineId === null || ! PipelineStage::query()->where('pipeline_id', $this->pipelineId)->whereKey($stageId)->exists()) {
+            return;
+        }
+
+        $this->limits[$stageId] = min(self::MAX_PAGES * self::CARDS_PER_PAGE, $this->limitFor($stageId) + self::CARDS_PER_PAGE);
     }
 
     /**

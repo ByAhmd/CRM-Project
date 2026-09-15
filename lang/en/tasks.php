@@ -105,7 +105,7 @@ return [
         'completed' => 'Task completed',
         'cancelled' => 'Task cancelled',
         'reopened' => 'Task reopened',
-        'bulk_completed' => ':count tasks completed',
+        'bulk_completed' => '{0} No tasks completed|{1} :count task completed|[2,*] :count tasks completed',
         'reminder_title' => 'Task reminder',
         'reminder_body' => 'Your task ":title" is due :due.',
         'overdue_title' => 'Task overdue',

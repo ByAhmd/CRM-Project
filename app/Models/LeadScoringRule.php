@@ -72,7 +72,7 @@ final class LeadScoringRule extends Model
             LeadScoringRuleKind::Source => (string) (LeadSource::query()->find($this->reference_id)?->getAttribute('display_name') ?? __('common.placeholders.empty')),
             LeadScoringRuleKind::Status => (string) (LeadStatus::query()->find($this->reference_id)?->getAttribute('display_name') ?? __('common.placeholders.empty')),
             LeadScoringRuleKind::FieldFilled => (string) __('leads.fields.'.$this->field),
-            LeadScoringRuleKind::ActivityRecency => __('lead_scoring_rules.fields.within_days_value', ['days' => (int) $this->within_days]),
+            LeadScoringRuleKind::ActivityRecency => trans_choice('lead_scoring_rules.fields.within_days_value', (int) $this->within_days, ['days' => (int) $this->within_days]),
         };
     }
 }

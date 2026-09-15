@@ -87,7 +87,7 @@ final class LeadStatusWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function the_converted_status_and_inactive_statuses_are_refused(): void
+    public function the_converted_status_is_refused_as_a_transition_target(): void
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
@@ -223,10 +223,5 @@ final class LeadStatusWorkflowTest extends TestCase
         $this->assertNotContains(LeadStatusKind::Converted, $kinds);
         $this->assertNotContains(LeadStatusKind::New, $kinds);
         $this->assertSame([LeadStatusKind::Working, LeadStatusKind::Qualified, LeadStatusKind::Unqualified], $kinds);
-    }
-
-    private function statusOfKind(LeadStatusKind $kind): LeadStatus
-    {
-        return LeadStatus::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

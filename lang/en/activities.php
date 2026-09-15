@@ -51,7 +51,7 @@ return [
 
     'helpers' => [
         'related' => 'Link the activity to at least one record.',
-        'type' => 'The kind of the type decides which fields apply: direction for calls and emails, duration for calls and meetings.',
+        'type' => 'The activity type\'s kind decides which fields apply: direction for calls and emails, duration for calls and meetings.',
     ],
 
     'filters' => [
@@ -80,7 +80,7 @@ return [
         'inactive_type' => 'That activity type is inactive and cannot be used.',
         'system_type_missing' => 'The system activity type for this kind is missing. Run the activity type seeder.',
         'immutable' => 'Activities are immutable events: they cannot be edited once logged. Delete and log again to correct one.',
-        'record_not_accessible' => 'You cannot link to this record: it is outside your reach.',
+        'record_not_accessible' => 'You cannot link to this record: it is outside the records you can access.',
     ],
 
     'empty' => [

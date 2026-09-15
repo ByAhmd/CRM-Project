@@ -30,6 +30,9 @@ final class TeamResource extends Resource
 
     protected static ?int $navigationSort = 80;
 
+    /** Global search covers leads, contacts, accounts, deals and tasks only (plan section 3.8, decision A-8). */
+    protected static bool $isGloballySearchable = false;
+
     protected static ?string $recordTitleAttribute = 'name_en';
 
     public static function getNavigationGroup(): NavigationGroup

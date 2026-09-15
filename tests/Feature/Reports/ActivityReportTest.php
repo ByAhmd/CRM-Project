@@ -117,6 +117,33 @@ final class ActivityReportTest extends TestCase
     }
 
     #[Test]
+    public function the_days_are_the_organisation_timezone_days_when_it_differs_from_the_application_timezone(): void
+    {
+        // A-19: buckets are folded in PHP in the organisation timezone, which General Settings may change (D-8).
+        app(SettingsRepository::class)->update([SettingsRepository::TIMEZONE => 'Asia/Tokyo'], $this->admin);
+        $this->assertNotSame((string) config('app.timezone'), app(SettingsRepository::class)->timezone(), 'precondition');
+
+        // 20:30 on 3 Sep in Riyadh (the application timezone) is 02:30 on 4 Sep in Tokyo.
+        $this->log($this->repA, ActivityKind::Call, '2026-09-03 20:30:00');
+
+        $filters = ReportFilters::resolve(
+            ['from' => '2026-09-01', 'to' => '2026-09-05', 'group_by' => ActivityReport::GROUP_DAY],
+            $this->admin,
+            app(RecordVisibilityResolver::class),
+            Activity::permissionGroup(),
+            app(SettingsRepository::class)->timezone(),
+            ActivityReport::GROUP_BY,
+            ActivityReport::GROUP_OWNER,
+        );
+
+        $byDay = $this->report()->rows($this->admin, $filters)
+            ->mapWithKeys(fn (ReportRow $row): array => [(string) $row->meta['date'] => (int) $row->value('total')])
+            ->all();
+
+        $this->assertSame(['2026-09-01' => 0, '2026-09-02' => 0, '2026-09-03' => 5, '2026-09-04' => 1, '2026-09-05' => 0], $byDay);
+    }
+
+    #[Test]
     public function grouping_by_week_folds_the_days_on_the_organisation_week_start(): void
     {
         $filters = $this->filters(['from' => '2026-09-01', 'to' => '2026-09-10', 'group_by' => ActivityReport::GROUP_WEEK]);

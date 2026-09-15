@@ -187,6 +187,34 @@ final class AccountResourceTest extends TestCase
     }
 
     #[Test]
+    public function the_bulk_delete_soft_deletes_only_in_scope_accounts_and_is_not_offered_to_a_rep(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $member = $this->salesRep($team);
+        $outsider = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
+        $inTeam = Account::factory()->create(['owner_id' => $member->getKey()]);
+        $outside = Account::factory()->create(['owner_id' => $outsider->getKey()]);
+
+        // Livewire::actingAs switches the user for every component, so each actor's component runs to completion first.
+        Livewire::actingAs($member)
+            ->test(ListAccounts::class)
+            ->assertTableBulkActionHidden('delete');
+
+        $this->assertNotSoftDeleted('accounts', ['id' => $inTeam->getKey()]);
+
+        Livewire::actingAs($manager)
+            ->test(ListAccounts::class)
+            ->callTableBulkAction('delete', [$inTeam, $outside])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSoftDeleted('accounts', ['id' => $inTeam->getKey()]);
+        $this->assertNotSoftDeleted('accounts', ['id' => $outside->getKey()]);
+        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::AccountDeleted->value, 'subject_id' => $inTeam->getKey()]);
+        $this->assertDatabaseMissing('activity_log', ['description' => ActivityLogEvent::AccountDeleted->value, 'subject_id' => $outside->getKey()]);
+    }
+
+    #[Test]
     public function the_list_tabs_filter_by_type(): void
     {
         $admin = $this->admin();

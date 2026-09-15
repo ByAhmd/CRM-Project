@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace App\Services\Access;
 
 use App\Contracts\OwnedRecord;
+use App\Enums\UserStatus;
 use App\Enums\VisibilityLevel;
 use App\Models\User;
+use Closure;
+use Illuminate\Container\Attributes\Scoped;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use WeakMap;
 
 /**
  * Resolves which owned records a user may see and change (decision D-4).
@@ -27,9 +32,57 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Unowned records (owner column null) are visible from team level upwards,
  * never at own level.
+ *
+ * Performance: list queries keep the team as a subquery (one statement),
+ * while per-record checks (a policy on every table row, every calendar
+ * entry) compare against the team's member ids, read once per user per
+ * request — the class is container-scoped for that reason. The memo is keyed
+ * by the user and their team, and any saved, deleted or restored user clears
+ * it, so a membership change inside the same request is never served stale.
  */
-final readonly class RecordVisibilityResolver
+#[Scoped]
+final class RecordVisibilityResolver
 {
+    /**
+     * Team member ids per "userId:teamId" for the current request.
+     *
+     * @var array<string, list<int>>
+     */
+    private array $teamMembers = [];
+
+    /**
+     * The event dispatchers the memo flush is registered on, so the listeners
+     * are wired once per application rather than once per resolved instance.
+     *
+     * @var WeakMap<Dispatcher, true>|null
+     */
+    private static ?WeakMap $flushRegisteredOn = null;
+
+    public function __construct(Dispatcher $events)
+    {
+        self::$flushRegisteredOn ??= new WeakMap;
+
+        if (isset(self::$flushRegisteredOn[$events])) {
+            return;
+        }
+
+        self::$flushRegisteredOn[$events] = true;
+
+        foreach (['saved', 'deleted', 'restored', 'forceDeleted'] as $event) {
+            $events->listen('eloquent.'.$event.': '.User::class, static function (): void {
+                if (app()->resolved(self::class)) {
+                    app(self::class)->forgetTeamMembers();
+                }
+            });
+        }
+    }
+
+    /** Drops the memoised team memberships (a user joined, left or was removed). */
+    public function forgetTeamMembers(): void
+    {
+        $this->teamMembers = [];
+    }
+
     /**
      * @param  class-string<Model&OwnedRecord>  $model
      */
@@ -93,14 +146,19 @@ final readonly class RecordVisibilityResolver
     }
 
     /**
-     * Users the given user may assign records to: own team at team level,
-     * everyone at all level, only themselves at own level.
+     * Active users the given user may assign records to: own team at team
+     * level, everyone at all level, only themselves at own level. Disabled,
+     * pending and deleted users are never offered or accepted as a new
+     * owner, a mention or an owner filter value (D-4, D-11).
      *
      * @return Builder<User>
      */
     public function assignableUsers(User $user, string $permissionGroup): Builder
     {
-        $query = User::query()->whereNull('deleted_at')->orderBy('name');
+        $query = User::query()
+            ->whereNull('deleted_at')
+            ->where('status', UserStatus::Active->value)
+            ->orderBy('name');
 
         if ($user->can($permissionGroup.'.view_all')) {
             return $query;
@@ -113,17 +171,59 @@ final readonly class RecordVisibilityResolver
         return $query->whereKey($user->getKey());
     }
 
+    /**
+     * canWrite() for many records of one model at once, as a test on the
+     * owner id: the level is resolved here, once, and the team's member ids
+     * are read at most once, so a long list (a calendar range) costs no
+     * permission lookup per record. The test answers exactly what canWrite()
+     * answers for a record with that owner; it knows nothing of the verb
+     * permission or of a trashed record, which remain the policy's checks.
+     *
+     * @param  class-string<Model&OwnedRecord>  $model
+     * @return Closure(int|null): bool
+     */
+    public function writableOwner(User $user, string $model): Closure
+    {
+        $level = $this->levelFor($user, $model);
+
+        if ($level === VisibilityLevel::Team) {
+            $this->memoisedTeamMemberIds($user);
+        }
+
+        return fn (?int $ownerId): bool => $this->ownerReached($level, $user, $ownerId);
+    }
+
     private function reaches(VisibilityLevel $level, User $user, Model&OwnedRecord $record): bool
     {
         $ownerId = $record->getAttribute($record::ownerColumn());
 
+        return $this->ownerReached($level, $user, $ownerId === null ? null : (int) $ownerId);
+    }
+
+    private function ownerReached(VisibilityLevel $level, User $user, ?int $ownerId): bool
+    {
         return match ($level) {
             VisibilityLevel::All => true,
             VisibilityLevel::Team => $ownerId === null
-                || $this->teamMemberIds($user)->whereKey((int) $ownerId)->exists(),
-            VisibilityLevel::Own => $ownerId !== null && (int) $ownerId === (int) $user->getKey(),
+                || in_array($ownerId, $this->memoisedTeamMemberIds($user), true),
+            VisibilityLevel::Own => $ownerId !== null && $ownerId === (int) $user->getKey(),
             VisibilityLevel::None => false,
         };
+    }
+
+    /**
+     * teamMemberIds() as a list, read once per user and team per request.
+     *
+     * @return list<int>
+     */
+    private function memoisedTeamMemberIds(User $user): array
+    {
+        $key = $user->getKey().':'.($user->team_id ?? '');
+
+        return $this->teamMembers[$key] ??= array_values(array_map(
+            static fn (mixed $id): int => (int) $id,
+            $this->teamMemberIds($user)->pluck('id')->all(),
+        ));
     }
 
     /**

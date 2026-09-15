@@ -319,6 +319,93 @@ final class CalendarFeedTest extends TestCase
         app(CalendarFeed::class)->events($other, Carbon::parse('2026-09-01'), Carbon::parse('2026-10-01'));
     }
 
+    #[Test]
+    public function the_editable_flag_equals_the_task_policy_for_own_team_outside_unassigned_and_trashed_tasks(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $rep = $this->salesRep($team);
+        $outsider = $this->salesRep();
+        $admin = $this->admin();
+        $readOnly = $this->readOnly($team);
+
+        foreach ([$rep, $manager, $admin, $readOnly] as $viewer) {
+            // Every task is linked to a lead the viewer reads, so the scoped
+            // query returns it whoever is assigned; only the write reach differs.
+            $lead = Lead::factory()->create(['owner_id' => $viewer->getKey()]);
+            $at = ['lead_id' => $lead->getKey(), 'due_at' => '2026-09-10 10:00:00'];
+            $tasks = [
+                'own' => Task::factory()->create(['assignee_id' => $viewer->getKey()] + $at),
+                'team' => Task::factory()->create(['assignee_id' => $rep->is($viewer) ? $manager->getKey() : $rep->getKey()] + $at),
+                'outside' => Task::factory()->create(['assignee_id' => $outsider->getKey()] + $at),
+                'unassigned' => Task::factory()->create(['assignee_id' => null] + $at),
+                'trashed' => Task::factory()->create(['assignee_id' => $viewer->getKey()] + $at),
+            ];
+            $tasks['trashed']->delete();
+
+            $this->actingAs($viewer);
+            $events = app(CalendarFeed::class)
+                ->range($viewer, Carbon::parse('2026-09-01 00:00:00'), Carbon::parse('2026-10-01 00:00:00'), TaskResource::getEloquentQuery()->withTrashed(), ActivityResource::getEloquentQuery())
+                ->events
+                ->keyBy(static fn (CalendarEvent $event): string => $event->id);
+
+            foreach ($tasks as $case => $task) {
+                $event = $events->get('task-'.$task->getKey());
+                $this->assertInstanceOf(CalendarEvent::class, $event, "{$viewer->name}: {$case} task missing from the feed");
+
+                $task = Task::withTrashed()->findOrFail($task->getKey());
+                $this->assertSame($viewer->can('update', $task), $event->editable, "{$viewer->name}: {$case} task");
+            }
+        }
+
+        // The matrix is not vacuous: each answer occurs.
+        $this->assertTrue($manager->can('update', Task::query()->where('assignee_id', $rep->getKey())->firstOrFail()));
+        $this->assertFalse($manager->can('update', Task::query()->where('assignee_id', $outsider->getKey())->firstOrFail()));
+    }
+
+    #[Test]
+    public function a_range_holding_more_than_the_cap_returns_the_earliest_entries_across_both_sources_and_says_it_was_cut(): void
+    {
+        $rep = $this->salesRep();
+        $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
+        $taskCount = intdiv(CalendarFeed::MAX_EVENTS, 2) + 10;
+        $activityCount = CalendarFeed::MAX_EVENTS + 1 - $taskCount;
+
+        // Interleaved: a task every 90 minutes from 08:00, a meeting every 90 minutes from 08:45.
+        // Model events are off while seeding (a read test; the observers add nothing it reads).
+        [$tasks, $meetings] = Task::withoutEvents(fn (): array => [
+            collect(range(0, $taskCount - 1))->map(static fn (int $i): Task => Task::factory()->create([
+                'assignee_id' => $rep->getKey(),
+                'due_at' => Carbon::parse('2026-09-02 08:00:00')->addMinutes(90 * $i),
+            ])),
+            collect(range(0, $activityCount - 1))->map(static fn (int $i): Activity => Activity::factory()->ofKind(ActivityKind::Meeting)->create([
+                'lead_id' => $lead->getKey(),
+                'owner_id' => $rep->getKey(),
+                'created_by' => $rep->getKey(),
+                'occurred_at' => Carbon::parse('2026-09-02 08:45:00')->addMinutes(90 * $i),
+            ])),
+        ]);
+        $latest = $tasks->last();
+        $this->assertInstanceOf(Task::class, $latest);
+
+        $this->actingAs($rep);
+        $range = app(CalendarFeed::class)->range($rep, Carbon::parse('2026-09-01 00:00:00'), Carbon::parse('2026-10-01 00:00:00'));
+        $ids = $range->events->map(static fn (CalendarEvent $event): string => $event->id)->all();
+
+        $this->assertTrue($range->truncated);
+        $this->assertCount(CalendarFeed::MAX_EVENTS, $ids);
+        $this->assertNotContains('task-'.$latest->getKey(), $ids);
+        $this->assertContains('task-'.$tasks->first()?->getKey(), $ids);
+        $this->assertContains('activity-'.$meetings->last()?->getKey(), $ids);
+
+        $latest->forceDelete();
+
+        $range = app(CalendarFeed::class)->range($rep, Carbon::parse('2026-09-01 00:00:00'), Carbon::parse('2026-10-01 00:00:00'));
+
+        $this->assertFalse($range->truncated);
+        $this->assertCount(CalendarFeed::MAX_EVENTS, $range->events);
+    }
+
     /**
      * The viewer's September entries, resolved the way the page does it —
      * authenticated as the viewer, over the resources' scoped queries.

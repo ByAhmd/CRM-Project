@@ -170,16 +170,4 @@ final class DealStageWorkflowTest extends TestCase
 
         $this->assertTrue($workflow->canTransition($deal));
     }
-
-    /** The n-th Open stage of the deal's pipeline, in pipeline order (0 = the default stage). */
-    private function openStage(Deal $deal, int $position): PipelineStage
-    {
-        return PipelineStage::query()
-            ->where('pipeline_id', $deal->pipeline_id)
-            ->where('kind', StageKind::Open->value)
-            ->orderBy('sort')
-            ->orderBy('id')
-            ->skip($position)
-            ->firstOrFail();
-    }
 }

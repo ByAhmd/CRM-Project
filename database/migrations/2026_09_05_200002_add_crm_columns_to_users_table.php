@@ -6,7 +6,10 @@ use App\Enums\UserStatus;
 use App\Support\Database\EnumCheck;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * CRM columns on the Laravel users table (decisions D-4, D-5, D-11).
@@ -42,8 +45,20 @@ return new class extends Migration
         EnumCheck::apply('users', 'status', UserStatus::class);
     }
 
+    /**
+     * Invited users who never accepted have no password, and MODIFY to NOT NULL
+     * fails on the first NULL ("Invalid use of NULL value") after the other
+     * columns are already gone — MySQL DDL is not transactional, so the table
+     * would be left half rolled back. Those rows receive an unusable random
+     * hash first: nobody knows it, so the account stays unusable until a
+     * password reset, exactly as it was while the invitation was pending.
+     */
     public function down(): void
     {
+        DB::table('users')
+            ->whereNull('password')
+            ->update(['password' => Hash::make(Str::random(64))]);
+
         EnumCheck::drop('users', 'status');
 
         Schema::table('users', function (Blueprint $table): void {

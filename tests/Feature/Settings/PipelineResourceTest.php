@@ -13,9 +13,11 @@ use App\Filament\Resources\Pipelines\Pages\EditPipeline;
 use App\Filament\Resources\Pipelines\Pages\ListPipelines;
 use App\Filament\Resources\Pipelines\PipelineResource;
 use App\Filament\Resources\Pipelines\RelationManagers\StagesRelationManager;
+use App\Models\Deal;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\User;
+use App\Services\Deals\DealStageWorkflow;
 use App\Services\Settings\PipelineService;
 use Database\Seeders\PipelineSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -444,6 +446,87 @@ final class PipelineResourceTest extends TestCase
     }
 
     #[Test]
+    public function a_pipeline_holding_deals_is_never_deleted_even_when_the_deals_are_trashed(): void
+    {
+        $admin = $this->admin();
+        $this->makePipeline('Sales', 'المبيعات', default: true);
+        $projects = $this->makePipeline('Projects', 'المشاريع');
+        $empty = $this->makePipeline('Tenders', 'المناقصات');
+        $stage = $projects->defaultStage;
+        $this->assertNotNull($stage);
+        $deal = Deal::factory()->create(['pipeline_id' => $projects->getKey(), 'stage_id' => $stage->getKey(), 'owner_id' => $admin->getKey()]);
+
+        $assertRefused = function () use ($admin, $projects): void {
+            $this->assertFalse(app(PipelineService::class)->isDeletable($projects));
+            $this->assertFalse($admin->can('delete', $projects));
+
+            Livewire::actingAs($admin)
+                ->test(EditPipeline::class, ['record' => $projects->getRouteKey()])
+                ->assertActionHidden('delete');
+
+            try {
+                app(PipelineService::class)->delete($projects);
+                $this->fail('A pipeline holding deals was deleted.');
+            } catch (InvalidPipelineException $exception) {
+                $this->assertSame(__('pipelines.validation.in_use'), $exception->getMessage());
+            }
+
+            $this->assertNotSoftDeleted('pipelines', ['id' => $projects->getKey()]);
+        };
+
+        $assertRefused();
+
+        $deal->delete();
+
+        $assertRefused();
+
+        Livewire::actingAs($admin)
+            ->test(ListPipelines::class)
+            ->callTableBulkAction('delete', [$projects, $empty]);
+
+        $this->assertNotSoftDeleted('pipelines', ['id' => $projects->getKey()]);
+        $this->assertSoftDeleted('pipelines', ['id' => $empty->getKey()]);
+    }
+
+    #[Test]
+    public function a_stage_holding_a_deal_or_named_in_stage_history_is_never_deleted(): void
+    {
+        $admin = $this->admin();
+        $pipeline = $this->makePipeline(default: true);
+        $service = app(PipelineService::class);
+        $proposal = $service->createStage($pipeline, ['name_ar' => 'العرض', 'name_en' => 'Proposal', 'kind' => StageKind::Open, 'probability' => 30]);
+        $negotiation = $service->createStage($pipeline, ['name_ar' => 'التفاوض', 'name_en' => 'Negotiation', 'kind' => StageKind::Open, 'probability' => 60]);
+        $unused = $service->createStage($pipeline, ['name_ar' => 'العرض التجريبي', 'name_en' => 'Demo', 'kind' => StageKind::Open, 'probability' => 20]);
+
+        $deal = Deal::factory()->create(['owner_id' => $admin->getKey()]);
+        app(DealStageWorkflow::class)->transition($deal, $proposal, $admin);
+        app(DealStageWorkflow::class)->transition($deal, $negotiation, $admin);
+
+        foreach ([$proposal, $negotiation] as $used) {
+            $this->assertFalse($service->isStageDeletable($used));
+
+            $this->stagesManager($admin, $pipeline)
+                ->assertTableActionHidden('delete', $used);
+
+            try {
+                $service->deleteStage($used);
+                $this->fail("{$used->name_en} is in use and was deleted.");
+            } catch (InvalidPipelineException $exception) {
+                $this->assertSame(__('pipelines.stages.validation.in_use'), $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('pipeline_stages', ['id' => $used->getKey()]);
+        }
+
+        $this->assertTrue($service->isStageDeletable($unused));
+
+        $this->stagesManager($admin, $pipeline)
+            ->callTableAction('delete', $unused);
+
+        $this->assertDatabaseMissing('pipeline_stages', ['id' => $unused->getKey()]);
+    }
+
+    #[Test]
     public function stages_are_reordered_from_the_relation_manager(): void
     {
         $admin = $this->admin();
@@ -496,8 +579,9 @@ final class PipelineResourceTest extends TestCase
             ['Qualification', 'Proposal', 'Negotiation', 'Won', 'Lost'],
             $pipeline->stages()->pluck('name_en')->all(),
         );
+        // The Arabic wording is owned by the seeder; the test only proves every row landed in order.
         $this->assertSame(
-            ['التأهيل', 'العرض', 'التفاوض', 'مكسوبة', 'خاسرة'],
+            array_column(PipelineSeeder::stages(), 'name_ar'),
             $pipeline->stages()->pluck('name_ar')->all(),
         );
         $this->assertSame([10, 30, 60, 100, 0], $pipeline->stages()->pluck('probability')->all());

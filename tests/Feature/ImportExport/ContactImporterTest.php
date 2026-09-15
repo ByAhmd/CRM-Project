@@ -12,13 +12,10 @@ use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Import;
 use App\Models\Tag;
-use App\Models\Team;
 use App\Models\User;
 use Filament\Actions\Imports\Jobs\ImportCsv;
-use Filament\Actions\Imports\Models\FailedImportRow;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use League\Csv\Reader;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -50,7 +47,7 @@ final class ContactImporterTest extends TestCase
         $previousPrimary = Contact::factory()->create(['owner_id' => $rep->getKey(), 'account_id' => $account->getKey(), 'is_primary' => true]);
         Tag::factory()->create(['name_en' => 'VIP', 'name_ar' => 'كبار العملاء']);
 
-        $import = $this->runImport($rep, $this->rows('contacts.csv'));
+        $import = $this->runImport($rep, $this->importFixtureRows('contacts.csv'));
 
         $this->assertSame(2, $import->successful_rows);
         $this->assertSame(0, $import->getFailedRowsCount());
@@ -85,17 +82,17 @@ final class ContactImporterTest extends TestCase
         $rep = $this->salesRep();
         $this->makeUser(CrmRole::SalesRep, ['email' => 'outsider@example.com']);
 
-        $import = $this->runImport($rep, $this->rows('contacts_invalid.csv'));
+        $import = $this->runImport($rep, $this->importFixtureRows('contacts_invalid.csv'));
 
         $this->assertSame(1, $import->successful_rows);
         $this->assertSame(5, $import->getFailedRowsCount());
         $this->assertTrue(Contact::query()->where('last_name', 'Contact')->exists());
 
-        $this->assertSame(__('validation.required', ['attribute' => __('imports.columns.contact.first_name')]), $this->failure($import, 'last_name', 'NoFirst'));
-        $this->assertSame(__('validation.email', ['attribute' => __('imports.columns.contact.email')]), $this->failure($import, 'last_name', 'Mail'));
-        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Nonexistent Co']), $this->failure($import, 'email', 'ghost@example.com'));
-        $this->assertSame(__('validation.in', ['attribute' => __('imports.columns.contact.preferred_locale')]), $this->failure($import, 'email', 'locale@example.com'));
-        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'outsider@example.com']), $this->failure($import, 'email', 'outside@example.com'));
+        $this->assertSame(__('validation.required', ['attribute' => __('imports.columns.contact.first_name')]), $this->failedImportReason($import, 'last_name', 'NoFirst'));
+        $this->assertSame(__('validation.email', ['attribute' => __('imports.columns.contact.email')]), $this->failedImportReason($import, 'last_name', 'Mail'));
+        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Nonexistent Co']), $this->failedImportReason($import, 'email', 'ghost@example.com'));
+        $this->assertSame(__('validation.in', ['attribute' => __('imports.columns.contact.preferred_locale')]), $this->failedImportReason($import, 'email', 'locale@example.com'));
+        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'outsider@example.com']), $this->failedImportReason($import, 'email', 'outside@example.com'));
     }
 
     #[Test]
@@ -112,7 +109,7 @@ final class ContactImporterTest extends TestCase
         $refused = $this->runImport($rep, [$row]);
 
         $this->assertSame(0, $refused->successful_rows);
-        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Far Away Co']), $this->failure($refused, 'email', 'linked@example.com'));
+        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Far Away Co']), $this->failedImportReason($refused, 'email', 'linked@example.com'));
 
         $accepted = $this->runImport($manager, [['first_name' => 'Team', 'last_name' => 'Person', 'email' => 'team@example.com', 'account' => 'team co']]);
 
@@ -130,7 +127,7 @@ final class ContactImporterTest extends TestCase
         $skipped = $this->runImport($rep, [$row]);
 
         $this->assertSame(0, $skipped->successful_rows);
-        $this->assertSame(__('imports.validation.duplicate', ['id' => (string) $existing->getKey()]), $this->failure($skipped, 'last_name', 'Mobile'));
+        $this->assertSame(__('imports.validation.duplicate', ['id' => (string) $existing->getKey()]), $this->failedImportReason($skipped, 'last_name', 'Mobile'));
         $this->assertSame(1, Contact::query()->count());
 
         $updated = $this->runImport($rep, [$row], ['duplicate_strategy' => 'update']);
@@ -184,8 +181,8 @@ final class ContactImporterTest extends TestCase
         ], ['duplicate_strategy' => 'update']);
 
         $this->assertSame(0, $refused->successful_rows);
-        $this->assertSame(__('imports.validation.update_forbidden', ['id' => (string) $theirs->getKey()]), $this->failure($refused, 'email', 'theirs@example.com'));
-        $this->assertSame(__('imports.validation.create_forbidden'), $this->failure($refused, 'email', 'new@example.com'));
+        $this->assertSame(__('imports.validation.update_forbidden', ['id' => (string) $theirs->getKey()]), $this->failedImportReason($refused, 'email', 'theirs@example.com'));
+        $this->assertSame(__('imports.validation.create_forbidden'), $this->failedImportReason($refused, 'email', 'new@example.com'));
         $this->assertSame('Old title', $theirs->refresh()->job_title);
         $this->assertSame(1, Contact::query()->count());
 
@@ -198,26 +195,9 @@ final class ContactImporterTest extends TestCase
         ]);
 
         $this->assertSame(1, $handed->successful_rows);
-        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failure($handed, 'email', 'handed@example.com'));
+        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failedImportReason($handed, 'email', 'handed@example.com'));
         $this->assertFalse(Contact::query()->where('email_normalized', 'handed@example.com')->exists());
         $this->assertSame($importer->getKey(), Contact::query()->where('email_normalized', 'kept@example.com')->firstOrFail()->owner_id);
-    }
-
-    /**
-     * A user holding exactly the given permissions and nothing through a
-     * role (buildable through the Roles resource, D-3), in the team.
-     *
-     * @param  list<Permission>  $permissions
-     */
-    private function userWithPermissions(Team $team, array $permissions): User
-    {
-        $user = User::factory()->create(['team_id' => $team->getKey()]);
-        $user->syncRoles([]);
-        $user->syncPermissions(array_map(fn (Permission $permission): string => $permission->value, $permissions));
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        return $user->fresh() ?? $user;
     }
 
     /**
@@ -241,28 +221,5 @@ final class ContactImporterTest extends TestCase
         $import->touch('completed_at');
 
         return $import->refresh();
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function rows(string $fixture): array
-    {
-        $reader = Reader::createFromPath(base_path('tests/Fixtures/imports/'.$fixture));
-        $reader->setHeaderOffset(0);
-
-        return array_values(iterator_to_array($reader->getRecords()));
-    }
-
-    /** The reason the row whose $column holds $value was refused. */
-    private function failure(Import $import, string $column, string $value): ?string
-    {
-        foreach (FailedImportRow::query()->where('import_id', $import->getKey())->get() as $row) {
-            if (($row->data[$column] ?? null) === $value) {
-                return $row->validation_error;
-            }
-        }
-
-        $this->fail("no failed row with {$column} = {$value}");
     }
 }

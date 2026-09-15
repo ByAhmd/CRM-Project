@@ -14,6 +14,7 @@ use App\Models\ActivityType;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Activities\ActivityRecorder;
+use App\Services\Settings\SettingsRepository;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -118,8 +119,8 @@ final class ActivitiesTable
                         DatePicker::make('until')->label(__('activities.filters.occurred_until'))->native(false),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->whereDate('occurred_at', '>=', $data['from']))
-                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->whereDate('occurred_at', '<=', $data['until'])))
+                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->where('occurred_at', '>=', app(SettingsRepository::class)->startOfOrganisationDay((string) $data['from'])))
+                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->where('occurred_at', '<=', app(SettingsRepository::class)->endOfOrganisationDay((string) $data['until']))))
                     ->indicateUsing(fn (array $data): array => array_filter([
                         filled($data['from'] ?? null) ? __('activities.filters.occurred_from').': '.$data['from'] : null,
                         filled($data['until'] ?? null) ? __('activities.filters.occurred_until').': '.$data['until'] : null,

@@ -62,7 +62,7 @@ final class DealImporter extends Importer
                 ->label(__('imports.columns.deal.title'))
                 ->requiredMapping()
                 ->rules(['required', 'string', 'max:150'])
-                ->example('توريد أجهزة الحاسب'),
+                ->example(__('imports.examples.deal.title')),
 
             ImportColumn::make('account')
                 ->label(__('imports.columns.deal.account'))
@@ -73,7 +73,7 @@ final class DealImporter extends Importer
                         $record->account_id = $importer->rowAccount->getKey();
                     }
                 })
-                ->example('شركة الأفق'),
+                ->example(__('imports.examples.deal.account')),
 
             ImportColumn::make('contact')
                 ->label(__('imports.columns.deal.contact'))
@@ -82,7 +82,7 @@ final class DealImporter extends Importer
                 ->fillRecordUsing(function (self $importer, Deal $record, ?string $state): void {
                     $record->contact_id = $importer->resolveContact($state)?->getKey();
                 })
-                ->example('نورة العتيبي'),
+                ->example(__('imports.examples.deal.contact')),
 
             ImportColumn::make('pipeline')
                 ->label(__('imports.columns.deal.pipeline'))
@@ -99,7 +99,7 @@ final class DealImporter extends Importer
                         $record->pipeline_id = $pipeline->getKey();
                     }
                 })
-                ->example('Sales'),
+                ->example(__('imports.examples.deal.pipeline')),
 
             ImportColumn::make('stage')
                 ->label(__('imports.columns.deal.stage'))
@@ -116,12 +116,12 @@ final class DealImporter extends Importer
                         $record->stage_id = $stage->getKey();
                     }
                 })
-                ->example('Qualification'),
+                ->example(__('imports.examples.deal.stage')),
 
             ImportColumn::make('amount')
                 ->label(__('imports.columns.deal.amount'))
                 ->numeric(decimalPlaces: 2)
-                ->rules(['nullable', 'numeric', 'min:0'])
+                ->rules(['nullable', 'numeric', 'min:0', 'max:'.DealForm::MAX_AMOUNT])
                 ->ignoreBlankState()
                 ->example('15000.00'),
 
@@ -160,19 +160,15 @@ final class DealImporter extends Importer
 
                     $record->lead_source_id = $source?->getKey();
                 })
-                ->example('Website'),
+                ->example(__('imports.examples.deal.source')),
 
             ImportColumn::make('owner')
                 ->label(__('imports.columns.deal.owner'))
                 ->rules(['nullable', 'email', 'max:190'])
                 ->ignoreBlankState()
-                ->fillRecordUsing(function (self $importer, Deal $record, ?string $state): void {
-                    $owner = $importer->resolveOwner($state, Deal::permissionGroup());
-
-                    if ($owner !== null) {
-                        $record->owner_id = $owner->getKey();
-                    }
-                })
+                // A new record is created for the named owner; an existing one is
+                // reassigned through RecordAssignmentService (D-4, A-20).
+                ->fillRecordUsing(fn (self $importer, Deal $record, ?string $state) => $importer->fillOwner($record, $state))
                 ->example('rep@example.com'),
 
             ImportColumn::make('tags')
@@ -180,13 +176,13 @@ final class DealImporter extends Importer
                 ->rules(['nullable', 'string', 'max:500'])
                 ->ignoreBlankState()
                 ->fillRecordUsing(fn (self $importer, ?string $state) => $importer->rememberTags($state))
-                ->example('VIP|Enterprise'),
+                ->example(__('imports.examples.deal.tags')),
 
             ImportColumn::make('description')
                 ->label(__('imports.columns.deal.description'))
                 ->rules(['nullable', 'string', 'max:5000'])
                 ->ignoreBlankState()
-                ->example('Renewal of the 2025 contract.'),
+                ->example(__('imports.examples.deal.description')),
 
             // One column per active definition of the entity, mapped by its
             // own label (D-9).
@@ -284,10 +280,7 @@ final class DealImporter extends Importer
     {
         ImportExportActions::applyLocale($import->getOptions());
 
-        return __('imports.notifications.completed', [
-            'successful' => (string) $import->successful_rows,
-            'failed' => (string) $import->getFailedRowsCount(),
-        ]);
+        return self::completedNotificationBody($import);
     }
 
     /**
@@ -301,7 +294,8 @@ final class DealImporter extends Importer
 
         $account = $name === null
             ? null
-            : $this->visible(Account::query())->whereRaw('LOWER(name) = ?', [$name])->orderBy('id')->first();
+            // The raw column (case-insensitive collation) keeps accounts_name_index usable.
+            : $this->visible(Account::query())->where('accounts.name', $name)->orderBy('id')->first();
 
         if (! $account instanceof Account) {
             $this->failRow('account_not_found', ['value' => $raw]);
@@ -322,7 +316,8 @@ final class DealImporter extends Importer
 
         $contact = Contact::query()
             ->where('account_id', $this->rowAccount->getKey())
-            ->whereRaw("LOWER(CONCAT(first_name, ' ', last_name)) = ?", [$name])
+            // Narrowed by the indexed account first; the collation ignores case.
+            ->whereRaw("CONCAT(first_name, ' ', last_name) = ?", [$name])
             ->orderBy('id')
             ->first();
 
@@ -402,7 +397,7 @@ final class DealImporter extends Importer
 
         return $this->visible(Deal::query())
             ->where('account_id', $account->getKey())
-            ->whereRaw('LOWER(title) = ?', [$title])
+            ->where('deals.title', $title)
             ->orderBy('id')
             ->first();
     }

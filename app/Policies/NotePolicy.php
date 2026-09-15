@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Model;
  * or `update` on the subject, so a manager tidies a rep's note on a team
  * deal while a support agent edits only their own.
  *
+ * A soft-deleted subject is frozen until it is restored (D-13), as in
+ * AttachmentPolicy: no note is added, edited or pinned on it. Its notes stay
+ * readable, and their author may still delete or restore them.
+ *
  * The bulk abilities are explicit because Filament's authorisation helper
  * falls through to allow when a policy exists but lacks the method.
  * Permanent deletion is never granted (D-13).
@@ -45,12 +49,26 @@ final class NotePolicy
             return false;
         }
 
+        if ($subject !== null && self::isTrashed($subject)) {
+            return false;
+        }
+
         return $subject === null || $user->can('view', $subject);
     }
 
     public function update(User $user, Note $note): bool
     {
-        return $user->can(Permission::NoteUpdate->value) && $this->authorsOrUpdatesSubject($user, $note);
+        if (! $user->can(Permission::NoteUpdate->value)) {
+            return false;
+        }
+
+        $subject = $note->subjectRecord();
+
+        if ($subject !== null && self::isTrashed($subject)) {
+            return false;
+        }
+
+        return $this->authorsOrUpdatesSubject($user, $note);
     }
 
     public function pin(User $user, Note $note): bool
@@ -86,6 +104,11 @@ final class NotePolicy
     public function forceDeleteAny(User $user): bool
     {
         return false;
+    }
+
+    private static function isTrashed(Model $subject): bool
+    {
+        return method_exists($subject, 'trashed') && $subject->trashed() === true;
     }
 
     private function authorsOrUpdatesSubject(User $user, Note $note): bool

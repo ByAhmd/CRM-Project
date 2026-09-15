@@ -24,13 +24,13 @@ return [
     ],
 
     'validation' => [
-        'outside_reach' => 'You cannot assign to this user: they are outside your reach.',
+        'outside_reach' => 'You cannot assign to this user: they are outside the users you can access.',
     ],
 
     'notifications' => [
         'assigned' => 'Assigned to :name',
         'unassigned' => 'Assignment removed',
-        'bulk_done' => ':count records assigned',
+        'bulk_done' => '{0} No records assigned|{1} :count record assigned|[2,*] :count records assigned',
         'title' => 'A :entity was assigned to you',
         'body' => ':by assigned the :entity ":record" to you.',
         'greeting' => 'Hello :name,',

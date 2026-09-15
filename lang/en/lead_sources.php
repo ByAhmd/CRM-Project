@@ -23,7 +23,7 @@ return [
     ],
 
     'helpers' => [
-        'is_active' => 'Inactive sources are not offered when creating a lead; existing leads keep their source.',
+        'is_active' => 'Inactive sources are not offered when creating a lead; existing leads keep their source. A source that leads, deals or a scoring rule use cannot be deleted; deactivate it instead.',
         'sort' => 'Display order in lists; lowest first. Rows can also be dragged in the table.',
     ],
 

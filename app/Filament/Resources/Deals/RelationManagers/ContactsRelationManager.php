@@ -22,10 +22,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * The people involved in a deal and their role (decision D-6). Only contacts
- * of the deal's account are offered when the deal has one; otherwise the
- * contacts the actor may see. Every change requires `update` on the deal, so
- * a closed deal's contacts are frozen with it.
+ * The people involved in a deal and their role (decision D-6). The panel
+ * lists and offers only contacts the actor may see (D-4), narrowed to the
+ * deal's account when it has one. Every change requires `update` on the
+ * deal, so a closed deal's contacts are frozen with it.
  */
 final class ContactsRelationManager extends RelationManager
 {
@@ -52,6 +52,10 @@ final class ContactsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('last_name')
+            // Only the attached contacts the viewer may read (D-4): seeing the
+            // deal does not reveal every person involved in it.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id')))
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('contacts.fields.name'))
@@ -116,6 +120,9 @@ final class ContactsRelationManager extends RelationManager
     }
 
     /**
+     * The contacts the actor may see (D-4), narrowed to the deal's account
+     * when it has one (D-6).
+     *
      * @template TModel of Model
      *
      * @param  Builder<TModel>  $query
@@ -125,10 +132,12 @@ final class ContactsRelationManager extends RelationManager
     {
         $deal = $this->getOwnerRecord();
 
+        $query->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'));
+
         if ($deal instanceof Deal && $deal->account_id !== null) {
-            return $query->where('contacts.account_id', $deal->account_id);
+            $query->where('contacts.account_id', $deal->account_id);
         }
 
-        return $query->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'));
+        return $query;
     }
 }

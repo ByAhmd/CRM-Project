@@ -52,11 +52,12 @@ use Illuminate\Support\Facades\Validator;
  * change is written into the properties of the record's own `<entity>.updated`
  * ledger entry — and only when something actually changed.
  *
- * The definitions are read through a freshly resolved CustomFieldRegistry on
- * every call rather than through an injected one: a write must see the
- * definitions as they are now, including one an administrator saved earlier in
- * the same request or an importer created between two rows. Reads memoise, a
- * write pays one indexed query on a settings-sized table.
+ * The definitions are read through the container's CustomFieldRegistry on
+ * every call rather than through an injected instance: the registry is scoped
+ * to the request or job and forgotten whenever a definition is saved or
+ * deleted, so a write sees the definitions as they are now — including one an
+ * administrator saved earlier in the same request — while an import of many
+ * rows reads them once instead of once per row.
  */
 final class CustomFieldValueService
 {

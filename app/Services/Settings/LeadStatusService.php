@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Settings;
 
+use App\Enums\LeadScoringRuleKind;
 use App\Enums\LeadStatusKind;
 use App\Exceptions\Settings\InvalidLeadStatusException;
+use App\Models\Lead;
+use App\Models\LeadScoringRule;
 use App\Models\LeadStatus;
+use App\Models\LeadStatusLog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -23,6 +27,11 @@ use Illuminate\Support\Facades\DB;
  * 2. Exactly one status is of kind Converted (LeadStatusKind::isSingleton()).
  *    A second Converted row is refused, the Converted row keeps its kind and
  *    cannot be deleted.
+ *
+ * A status that is referenced — by a lead (soft-deleted ones keep their
+ * foreign key), by either side of a status-history row or by a scoring rule —
+ * cannot be deleted either: the RESTRICT keys would refuse it, so the service
+ * refuses first with a message that points to deactivation.
  *
  * MySQL has no partial unique index that could back either invariant, so
  * every existence check that decides a write takes a FOR UPDATE lock on the
@@ -120,6 +129,10 @@ final class LeadStatusService
                 throw InvalidLeadStatusException::convertedCannotBeDeleted();
             }
 
+            if ($this->isInUse($current)) {
+                throw InvalidLeadStatusException::inUse();
+            }
+
             $current->delete();
         });
     }
@@ -127,7 +140,17 @@ final class LeadStatusService
     /** Whether the record may be removed at all — the pages hide the action when it may not. */
     public function isDeletable(LeadStatus $status): bool
     {
-        return ! $status->isDefault() && ! $status->isConverted();
+        return ! $status->isDefault() && ! $status->isConverted() && ! $this->isInUse($status);
+    }
+
+    /** Whether a lead, a status-history row or a scoring rule still references the status. */
+    public function isInUse(LeadStatus $status): bool
+    {
+        $id = $status->getKey();
+
+        return Lead::withTrashed()->where('lead_status_id', $id)->exists()
+            || LeadStatusLog::query()->where(fn (Builder $query): Builder => $query->where('to_status_id', $id)->orWhere('from_status_id', $id))->exists()
+            || LeadScoringRule::query()->where('kind', LeadScoringRuleKind::Status->value)->where('reference_id', $id)->exists();
     }
 
     /**

@@ -9,7 +9,7 @@ return [
     'title' => 'لوحة الصفقات',
 
     'fields' => [
-        'pipeline' => 'خط المبيعات',
+        'pipeline' => 'مسار المبيعات',
     ],
 
     'columns' => [
@@ -25,13 +25,13 @@ return [
     ],
 
     'notifications' => [
-        'moved' => 'نُقلت :deal إلى :stage',
+        'moved' => 'نُقلت الصفقة «:deal» إلى مرحلة «:stage»',
         'refused' => 'تعذّر نقل الصفقة',
     ],
 
     'validation' => [
-        'stage_outside_pipeline' => 'هذه المرحلة لا تنتمي إلى خط المبيعات المحدد.',
-        'pipeline_inactive' => 'خط المبيعات هذا غير نشط.',
+        'stage_outside_pipeline' => 'هذه المرحلة لا تنتمي إلى مسار المبيعات المحدد.',
+        'pipeline_inactive' => 'مسار المبيعات هذا غير نشط.',
     ],
 
 ];

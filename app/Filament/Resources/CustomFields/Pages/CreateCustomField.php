@@ -51,6 +51,11 @@ final class CreateCustomField extends CreateRecord
         }
     }
 
+    protected function getCreatedNotificationTitle(): string
+    {
+        return __('custom_fields.notifications.created');
+    }
+
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');

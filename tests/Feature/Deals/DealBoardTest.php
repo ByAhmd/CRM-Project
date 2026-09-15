@@ -300,6 +300,26 @@ final class DealBoardTest extends TestCase
     }
 
     #[Test]
+    public function load_more_stops_at_the_page_cap_and_ignores_stages_that_are_not_on_the_board(): void
+    {
+        $admin = $this->admin();
+        $deal = Deal::factory()->create(['owner_id' => $admin->getKey()]);
+        $stageId = (int) $deal->stage_id;
+        $otherStageId = (int) $this->anotherPipeline()->stages()->orderBy('sort')->value('id');
+
+        $page = Livewire::actingAs($admin)->test(DealBoard::class);
+
+        for ($i = 0; $i < DealBoard::MAX_PAGES + 5; $i++) {
+            $page->call('loadMore', $stageId);
+        }
+
+        $page->call('loadMore', $otherStageId)
+            ->call('loadMore', 999999)
+            ->assertSet("limits.{$stageId}", DealBoard::MAX_PAGES * DealBoard::CARDS_PER_PAGE)
+            ->assertSet('limits', [$stageId => DealBoard::MAX_PAGES * DealBoard::CARDS_PER_PAGE]);
+    }
+
+    #[Test]
     public function switching_the_pipeline_reloads_the_columns_and_refuses_an_inactive_one(): void
     {
         $admin = $this->admin();

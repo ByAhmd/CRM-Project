@@ -8,9 +8,11 @@ use RuntimeException;
 
 /**
  * Raised when a lead status change would break a workflow invariant
- * (decision D-7): a second Converted status, no default status, or removing
- * the status the workflow depends on. The message is already translated so
- * the page can show it to the administrator as it is.
+ * (decision D-7): a second Converted status, no default status, removing
+ * the status the workflow depends on, or removing a status that leads, their
+ * status history or a scoring rule still reference (RESTRICT keys). The
+ * message is already translated so the page can show it to the administrator
+ * as it is.
  */
 final class InvalidLeadStatusException extends RuntimeException
 {
@@ -42,5 +44,10 @@ final class InvalidLeadStatusException extends RuntimeException
     public static function defaultCannotBeDeleted(): self
     {
         return new self(__('lead_statuses.validation.default_cannot_be_deleted'));
+    }
+
+    public static function inUse(): self
+    {
+        return new self(__('lead_statuses.validation.in_use'));
     }
 }

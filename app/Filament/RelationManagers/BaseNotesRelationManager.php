@@ -30,6 +30,7 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 /**
@@ -121,7 +122,15 @@ abstract class BaseNotesRelationManager extends RelationManager
                 ->reorder()
                 ->withoutGlobalScopes([SoftDeletingScope::class])
                 ->where($query->qualifyColumn(static::$subjectForeignKey), $this->getOwnerRecord()->getKey())
-                ->with('author')))
+                // Every row action authorises through Note::subjectRecord(); the subjects are
+                // loaded once for the page (trashed ones too, as the policy resolves them).
+                ->with([
+                    'author',
+                    'lead' => static fn (Relation $subject): Relation => $subject->withoutGlobalScope(SoftDeletingScope::class),
+                    'contact' => static fn (Relation $subject): Relation => $subject->withoutGlobalScope(SoftDeletingScope::class),
+                    'deal' => static fn (Relation $subject): Relation => $subject->withoutGlobalScope(SoftDeletingScope::class),
+                    'account' => static fn (Relation $subject): Relation => $subject->withoutGlobalScope(SoftDeletingScope::class),
+                ])))
             ->columns([
                 IconColumn::make('is_pinned')
                     ->label(__('notes.fields.is_pinned'))

@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Accounts\RelationManagers;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Contacts\Schemas\ContactForm;
 use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\OwnerSelect;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Contacts\ContactService;
@@ -18,11 +19,17 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * The people at an account. Creating one here inherits the account and the
  * actor as owner; opening one leads to the contact's own page.
+ *
+ * The panel lists only the contacts the viewer may read (D-4): the account
+ * being visible does not make every person at it visible. A change of owner
+ * made in the edit modal is a reassignment and goes through
+ * RecordAssignmentService (audit + notification).
  */
 final class ContactsRelationManager extends RelationManager
 {
@@ -42,7 +49,9 @@ final class ContactsRelationManager extends RelationManager
     {
         $user = auth()->user();
 
-        return $user instanceof User && $user->can('viewAny', Contact::class);
+        return $user instanceof User
+            && $user->can('viewAny', Contact::class)
+            && $user->can('view', $ownerRecord);
     }
 
     public function form(Schema $schema): Schema
@@ -54,6 +63,9 @@ final class ContactsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('last_name')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'))
+                ->with('owner'))
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('contacts.fields.name'))
@@ -85,7 +97,18 @@ final class ContactsRelationManager extends RelationManager
             ->recordActions([
                 ViewAction::make()->url(fn (Contact $record): string => ContactResource::getUrl('view', ['record' => $record])),
                 CustomFieldActions::editAction(
-                    EditAction::make(),
+                    EditAction::make()
+                        // The owner is not saved as a plain attribute: a change
+                        // is handed to RecordAssignmentService (D-4).
+                        ->using(function (array $data, Contact $record): Contact {
+                            $ownerId = OwnerSelect::pull($data, $record);
+
+                            $record->update($data);
+
+                            OwnerSelect::reassign($record, $ownerId);
+
+                            return $record;
+                        }),
                     after: fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record),
                 ),
             ])

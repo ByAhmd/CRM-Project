@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Services\Tasks;
 
 use App\Enums\ActivityKind;
+use App\Enums\Permission;
 use App\Filament\Resources\Activities\ActivityResource;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Activity;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Settings\SettingsRepository;
 use Carbon\CarbonInterface;
 use Closure;
@@ -36,6 +38,15 @@ use LogicException;
  *   ActivityResource, which scope to the authenticated user, so the default
  *   is refused when that user is not the viewer.
  *
+ * One range returns at most MAX_EVENTS entries, the earliest across both
+ * sources: each source reads at most MAX_EVENTS + 1 rows in the order of
+ * its stored moment (a task's start, else its due date; an activity's
+ * occurrence), the two are merged in that order and cut, and the range says
+ * whether it was cut so the page can tell the viewer to narrow the view.
+ * Whether a task is draggable is TaskPolicy::update resolved once for the
+ * range — the `task.update` key and the viewer's reach over assignees from
+ * RecordVisibilityResolver — never one policy call per entry.
+ *
  * The range arrives in the organisation timezone (what the browser shows)
  * while every stored date is in the application timezone, so the bounds are
  * converted before they reach the query: a bound bound as-is is formatted
@@ -48,6 +59,9 @@ final class CalendarFeed
 {
     /** The widest range one request may load (a six-week month grid is 42 days). */
     public const MAX_RANGE_DAYS = 62;
+
+    /** The most entries one range returns; a busier range returns its earliest and says it was cut. */
+    public const MAX_EVENTS = 500;
 
     public const MUTED_CLASS = 'crm-calendar-event-muted';
 
@@ -70,16 +84,30 @@ final class CalendarFeed
 
     public function __construct(
         private readonly SettingsRepository $settings,
+        private readonly RecordVisibilityResolver $visibility,
     ) {}
 
     /**
-     * The viewer's entries overlapping [$start, $end), ordered by start.
+     * The viewer's entries overlapping [$start, $end), ordered by start, at
+     * most MAX_EVENTS of them.
      *
      * @param  Builder<Task>|null  $tasks  The viewer-scoped task query; TaskResource's when omitted.
      * @param  Builder<Activity>|null  $activities  The viewer-scoped activity query; ActivityResource's when omitted.
      * @return Collection<int, CalendarEvent>
      */
     public function events(User $viewer, Carbon $start, Carbon $end, ?Builder $tasks = null, ?Builder $activities = null): Collection
+    {
+        return $this->range($viewer, $start, $end, $tasks, $activities)->events;
+    }
+
+    /**
+     * The viewer's entries overlapping [$start, $end), ordered by start: the
+     * earliest MAX_EVENTS of them, and whether the range held more.
+     *
+     * @param  Builder<Task>|null  $tasks  The viewer-scoped task query; TaskResource's when omitted.
+     * @param  Builder<Activity>|null  $activities  The viewer-scoped activity query; ActivityResource's when omitted.
+     */
+    public function range(User $viewer, Carbon $start, Carbon $end, ?Builder $tasks = null, ?Builder $activities = null): CalendarRange
     {
         $tasks ??= self::resourceQuery($viewer, static fn (): Builder => TaskResource::getEloquentQuery());
         $activities ??= self::resourceQuery($viewer, static fn (): Builder => ActivityResource::getEloquentQuery());
@@ -88,18 +116,30 @@ final class CalendarFeed
         $start = self::inAppTimezone($start);
         $end = self::inAppTimezone($end);
 
-        // Base collections: an Eloquent collection merges by model key, and
-        // these items are DTOs.
-        $events = $this->tasks($tasks, $start, $end)
+        // Each source is read in the order of its stored moment and the sort
+        // below is stable, so the merge keeps both orders: every entry of the
+        // earliest MAX_EVENTS is among the MAX_EVENTS + 1 rows its source
+        // returned. Base collections: an Eloquent collection merges by model
+        // key, and the two sources share key values.
+        $candidates = $this->tasks($tasks, $start, $end)
             ->toBase()
-            ->map(fn (Task $task): CalendarEvent => $this->taskEvent($task, $viewer, $timezone))
+            ->map(static fn (Task $task): array => ['at' => self::taskMoment($task), 'record' => $task])
             ->merge($this->activities($activities, $start, $end)
                 ->toBase()
-                ->map(fn (Activity $activity): CalendarEvent => $this->activityEvent($activity, $timezone)));
+                ->map(static fn (Activity $activity): array => ['at' => $activity->occurred_at->getTimestamp(), 'record' => $activity]))
+            ->sortBy('at');
 
-        return $events
+        $editable = $this->taskEditability($viewer);
+
+        $events = $candidates
+            ->take(self::MAX_EVENTS)
+            ->map(fn (array $candidate): CalendarEvent => $candidate['record'] instanceof Task
+                ? $this->taskEvent($candidate['record'], $editable, $timezone)
+                : $this->activityEvent($candidate['record'], $timezone))
             ->sortBy(static fn (CalendarEvent $event): int => Carbon::parse($event->start, $timezone)->getTimestamp())
             ->values();
+
+        return new CalendarRange($events, $candidates->count() > self::MAX_EVENTS);
     }
 
     /**
@@ -133,9 +173,10 @@ final class CalendarFeed
                             ->where('tasks.due_at', '<', $end);
                     });
             })
-            ->orderBy('tasks.starts_at')
-            ->orderBy('tasks.due_at')
+            // The stored moment taskMoment() reads: the start, else the due date.
+            ->orderByRaw('COALESCE(tasks.starts_at, tasks.due_at)')
             ->orderBy('tasks.id')
+            ->limit(self::MAX_EVENTS + 1)
             ->get();
     }
 
@@ -153,10 +194,39 @@ final class CalendarFeed
             ->where('activities.occurred_at', '<', $end)
             ->orderBy('activities.occurred_at')
             ->orderBy('activities.id')
+            ->limit(self::MAX_EVENTS + 1)
             ->get();
     }
 
-    private function taskEvent(Task $task, User $viewer, string $timezone): CalendarEvent
+    /** The moment a task is ordered and cut by: its start, else its due date (the query guarantees one). */
+    private static function taskMoment(Task $task): int
+    {
+        return ($task->starts_at ?? $task->due_at)?->getTimestamp() ?? 0;
+    }
+
+    /**
+     * TaskPolicy::update for every task of the range, resolved once: a
+     * trashed task is frozen, the viewer needs `task.update`, and the
+     * assignee must be inside the viewer's write reach.
+     *
+     * @return Closure(Task): bool
+     */
+    private function taskEditability(User $viewer): Closure
+    {
+        if (! $viewer->can(Permission::TaskUpdate->value)) {
+            return static fn (Task $task): bool => false;
+        }
+
+        $writableOwner = $this->visibility->writableOwner($viewer, Task::class);
+
+        return static fn (Task $task): bool => ! $task->trashed()
+            && $writableOwner($task->assignee_id === null ? null : (int) $task->assignee_id);
+    }
+
+    /**
+     * @param  Closure(Task): bool  $editable
+     */
+    private function taskEvent(Task $task, Closure $editable, string $timezone): CalendarEvent
     {
         $timed = $task->starts_at !== null;
         $open = $task->isOpen();
@@ -181,7 +251,7 @@ final class CalendarFeed
             borderColor: $color,
             textColor: self::TEXT_COLOR,
             url: TaskResource::getUrl('view', ['record' => $task]),
-            editable: $open && $viewer->can('update', $task),
+            editable: $open && $editable($task),
             classNames: $open ? [] : [self::MUTED_CLASS],
             extendedProps: [
                 'type' => 'task',

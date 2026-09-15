@@ -17,7 +17,11 @@ use App\Enums\Permission;
  *
  * Visibility defaults (D-4): sales_rep sees own records, sales_manager the
  * team's, admin / support / read_only everything. Sales reps may not reassign
- * (no *.assign) but may export within their own scope (D-13).
+ * (no *.assign). Every seeded role exports the four commercial entities
+ * (`{entity}.export`) within its own visibility scope (D-13): exporters run
+ * through RecordVisibilityResolver, so the grant never widens what a role reads.
+ * Setting an account's lifecycle type by hand (`account.set_type`) is kept
+ * to super admins and admins (D-6); everyone else sees it follow the deals.
  */
 final class RolePermissionMatrix
 {
@@ -80,7 +84,7 @@ final class RolePermissionMatrix
             Permission::DealClose, Permission::DealExport, Permission::DealImport,
 
             Permission::ActivityViewAny, Permission::ActivityViewTeam, Permission::ActivityCreate,
-            Permission::ActivityDelete, Permission::ActivityExport,
+            Permission::ActivityDelete, Permission::ActivityAssign, Permission::ActivityExport,
 
             Permission::TaskViewAny, Permission::TaskViewTeam, Permission::TaskCreate, Permission::TaskUpdate,
             Permission::TaskDelete, Permission::TaskAssign, Permission::TaskExport,
@@ -128,17 +132,17 @@ final class RolePermissionMatrix
 
     /**
      * Reads everything and may log interactions (activities, tasks, notes),
-     * but never changes commercial records.
+     * but never changes commercial records; exports what it reads (D-13).
      *
      * @return list<Permission>
      */
     private static function support(): array
     {
         return [
-            Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadViewAll,
-            Permission::ContactViewAny, Permission::ContactViewTeam, Permission::ContactViewAll,
-            Permission::AccountViewAny, Permission::AccountViewTeam, Permission::AccountViewAll,
-            Permission::DealViewAny, Permission::DealViewTeam, Permission::DealViewAll,
+            Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadViewAll, Permission::LeadExport,
+            Permission::ContactViewAny, Permission::ContactViewTeam, Permission::ContactViewAll, Permission::ContactExport,
+            Permission::AccountViewAny, Permission::AccountViewTeam, Permission::AccountViewAll, Permission::AccountExport,
+            Permission::DealViewAny, Permission::DealViewTeam, Permission::DealViewAll, Permission::DealExport,
 
             Permission::ActivityViewAny, Permission::ActivityViewTeam, Permission::ActivityViewAll,
             Permission::ActivityCreate,
@@ -154,15 +158,17 @@ final class RolePermissionMatrix
     }
 
     /**
+     * Reads everything and exports what it reads (D-13); writes nothing.
+     *
      * @return list<Permission>
      */
     private static function readOnly(): array
     {
         return [
-            Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadViewAll,
-            Permission::ContactViewAny, Permission::ContactViewTeam, Permission::ContactViewAll,
-            Permission::AccountViewAny, Permission::AccountViewTeam, Permission::AccountViewAll,
-            Permission::DealViewAny, Permission::DealViewTeam, Permission::DealViewAll,
+            Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadViewAll, Permission::LeadExport,
+            Permission::ContactViewAny, Permission::ContactViewTeam, Permission::ContactViewAll, Permission::ContactExport,
+            Permission::AccountViewAny, Permission::AccountViewTeam, Permission::AccountViewAll, Permission::AccountExport,
+            Permission::DealViewAny, Permission::DealViewTeam, Permission::DealViewAll, Permission::DealExport,
             Permission::ActivityViewAny, Permission::ActivityViewTeam, Permission::ActivityViewAll,
             Permission::TaskViewAny, Permission::TaskViewTeam, Permission::TaskViewAll,
             Permission::AttachmentDownload,

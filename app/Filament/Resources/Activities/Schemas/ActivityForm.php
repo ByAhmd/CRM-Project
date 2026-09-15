@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Activities\Schemas;
 
 use App\Enums\ActivityDirection;
 use App\Enums\ActivityKind;
+use App\Enums\Permission;
 use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Activity;
@@ -133,9 +134,10 @@ final class ActivityForm
     {
         $type = ActivityType::query()->findOrFail((int) $data['activity_type_id']);
 
-        // Only a user inside the actor's reach may own the entry; anyone else falls back to the actor.
+        // Another owner needs `activity.assign` and must be an active user
+        // inside the actor's reach (D-4); anything else falls back to the actor.
         $ownerId = $data['owner_id'] ?? null;
-        $owner = $ownerId === null || $ownerId === ''
+        $owner = $ownerId === null || $ownerId === '' || ((int) $ownerId !== (int) $actor->getKey() && ! $actor->can(Permission::ActivityAssign->value))
             ? null
             : app(RecordVisibilityResolver::class)->assignableUsers($actor, Activity::permissionGroup())->whereKey((int) $ownerId)->first();
 

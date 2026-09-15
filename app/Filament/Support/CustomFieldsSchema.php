@@ -377,7 +377,11 @@ final class CustomFieldsSchema
                     $display = self::display($field, self::valueOf($record, $field));
 
                     return is_array($display) ? implode(self::LIST_SEPARATOR, $display) : $display;
-                });
+                })
+                // Values and option labels are typed by users: a cell starting
+                // with = + - @ TAB or CR is neutralised (CWE-1236); numbers,
+                // including sign-led ones, are left as they are.
+                ->preventFormulaInjection();
         }
 
         return $columns;

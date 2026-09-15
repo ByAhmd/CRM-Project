@@ -128,7 +128,7 @@ final class TaskActions
                     $count++;
                 }
 
-                Notification::make()->title(__('tasks.notifications.bulk_completed', ['count' => $count]))->success()->send();
+                Notification::make()->title(trans_choice('tasks.notifications.bulk_completed', $count, ['count' => $count]))->success()->send();
             });
     }
 

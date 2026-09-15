@@ -70,6 +70,12 @@ return [
         'greeting' => 'Dear :name,',
         'reply_hint' => 'You can reply to this message directly to reach :name.',
         'footer' => ':organisation',
+        // The layout strings Laravel's mail views carry as JSON keys.
+        'hello' => 'Hello,',
+        'whoops' => 'Whoops, something went wrong.',
+        'regards' => 'Regards,',
+        'action_fallback' => 'If you\'re having trouble clicking the ":action" button, copy and paste the URL below into your web browser:',
+        'rights' => '© :year :name. All rights reserved.',
     ],
 
 ];

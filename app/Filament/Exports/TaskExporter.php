@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  * Exports the rows of the table query it is launched from — already inside
  * the actor's visible scope — with enums as labels in the actor's locale,
  * the assignee by name, the linked records by their labels, dates as
- * Y-m-d H:i. Free-text cells are protected against spreadsheet formula
+ * Y-m-d H:i. All text cells are protected against spreadsheet formula
  * injection.
  */
 final class TaskExporter extends Exporter
@@ -35,13 +35,16 @@ final class TaskExporter extends Exporter
             ExportColumn::make('title')->label(__('exports.columns.task.title'))->preventFormulaInjection(),
             ExportColumn::make('kind')
                 ->label(__('exports.columns.task.kind'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('status')
                 ->label(__('exports.columns.task.status'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('priority')
                 ->label(__('exports.columns.task.priority'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('due_at')
                 ->label(__('exports.columns.task.due_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
@@ -54,7 +57,7 @@ final class TaskExporter extends Exporter
             ExportColumn::make('completed_at')
                 ->label(__('exports.columns.task.completed_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
-            ExportColumn::make('assignee.name')->label(__('exports.columns.task.assignee')),
+            ExportColumn::make('assignee.name')->label(__('exports.columns.task.assignee'))->preventFormulaInjection(),
             ExportColumn::make('related')
                 ->label(__('exports.columns.task.related'))
                 ->state(fn (Task $record): ?string => $record->subjectLabel())
@@ -71,7 +74,8 @@ final class TaskExporter extends Exporter
             ExportColumn::make('deal.title')->label(__('exports.columns.task.deal'))->preventFormulaInjection(),
             ExportColumn::make('recurrence_frequency')
                 ->label(__('exports.columns.task.recurrence_frequency'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('description')->label(__('exports.columns.task.description'))->preventFormulaInjection(),
             ExportColumn::make('created_at')
                 ->label(__('exports.columns.task.created_at'))
@@ -93,9 +97,11 @@ final class TaskExporter extends Exporter
     {
         ImportExportActions::applyLocale($export->getOptions());
 
-        return __('exports.notifications.completed', [
-            'successful' => (string) $export->successful_rows,
-            'failed' => (string) $export->getFailedRowsCount(),
-        ]);
+        $body = trans_choice('exports.notifications.completed', (int) $export->successful_rows);
+        $failed = $export->getFailedRowsCount();
+
+        return $failed > 0
+            ? $body.' '.trans_choice('exports.notifications.failed', $failed)
+            : $body;
     }
 }

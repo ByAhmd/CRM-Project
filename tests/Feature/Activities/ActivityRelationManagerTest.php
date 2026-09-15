@@ -18,7 +18,6 @@ use App\Filament\Resources\Leads\Pages\ViewLead;
 use App\Filament\Resources\Leads\RelationManagers\LeadActivitiesRelationManager;
 use App\Models\Account;
 use App\Models\Activity;
-use App\Models\ActivityType;
 use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\Lead;
@@ -208,10 +207,5 @@ final class ActivityRelationManagerTest extends TestCase
 
         $this->assertDatabaseMissing('activities', ['id' => $activity->getKey()]);
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::ActivityDeleted->value, 'subject_id' => $activity->getKey(), 'causer_id' => $manager->getKey()]);
-    }
-
-    private function typeOfKind(ActivityKind $kind): ActivityType
-    {
-        return ActivityType::query()->where('kind', $kind->value)->where('is_system', true)->firstOrFail();
     }
 }

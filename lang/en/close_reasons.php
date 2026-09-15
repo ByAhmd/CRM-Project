@@ -30,7 +30,7 @@ return [
 
     'helpers' => [
         'kind' => 'Whether this reason explains a won deal or a lost one.',
-        'is_active' => 'Inactive reasons are not offered when closing deals.',
+        'is_active' => 'Inactive reasons are not offered when closing deals. A reason that closed deals use cannot be deleted; deactivate it instead.',
         'sort' => 'Display order in lists; lowest first. Rows can also be dragged in the table.',
     ],
 

@@ -9,9 +9,10 @@ use RuntimeException;
 
 /**
  * Raised when a pipeline or stage change would break a workflow invariant
- * (decision D-8): no default pipeline, a deactivated or deleted default, or
- * a stage set without an Open stage, without exactly one Won and one Lost,
- * or without exactly one default Open stage. The message is already
+ * (decision D-8): no default pipeline, a deactivated or deleted default, a
+ * pipeline or stage still referenced by deals or stage history, or a stage
+ * set without an Open stage, without exactly one Won and one Lost, or
+ * without exactly one default Open stage. The message is already
  * translated so the page can show it to the administrator as it is.
  */
 final class InvalidPipelineException extends RuntimeException
@@ -29,6 +30,11 @@ final class InvalidPipelineException extends RuntimeException
     public static function defaultCannotBeDeleted(): self
     {
         return new self(__('pipelines.validation.default_cannot_be_deleted'));
+    }
+
+    public static function holdsDeals(): self
+    {
+        return new self(__('pipelines.validation.in_use'));
     }
 
     public static function deletedCannotBeDefault(): self
@@ -64,6 +70,11 @@ final class InvalidPipelineException extends RuntimeException
     public static function lastStageOfKind(StageKind $kind): self
     {
         return new self(__('pipelines.stages.validation.last_of_kind', ['kind' => $kind->getLabel()]));
+    }
+
+    public static function stageInUse(): self
+    {
+        return new self(__('pipelines.stages.validation.in_use'));
     }
 
     public static function probabilityOutOfRange(): self

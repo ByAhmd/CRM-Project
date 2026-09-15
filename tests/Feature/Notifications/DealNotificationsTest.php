@@ -9,7 +9,6 @@ use App\Enums\CrmRole;
 use App\Enums\StageKind;
 use App\Filament\Resources\Deals\DealResource;
 use App\Models\Deal;
-use App\Models\DealCloseReason;
 use App\Models\PipelineStage;
 use App\Models\Team;
 use App\Notifications\DealClosedNotification;
@@ -255,10 +254,5 @@ final class DealNotificationsTest extends TestCase
         app(DealStageWorkflow::class)->transition($deal, $to, $manager);
 
         Notification::assertSentTo($rep, DealStageChangedNotification::class, fn (DealStageChangedNotification $notification, array $channels): bool => $channels === ['database', 'mail']);
-    }
-
-    private function reasonOfKind(CloseReasonKind $kind): DealCloseReason
-    {
-        return DealCloseReason::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

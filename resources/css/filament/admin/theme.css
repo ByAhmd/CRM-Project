@@ -41,6 +41,9 @@
     --crm-sidebar-2: #1d3461;
     --crm-sidebar-hover: #24407a;
     --crm-on-sidebar: #e8eef8;
+
+    /* Text and icons drawn on a solid accent fill (calendar events and buttons). */
+    --crm-on-accent: #ffffff;
 }
 
 .dark {
@@ -58,12 +61,17 @@
     --crm-on-sidebar: #dbe4f2;
 }
 
-/* Filament's gray ramp re-anchored for the dark ground so cards separate from the page. */
+/*
+ | Filament's gray ramp re-anchored for the dark ground so cards separate from
+ | the page. Filament 5 emits and consumes --gray-* as complete colours
+ | (oklch), so the overrides are colours too, never bare RGB triplets;
+ | html.dark outranks the :root block the panel injects for its ramps.
+ */
 html.dark {
-    --gray-950: 15 21 28;
-    --gray-900: 22 30 39;
-    --gray-800: 39 49 60;
-    --gray-700: 52 64 75;
+    --gray-950: var(--crm-bg);
+    --gray-900: var(--crm-card);
+    --gray-800: var(--crm-border);
+    --gray-700: var(--crm-border-2);
 }
 
 /* ---------------------------------------------------------------------------
@@ -100,7 +108,9 @@ html.dark {
 .fi-sidebar-item.fi-active .fi-sidebar-item-btn,
 .fi-sidebar-item-btn[aria-current='page'] {
     background-color: var(--crm-sidebar-2);
-    box-shadow: inset 3px 0 0 0 var(--color-primary-400);
+    /* Logical edge: the marker sits on the reading-start side in both directions. */
+    border-inline-start: 3px solid var(--color-primary-400);
+    padding-inline-start: calc(0.5rem - 3px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -156,7 +166,7 @@ html.dark {
     --crm-color-success: var(--success-600);
     --crm-color-warning: var(--warning-600);
     --crm-color-danger: var(--danger-600);
-    --crm-color-on-event: #ffffff;
+    --crm-color-on-event: var(--crm-on-accent);
 
     --fc-border-color: var(--crm-border);
     --fc-page-bg-color: var(--crm-card);

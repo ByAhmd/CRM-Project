@@ -15,6 +15,10 @@ use Illuminate\Support\Str;
  * international number written with "+" or "00" is kept as entered (digits only).
  * Numbers that cannot be interpreted are returned as their digits so an exact
  * match still works; empty input yields null.
+ *
+ * Every digit is kept: a 30-character input yields at most 31 characters (a
+ * local Saudi number grows to 13), which the VARCHAR(32) phone_normalized
+ * columns hold.
  */
 final class Normalizer
 {

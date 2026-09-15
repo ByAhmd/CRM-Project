@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Exports\Tables;
 
 use App\Filament\Resources\Exports\ExportResource;
 use App\Models\Export;
+use App\Services\Settings\SettingsRepository;
 use Filament\Actions\Action;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\DatePicker;
@@ -96,8 +97,8 @@ final class ExportsTable
                         DatePicker::make('until')->label(__('exports.filters.until'))->native(false),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $data['from']))
-                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $data['until'])))
+                        ->when(filled($data['from'] ?? null), fn (Builder $query): Builder => $query->where('created_at', '>=', app(SettingsRepository::class)->startOfOrganisationDay((string) $data['from'])))
+                        ->when(filled($data['until'] ?? null), fn (Builder $query): Builder => $query->where('created_at', '<=', app(SettingsRepository::class)->endOfOrganisationDay((string) $data['until']))))
                     ->indicateUsing(fn (array $data): array => array_filter([
                         filled($data['from'] ?? null) ? __('exports.filters.from').': '.$data['from'] : null,
                         filled($data['until'] ?? null) ? __('exports.filters.until').': '.$data['until'] : null,

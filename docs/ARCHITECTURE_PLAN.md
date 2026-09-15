@@ -1,14 +1,16 @@
 # CRM — Architecture and Implementation Plan
 
-Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export) complete 2026-09-07; step 10 (dashboard and reports) complete 2026-09-07; step 11 (custom fields) complete 2026-09-07; step 12 (quality pass) and step 13 (production readiness) remain.**
+Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13, A-1 … A-21). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) and step 8 (notifications, scheduler, templated email) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export), step 10 (dashboard and reports) and step 11 (custom fields) complete 2026-09-07; step 12 (quality pass) complete 2026-09-15 — open go-live items are carried in [GoLive_Checklist.md](GoLive_Checklist.md). Step 13 (production readiness) is next.**
 
 Companion documents:
 
 | Document | Purpose |
 |---|---|
-| [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint |
+| [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-15 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-21 |
+| [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
+| [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
 
 ---
@@ -145,6 +147,8 @@ multi-currency.
 ### 3.2 Database architecture
 
 MySQL 8.4 locally and in CI; production engine confirmed in writing before the first production migration (D-1).
+The migrations are proven on MySQL 8.4.11 and MariaDB 10.4.32 (fresh migrate + seed, full rollback, re-migrate, double
+seed, preflight, and a full suite with no engine-difference failure) through the engine-aware `App\Support\Database\DatabaseEngine` helper (A-21).
 Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 
 - One table per migration, docblock stating purpose and decision reference, reversible `down()`.
@@ -173,7 +177,7 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 - Default role→permission sets live in `App\Support\Access\RolePermissionMatrix` and are seeded by
   `RolesAndPermissionsSeeder` (idempotent, `syncPermissions`, cache flushed). A drift test asserts
   the seeded tables equal the matrix; runtime edits through the Roles resource are audited (D-3).
-- `super_admin` is granted through `Gate::before`. Roles: `super_admin`, `admin`, `sales_manager`,
+- `super_admin` is granted every permission explicitly by `RolePermissionMatrix` and the seeder, and the role is locked (no `Gate::before`). Roles: `super_admin`, `admin`, `sales_manager`,
   `sales_rep`, `support`, `read_only`.
 - Policies: one per model, `Policies\Concerns\ChecksPermissions` gives `viewAny/create/update/delete/
   restore/forceDelete` plus explicit `deleteAny/restoreAny/forceDeleteAny` (Filament grants a missing
@@ -223,19 +227,48 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 
 ### 3.6 Notification architecture
 
-- Laravel notifications with Filament's database envelope (`Notification::make()->…->getDatabaseMessage()`),
-  panel `->databaseNotifications()->databaseNotificationsPolling('30s')`, actions inside notifications
-  (open record, mark read).
-- Events: `LeadAssigned`, `DealAssigned`, `TaskAssigned`, `TaskDue`, `TaskOverdue`, `DealStageChanged`,
-  `DealWon/Lost`, `LeadConverted`, `MentionedInNote`, `ImportCompleted`/`ExportCompleted` (Filament).
-- Channels: `database` always; `mail` only when `config('mail.default')` is a real transport and the
-  user's `notification_preferences` row enables it. No paid provider.
-- Queue: `QUEUE_CONNECTION=database`, drained by the scheduler every minute
-  (`queue:work --stop-when-empty --max-time=50`, `withoutOverlapping(10)`, `onOneServer()`), `sync` in
-  tests. Fixed by D-1 (shared hosting, no persistent worker).
-- Scheduler (`routes/console.php`): queue drain, `tasks:remind` (every 5 minutes, idempotent via
-  `reminder_sent_at`), `tasks:flag-overdue`/`leads:flag-stale` (daily), `activitylog:clean`,
-  `queue:prune-failed`, `model:prune` (imports/exports).
+As built (step 12, read from `app/Notifications` and `routes/console.php` on 2026-09-15).
+
+- Laravel notifications with Filament's database envelope (`FilamentNotification::make()->…`), panel
+  `->databaseNotifications()->databaseNotificationsPolling('30s')`, actions inside notifications (open record).
+- Notification classes (`app/Notifications`):
+
+  | Class | Sent by | To | Queued |
+  |---|---|---|---|
+  | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record) | the new owner / assignee | no |
+  | `DealStageChangedNotification` | `DealStageWorkflow` (open-stage move or reopen by someone else) | the deal owner | yes |
+  | `DealClosedNotification` | `DealStageWorkflow` (won / lost) | the owner and the owner's team manager, never the actor | yes |
+  | `LeadConvertedNotification` | `LeadConversionWorkflow` (after commit, conversion by someone else) | the lead owner | yes |
+  | `LeadStaleNotification` | `LeadStaleService` through `leads:notify-stale` | the owner of a quiet open lead, once | yes |
+  | `NoteMentionNotification` | `NoteService` | every mentioned user except the author | yes |
+  | `TaskReminderNotification` | `TaskReminderService` through `tasks:send-reminders` | the assignee, once | no |
+  | `TaskOverdueNotification` | `TaskReminderService` through `tasks:notify-overdue` | the assignee, once | no |
+  | `UserInvitationNotification` | `UserInvitationService` (D-11) | the invited user, mail only | no |
+
+  Import and export completion notices are Filament's own database notifications. Templated e-mail (D-10)
+  is the queued mailable `App\Mail\CrmMessage` sent by `EmailSendService`, not a notification.
+- Recipients: `Services/Notifications/NotificationRecipients` keeps only users who can open the record and
+  can sign in (never disabled or pending accounts); a team manager is chosen among the team's active members.
+- Channels: every `via()` except the invitation goes through `App\Support\Notifications\NotificationChannels::for()`:
+  `database` unless the user switched the event off; `mail` only when `config('mail.default')` is a real
+  transport (not `log`, `array` or empty) and the user's `notification_preferences` row opts in. No paid provider.
+- Queue: `QUEUE_CONNECTION=database`, drained by the scheduler every minute, `sync` in tests. Fixed by D-1
+  (shared hosting, no persistent worker).
+- Scheduler (`routes/console.php`; wiring pinned by `tests/Feature/Notifications/SchedulerWiringTest.php` and
+  `tests/Feature/System/ProductionWiringTest.php`). Every entry runs `onOneServer()`:
+
+  | Entry | Cadence | Purpose |
+  |---|---|---|
+  | `queue:work --stop-when-empty --max-time=50` | every minute, `withoutOverlapping(10)`, skipped when the queue driver is `sync` | drains the database queue (D-1) |
+  | `tasks:send-reminders` | every five minutes, `withoutOverlapping(5)` | task reminders, idempotent via `reminder_sent_at` (A-10) |
+  | `tasks:notify-overdue` | every fifteen minutes, `withoutOverlapping(5)` | overdue notices, idempotent via `overdue_notified_at` |
+  | `leads:notify-stale` | daily at 07:00 (app timezone) | stale-lead notice, idempotent via `stale_notified_at` |
+  | `RescoreLeads` (queued job) | daily at 03:00 | recomputes open lead scores in batches of 500 so activity-recency points expire (D-7); unique, `$timeout = 45` so one batch fits one drain |
+  | `attachments:prune-temporary` (named closure) | daily | deletes uploads parked under `tmp/` on the attachments disk for more than a day |
+  | `activitylog:clean --days=<crm.audit.retention_days> --force` | weekly | audit retention, 730 days by default (D-13) |
+  | `queue:prune-failed --hours=168` | weekly | failed jobs older than seven days |
+  | `model:prune --model=App\Models\Import --model=App\Models\Export` | daily | import history after `Import::RETENTION_DAYS` (90), export history and files after `Export::RETENTION_DAYS` (30); failed import rows leave with their import through the cascading key |
+  | `reports:prune-downloads` (named closure) | hourly | deletes report export files older than an hour that an aborted download stranded |
 
 ### 3.7 Audit architecture
 
@@ -252,7 +285,10 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 
 ### 3.8 Search architecture
 
-- Filament global search on Lead, Contact, Account, Deal, Task: `getGloballySearchableAttributes()`
+- Filament global search on Lead, Contact, Account, Deal, Task only (A-8, A-21): every other resource sets
+  `protected static bool $isGloballySearchable = false`, pinned by
+  `CompletenessProbeTest::global_search_is_offered_only_on_the_five_resources_plan_section_3_8_names`;
+  `getGloballySearchableAttributes()`
   (name, email, phone, company, title), result details/actions, `getGlobalSearchEloquentQuery()`
   through the visibility resolver, `canGloballySearch()` = `canViewAny()`; key bindings ⌘K/Ctrl+K;
   debounce 500 ms; negative test that out-of-scope records never surface.
@@ -336,6 +372,8 @@ Each step is designed → implemented → validated → authorised → tested (P
 
 ## 6. Testing strategy
 
+> Quality pass (2026-09-14): `phpunit.xml` sets `failOnWarning`, `failOnRisky`, `failOnDeprecation` and `failOnPhpunitDeprecation`, so a deprecation raised only on the PHP 8.3 CI runner or the 8.4 local runner fails the build. Per-role authorisation matrices for every owned entity live in `tests/Feature/Access/OwnedPolicyMatrixTest.php`. Shared fixtures live in `Tests\Concerns\CreatesCrmFixtures` and upload byte builders in `Tests\Concerns\BuildsUploadBytes`. Lazy loading is prevented for the whole suite in `tests/TestCase.php`. `Storage::fake()` uses `storage/framework/testing/disks/<disk>` for every process, so two PHPUnit runs at the same time wipe each other's fake files even on different databases — run suites that touch the fake disk one at a time.
+
 - **Framework**: PHPUnit 12 with `#[Test]` attributes, `final` classes, snake_case sentence names,
   `RefreshDatabase` against MySQL `crm_testing`, `Filament::setCurrentPanel('admin')` before Livewire
   tests, `Notification::fake()`, `Queue::fake()`, `Storage::fake()`, `$this->travelTo()` for time logic.
@@ -374,9 +412,9 @@ Each step is designed → implemented → validated → authorised → tested (P
 | Area | Measure |
 |---|---|
 | Authentication | Filament login with rate limiting; invitation-only accounts; status gating; `Password::defaults()` (min 12, mixed case, numbers, uncompromised — D-11); MFA providers wired, optional for all users (D-11); session lifetime/secure cookie in production; login/logout/failed events audited; `last_login_at` |
-| Authorization | Policies for every model incl. lookups and settings; permission keys enumerated; `Gate::before` only for `super_admin`; `->strictAuthorization()`; bulk `authorizeIndividualRecords`; visibility resolver in every query path; importers/exporters/widgets/pages gated |
-| Record ownership | `owner_id` on leads/contacts/accounts/deals/tasks; assignment permission; ownership changes audited and notified |
-| Mass assignment | `#[Fillable]` whitelists; workflow columns guarded by observers; `Model::shouldBeStrict()` outside production |
+| Authorization | Policies for every model incl. lookups and settings; permission keys enumerated; no `Gate::before`; `super_admin` holds the full catalogue explicitly; `->strictAuthorization()`; bulk `authorizeIndividualRecords`; visibility resolver in every query path; importers/exporters/widgets/pages gated |
+| Record ownership | `owner_id` on leads/contacts/accounts/deals/tasks; assignment permission; every change of owner — edit pages, assign actions, task assignment and import rows that reassign an existing record — goes through `RecordAssignmentService`, which audits (`{entity}.assigned`) and notifies the new owner |
+| Mass assignment | `#[Fillable]` whitelists; workflow columns guarded by observers; outside production `AppServiceProvider::configureModels()` enables `Model::preventSilentlyDiscardingAttributes()` and `Model::preventAccessingMissingAttributes()` only — lazy-loading prevention is not enabled in the application (spatie/laravel-permission and Filament resolve relations lazily) and is switched on for the whole test suite in `tests/TestCase.php` |
 | Validation | Filament schema rules + `Rule::unique` closures + custom rules for phone/email normalisation; server-side only |
 | CSRF / sessions | Filament middleware stack (`PreventRequestForgery`, `AuthenticateSession`); `SESSION_SECURE_COOKIE=true` in production (preflight fails otherwise) |
 | Files | Private disk, server-side MIME sniffing allowlist, size caps from config, UUID names, per-entity directories, authorised download route, `FileUpload::preventFilePathTampering()` |
@@ -385,18 +423,22 @@ Each step is designed → implemented → validated → authorised → tested (P
 | Sensitive data | No secrets in the ledger; `#[Hidden]`; encrypted casts for any future integration credentials; no IDs/credentials in notifications |
 | Rate limiting | `throttle` on every public POST (password reset), Filament login limiter, `rateLimit()` on heavy actions (import, export) |
 | Audit | Ledger per §3.7 |
-| Errors | `APP_DEBUG=false` enforced by preflight; friendly translated error pages |
+| Errors | `APP_DEBUG=false` enforced by preflight; friendly translated error pages — done: `resources/views/errors/{403,404,419,429,500,503}.blade.php` share one template with no build, session or database dependency, strings in `lang/*/errors.php` |
 | Headers | Security headers middleware (nosniff, frame-deny, referrer policy, HSTS when https) |
 
 ---
 
 ## 8. Performance plan
 
+> Quality pass (2026-09-14): `SettingsRepository` and `CustomFieldRegistry` are container-scoped (one memo per request, job or command) and forgotten whenever a setting or a definition is saved; date filters compare raw columns against organisation-day bounds instead of `whereDate()`; import and export actions are rate limited (5 and 10 per minute); the rescore job reads 500 whole leads per batch and queues its continuation.
+
 - Eager loading declared per table (`modifyQueryUsing(fn ($q) => $q->with([...]))`), `preventLazyLoading`
   in tests so N+1s fail the suite.
 - Indexes per [DATABASE_DESIGN.md](DATABASE_DESIGN.md); dashboard/report queries are aggregate SQL, not
   collection loops; optional `Cache::remember` (file cache) for dashboard KPIs with short TTL.
-- Pagination everywhere; kanban limits cards per column with "load more"; calendar loads by visible range.
+- Pagination everywhere; kanban limits cards per column with "load more" (capped, `DealBoardRenderBoundsProbeTest`); calendar loads by
+  visible range (at most 62 days) and returns at most `CalendarFeed::MAX_EVENTS` (500) entries per range, the earliest across tasks
+  and activities, with a translated hint when the range was cut.
 - Imports chunked (100 rows) and queued; exports chunked and queued; both prunable.
 - Global search limited per resource; indexed columns only.
 - `filament:optimize`, config/route/view cache in deploys.
@@ -405,26 +447,38 @@ Each step is designed → implemented → validated → authorised → tested (P
 
 ## 9. Deployment readiness
 
-- Target host is Hostinger shared hosting (D-1): GitHub Actions builds assets
+Items marked **step 13** do not exist in the tree yet; everything else is built. Open go-live items and
+their owners are tracked in [GoLive_Checklist.md](GoLive_Checklist.md).
+
+- Target host is Hostinger shared hosting (D-1). **Step 13:** GitHub Actions `deploy.yml` that builds assets
   and ships `public/build`, deploys over SSH with `scripts/deploy-production.sh` (maintenance mode,
   `composer install --no-dev`, `migrate --force`, caches, `filament:optimize`, `app:preflight`, `up`),
   one cron running `schedule:run` every minute, storage symlink created once by hand, `.env` set on the
-  server only. If a VPS: same pipeline plus Supervisor for `queue:work`.
-- `app:preflight` fails on `APP_DEBUG=true`, blank `APP_KEY`, `APP_ENV≠production`, non-https `APP_URL`,
-  `SESSION_SECURE_COOKIE≠true`, `log` mailer, `sync` queue.
-- Documentation set: README, CLAUDE.md, CONTRIBUTING.md, `docs/ARCHITECTURE.md`, `DATABASE.md`,
-  `DECISIONS.md` (+ ADRs), `PERMISSIONS.md`, `MODULES.md`, `DEPLOYMENT.md`, `GoLive_Checklist.md`,
-  `Static_Analysis_Known_False_Positives.md`, `DESIGN_TOKENS.md`.
+  server only, trusted-proxy configuration for HTTPS detection behind the host's proxy. If a VPS: same
+  pipeline plus Supervisor for `queue:work`.
+- Built: `.github/workflows/ci.yml` (Pint, PHPStan, asset build and PHPUnit on PHP 8.3 + MySQL 8.4).
+- Built: `app:preflight` fails on a blank `APP_KEY`; in production on `APP_DEBUG=true`, a non-https
+  `APP_URL`, `SESSION_SECURE_COOKIE≠true` and a `sync` queue; everywhere on pending migrations and on missing
+  reference rows (default lead status, converted status, default pipeline and its default stage, system
+  activity types). It warns on the `log` / `array` mailer and, in production, the `array` cache
+  (`tests/Feature/System/PreflightCommandTest.php`).
+- Documentation set built: README, CLAUDE.md, CONTRIBUTING.md, `docs/ARCHITECTURE_PLAN.md`,
+  `DATABASE_DESIGN.md`, `DECISIONS.md`, `PERMISSIONS.md`, `GoLive_Checklist.md`, `STOCKFLOW_COMPARISON.md`,
+  `OPEN_DECISIONS.md`. **Step 13:** `DEPLOYMENT.md` (runbook and `.env` reference), `MODULES.md`,
+  `DESIGN_TOKENS.md`, and `Static_Analysis_Known_False_Positives.md` once a false positive needs recording.
 
 ---
 
 ## 10. Proposed folder structure
 
+The tree below is the step-0 proposal, kept for orientation; the code is the authority for class names. Entries
+marked **step 13** are not built yet. The console commands, job and notification lines are as built.
+
 ```
 CRM_Project/
 ├── app/
-│   ├── Console/Commands/          OnboardCommand (app:onboard), PreflightCommand (app:preflight), SeedDemoCommand (app:seed-demo),
-│   │                              RemindTasksCommand (tasks:remind), FlagOverdueTasksCommand (tasks:flag-overdue), FlagStaleLeadsCommand (leads:flag-stale)
+│   ├── Console/Commands/          OnboardCommand (app:onboard), PreflightCommand (app:preflight), SendTaskReminders (tasks:send-reminders),
+│   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale); step 13: demo data command
 │   ├── Contracts/                 TranslatableStatus
 │   ├── Enums/                     NavigationGroup, Permission, CrmRole, UserStatus, LeadStatusKind, LeadPriority, StageKind, DealStatus,
 │   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskPriority, RecurrenceFrequency,
@@ -447,16 +501,16 @@ CRM_Project/
 │   │   └── Widgets/               SalesKpisWidget, LeadFunnelWidget, PipelineByStageChart, WonRevenueTrendChart, MyTasksTodayWidget,
 │   │                              OverdueTasksWidget, UpcomingFollowUpsWidget, StaleDealsWidget, RecentLeadsWidget, ActivityFeedWidget
 │   ├── Http/Controllers/          AttachmentDownloadController
-│   ├── Jobs/                      SendTaskReminder, SendAssignmentNotification
+│   ├── Jobs/                      RescoreLeads
 │   ├── Listeners/                 ActivateInvitedUser, RecordAuthActivity, PersistUserLocale, RecordLastLogin
 │   ├── Models/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
 │   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
 │   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, SavedView, NotificationPreference, ActivityLog
-│   ├── Notifications/             LeadAssignedNotification, DealAssignedNotification, TaskAssignedNotification, TaskDueNotification,
-│   │                              TaskOverdueNotification, DealStageChangedNotification, DealClosedNotification, LeadConvertedNotification,
-│   │                              MentionedInNoteNotification, UserInvitationNotification
+│   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
+│   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
+│   │                              UserInvitationNotification
 │   ├── Observers/                 LeadObserver, DealObserver, TaskObserver, AttachmentObserver, PipelineStageObserver,
 │   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver
 │   ├── Policies/                  <Model>Policy per model + Concerns/ChecksPermissions
@@ -478,16 +532,16 @@ CRM_Project/
 │   │   └── Views/                 SavedViewStore
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
-│       ├── Database/              EnumCheck
+│       ├── Database/              EnumCheck, DatabaseEngine, TimestampRange
 │       ├── Filament/              FilamentLanguageMenuItems
 │       ├── Money.php              deal line totals (D-8)
 │       └── PhoneNumber.php        normalisation
 ├── bootstrap/                     app.php, providers.php
 ├── config/                        admin.php, brand-colors.php (generated), crm.php, activitylog.php, permission.php, filament.php
 ├── database/                      migrations/ (one table per file), seeders/ (DatabaseSeeder, RolesAndPermissionsSeeder, LookupSeeder,
-│                                  DefaultPipelineSeeder, DemoDataSeeder), factories/
-├── docs/                          ARCHITECTURE.md, DATABASE.md, DECISIONS.md, decisions/ADR-*.md, PERMISSIONS.md, MODULES.md, DEPLOYMENT.md,
-│                                  GoLive_Checklist.md, Static_Analysis_Known_False_Positives.md, DESIGN_TOKENS.md
+│                                  DefaultPipelineSeeder; step 13: DemoDataSeeder), factories/
+├── docs/                          ARCHITECTURE_PLAN.md, DATABASE_DESIGN.md, DECISIONS.md, PERMISSIONS.md, GoLive_Checklist.md;
+│                                  step 13: MODULES.md, DEPLOYMENT.md, DESIGN_TOKENS.md, Static_Analysis_Known_False_Positives.md
 ├── lang/{ar,en}/                  app, navigation, enums, auth, passwords, validation, pagination, dashboard, leads, contacts, accounts, deals,
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
 │                                  views, imports, reports, activity, notifications
@@ -496,11 +550,11 @@ CRM_Project/
 ├── resources/js/                  app.js, deal-board.js, calendar.js
 ├── resources/views/filament/      pages/, widgets/, components/timeline/, activity-log/
 ├── routes/                        web.php, console.php
-├── scripts/                       deploy-production.sh
+├── scripts/                       step 13: deploy-production.sh
 ├── tests/                         Concerns/, Support/, Feature/{Access,Audit,Leads,Contacts,Accounts,Deals,Activities,Tasks,Attachments,Imports,
 │                                  Views,Search,Filament,Isolation,Qa,Seeders,System,Domain,Statistics,Localization}, Unit/{Services,Deployment}
 ├── tools/                         ramp.mjs (colour ramps)
-├── .github/workflows/             ci.yml (lint, analyse, test on push/PR), deploy.yml (master → host)
+├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); step 13: deploy.yml (master → host)
 ├── CLAUDE.md  README.md  CONTRIBUTING.md
 └── composer.json  package.json  vite.config.js  phpstan.neon.dist  phpunit.xml  .editorconfig  .gitattributes  .env.example  .gitignore
 ```
@@ -511,7 +565,7 @@ CRM_Project/
 
 | Risk | Mitigation |
 |---|---|
-| Production DB engine differs from MySQL 8 (Stockflow's host runs MariaDB) | D-1: engine confirmed before the first production migration; `EnumCheck` engine-aware; no MySQL-only JSON functions |
+| Production DB engine differs from MySQL 8 (Stockflow's host runs MariaDB) | D-1: engine confirmed in writing before the first production migration; `DatabaseEngine` / `EnumCheck` engine-aware; migrations proven on MariaDB 10.4.32 and the full suite showed no engine difference (A-21) — recheck on the host's exact version |
 | Shared hosting queue latency (≤ 60 s) | Documented; reminders/notifications tolerate it; imports chunked |
 | Git Bash resolves the wrong PHP | All scripts through Herd `composer`; README warning; CI on PHP 8.3 |
 | Filament Arabic translation gaps | `lang/vendor` patches + vendor fallback test |
@@ -523,26 +577,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-### 12.1 Decided by the architect (implementation details within the established standard)
-
-| # | Decision |
-|---|---|
-| A1 | Stack pinned to the Stockflow line: Laravel `^13.0`, Filament `^5.0`, PHP `^8.3` (8.4 locally), MySQL 8.4, spatie permission `^8`, activitylog `^4.12`, language-switch `^5`, PHPUnit `^12`, Larastan `^3`, Pint `^1`, Vite 8, Tailwind 4 |
-| A2 | Single Filament panel at `/admin`; no multi-panel layer, no launcher, no platform tier |
-| A3 | Resource composition and naming exactly as Stockflow (Schemas/Tables/Pages/RelationManagers), `final` + `strict_types`, attribute-based model config |
-| A4 | Configurable business data as bilingual lookup rows; code enums only for behaviour; `EnumCheck` DB constraints on code-enum columns |
-| A5 | spatie/laravel-permission as the permission store with typed `Permission` keys, seeded from a code matrix with a drift test; own bilingual Roles resource (D-3) |
-| A6 | spatie/laravel-activitylog as the audit ledger with append-only observer, separate `deal_stage_logs`/`lead_status_logs` history tables, and a composed timeline reader |
-| A7 | Own `attachments` table on a private disk with an authorised download route (no media-library package) |
-| A8 | Filament built-in Import/Export actions with importers/exporters, private disk, prunable history resources |
-| A9 | Database queue drained by the scheduler (Stockflow's production pattern; D-1) |
-| A10 | Filament global search + own `saved_views` table + persisted table state |
-| A11 | One Tailwind 4 theme file with CRM tokens and a generated colour ramp; light/dark/system via Filament |
-| A12 | Testing: PHPUnit 12 on MySQL; PHPStan level 5 with `checkModelProperties`, no baseline; Pint default; CI runs lint + analyse + test |
-| A13 | Notes are a mutable table with edit history in the audit ledger; activities are immutable events; tasks are mutable |
-| A14 | Duplicate detection = normalised email/phone exact match (warn, not block) + a merge action; no fuzzy matching in v1 |
-| A15 | Documentation and git conventions mirror Stockflow (README, CLAUDE.md, docs/, conventional commits, `master`/`develop` branches) with a written CONTRIBUTING.md |
-
-### 12.2 Owner decisions
-
-All thirteen questions were answered on 2026-09-05 — see [DECISIONS.md](DECISIONS.md) D-1 … D-13.
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-13 and architect
+decisions A-1 … A-21, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
+had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

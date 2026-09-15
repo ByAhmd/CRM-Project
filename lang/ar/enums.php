@@ -38,7 +38,7 @@ return [
     'stage_kind' => [
         'open' => 'مفتوحة',
         'won' => 'مكسوبة',
-        'lost' => 'خاسرة',
+        'lost' => 'مفقودة',
     ],
 
     'activity_kind' => [
@@ -47,12 +47,12 @@ return [
         'email' => 'بريد إلكتروني',
         'note' => 'ملاحظة',
         'task' => 'مهمة',
-        'system' => 'النظام',
+        'system' => 'نظامي',
         'other' => 'أخرى',
     ],
 
     'close_reason_kind' => [
-        'won' => 'سبب الربح',
+        'won' => 'سبب الفوز',
         'lost' => 'سبب الخسارة',
     ],
 
@@ -66,7 +66,7 @@ return [
     ],
 
     'account_type' => [
-        'prospect' => 'عميل محتمل',
+        'prospect' => 'عميل مرتقب',
         'customer' => 'عميل',
         'partner' => 'شريك',
         'other' => 'أخرى',
@@ -97,7 +97,7 @@ return [
     'deal_status' => [
         'open' => 'مفتوحة',
         'won' => 'مكسوبة',
-        'lost' => 'خاسرة',
+        'lost' => 'مفقودة',
     ],
 
     'forecast_category' => [
@@ -166,10 +166,10 @@ return [
         'record_assigned' => 'إسناد سجل إليّ',
         'task_reminder' => 'تذكير بمهمة',
         'task_overdue' => 'تأخر مهمة',
-        'deal_stage_changed' => 'تغيير مرحلة صفقة أملكها',
-        'deal_closed' => 'كسب أو خسارة صفقة أملكها',
-        'lead_converted' => 'تحويل عميل محتمل أملكه',
-        'lead_stale' => 'ركود عميل محتمل أملكه',
+        'deal_stage_changed' => 'تغيير مرحلة صفقة أنا مسؤول عنها',
+        'deal_closed' => 'الفوز بصفقة أنا مسؤول عنها أو خسارتها',
+        'lead_converted' => 'تحويل عميل محتمل أنا مسؤول عنه',
+        'lead_stale' => 'ركود عميل محتمل أنا مسؤول عنه',
         'note_mention' => 'الإشارة إليّ في ملاحظة',
     ],
 
@@ -177,7 +177,7 @@ return [
         'lead' => 'العملاء المحتملون',
         'contact' => 'جهات الاتصال',
         'account' => 'الحسابات',
-        'deal' => 'الفرص البيعية',
+        'deal' => 'الصفقات',
     ],
 
 ];

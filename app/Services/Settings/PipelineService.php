@@ -7,8 +7,11 @@ namespace App\Services\Settings;
 use App\Enums\BadgeColor;
 use App\Enums\StageKind;
 use App\Exceptions\Settings\InvalidPipelineException;
+use App\Models\Deal;
+use App\Models\DealStageLog;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,15 +24,23 @@ use Illuminate\Support\Facades\DB;
  *    transaction; the default can be neither unset, deactivated nor deleted —
  *    an administrator promotes another pipeline instead. The first pipeline
  *    ever created becomes the default so the invariant holds from the first row.
+ * 2. A pipeline that holds deals (soft-deleted ones included) is never
+ *    deleted: pipelines soft-delete, which would bypass the deals.pipeline_id
+ *    RESTRICT key and strand the deals off the board while they still count
+ *    in forecasts. The administrator deactivates it instead.
  *
  * Stage-set invariants, validated by validateStageSet() after every stage
  * change (a pipeline update never touches its stages, so it is not validated
  * there — a pipeline whose set became invalid outside the service can still be
  * renamed, re-sorted, activated or promoted to default):
  *
- * 2. At least one Open stage, exactly one Won and exactly one Lost stage.
- * 3. Exactly one default stage, and it is Open.
- * 4. Won is stored with probability 100 and Lost with 0, whatever was submitted.
+ * 3. At least one Open stage, exactly one Won and exactly one Lost stage.
+ * 4. Exactly one default stage, and it is Open.
+ * 5. Won is stored with probability 100 and Lost with 0, whatever was submitted.
+ *
+ * A stage that a deal sits in (soft-deleted deals included) or that either
+ * side of a stage-history row names is never deleted: the RESTRICT keys
+ * would refuse it, so the service refuses first with a translated message.
  *
  * A new pipeline is created with the minimal valid set (one default Open
  * stage, Won and Lost) so the invariants can be validated strictly on every
@@ -112,6 +123,10 @@ final class PipelineService
                 throw InvalidPipelineException::defaultCannotBeDeleted();
             }
 
+            if ($this->holdsDeals($current)) {
+                throw InvalidPipelineException::holdsDeals();
+            }
+
             $current->delete();
         });
     }
@@ -119,7 +134,13 @@ final class PipelineService
     /** Whether the pipeline may be removed at all — the pages hide the action when it may not. */
     public function isDeletable(Pipeline $pipeline): bool
     {
-        return ! $pipeline->isDefault();
+        return ! $pipeline->isDefault() && ! $this->holdsDeals($pipeline);
+    }
+
+    /** Whether any deal, soft-deleted or not, still belongs to the pipeline. */
+    public function holdsDeals(Pipeline $pipeline): bool
+    {
+        return Deal::withTrashed()->where('pipeline_id', $pipeline->getKey())->exists();
     }
 
     /**
@@ -185,6 +206,10 @@ final class PipelineService
                 throw InvalidPipelineException::lastStageOfKind($current->kind);
             }
 
+            if ($this->isStageInUse($current)) {
+                throw InvalidPipelineException::stageInUse();
+            }
+
             $pipeline = $current->pipeline;
 
             $current->delete();
@@ -196,11 +221,20 @@ final class PipelineService
     /** Whether the stage may be removed at all — the relation manager hides the action when it may not. */
     public function isStageDeletable(PipelineStage $stage): bool
     {
-        if ($stage->isDefault()) {
+        if ($stage->isDefault() || $this->isStageInUse($stage)) {
             return false;
         }
 
         return ! $stage->isClosed() || $stage->siblingsOfSameKind()->exists();
+    }
+
+    /** Whether a deal (soft-deleted or not) sits in the stage or a stage-history row names it. */
+    public function isStageInUse(PipelineStage $stage): bool
+    {
+        $id = $stage->getKey();
+
+        return Deal::withTrashed()->where('stage_id', $id)->exists()
+            || DealStageLog::query()->where(fn (Builder $query): Builder => $query->where('to_stage_id', $id)->orWhere('from_stage_id', $id))->exists();
     }
 
     /**

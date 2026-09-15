@@ -6,7 +6,6 @@ namespace Tests\Feature\Reports;
 
 use App\Enums\LeadStatusKind;
 use App\Models\Lead;
-use App\Models\LeadStatus;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
@@ -162,11 +161,6 @@ final class ConversionFunnelReportTest extends TestCase
         $this->assertSame([3, 3, 2, 1], $chart['datasets'][0]['data']);
         $this->assertSame(['leads', 'step_rate', 'overall_rate'], array_keys($this->report()->columns()));
         $this->assertSame(ReportRow::FORMAT_PERCENT, $this->report()->formats()['overall_rate']);
-    }
-
-    private function statusOfKind(LeadStatusKind $kind): LeadStatus
-    {
-        return LeadStatus::query()->where('kind', $kind->value)->orderBy('sort')->firstOrFail();
     }
 
     private function report(): ConversionFunnelReport

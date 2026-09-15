@@ -17,6 +17,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\BuildsUploadBytes;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 use ZipArchive;
@@ -30,10 +31,9 @@ use ZipArchive;
  */
 final class AttachmentStorageTest extends TestCase
 {
+    use BuildsUploadBytes;
     use CreatesCrmFixtures;
     use RefreshDatabase;
-
-    private const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
     /** @var list<string> */
     private array $scratchFiles = [];
@@ -371,21 +371,6 @@ final class AttachmentStorageTest extends TestCase
         $this->scratchFiles[] = $path;
 
         return new UploadedFile($path, $clientName, null, null, true);
-    }
-
-    private function pdfBytes(): string
-    {
-        return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
-    }
-
-    private function pngBytes(): string
-    {
-        return (string) base64_decode(self::PNG_1X1, true);
-    }
-
-    private function executableBytes(): string
-    {
-        return "MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00".str_repeat("\x00", 100).'This program cannot be run in DOS mode.';
     }
 
     /** A minimal OOXML package: `[Content_Types].xml` declaring one main part, plus that part. */

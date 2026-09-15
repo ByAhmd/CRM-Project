@@ -1,10 +1,14 @@
-# CRM — Database Design (v1 proposal)
+# CRM — Database Design (as built)
 
-Status: approved design, 2026-09-05 (decisions D-1 … D-13 applied). Becomes `docs/DATABASE.md` (as-built) once migrations exist.
+Status: **as built at the end of step 12, 2026-09-15.** Designed 2026-09-05 (decisions D-1 … D-13), amended by the
+quality-pass migrations dated 2026-09-14 (section 6) and checked against `information_schema` on `crm_testing_c` after
+`migrate:fresh` on MySQL 8.4.11. The migrations are also proven on MariaDB 10.4.32 (A-21); engine differences are listed
+under *Engine-aware migrations* below. The schema contract is pinned by `tests/Feature/Database/SchemaContractTest.php`
+and the `tests/Feature/QualityPass/Schema` probes.
 
 ## Conventions
 
-- MySQL 8.4, InnoDB, `utf8mb4` / `utf8mb4_unicode_ci`, snake_case plural table names.
+- MySQL 8.4 (also proven on MariaDB 10.4, A-21), InnoDB, `utf8mb4` / `utf8mb4_unicode_ci`, snake_case plural table names.
 - `id` `BIGINT UNSIGNED` auto-increment PK on every table except keyless pivots.
 - `created_at` / `updated_at` on every table except append-only logs (`created_at` only) and keyless pivots.
 - `deleted_at` (soft delete) on business entities only — never on logs, pivots, lookups' values or sessions.
@@ -14,11 +18,37 @@ Status: approved design, 2026-09-05 (decisions D-1 … D-13 applied). Becomes `d
 - Code-enum columns: `VARCHAR(32)` + `CHECK` (through `App\Support\Database\EnumCheck`).
 - Money `DECIMAL(14,2)`; probability `TINYINT UNSIGNED` (0–100); durations `SMALLINT UNSIGNED` minutes.
 - Bilingual lookups: `name_ar VARCHAR(100) NOT NULL`, `name_en VARCHAR(100) NOT NULL`.
-- Normalised contact columns: `email_normalized` (lower-cased, trimmed), `phone_normalized` (E.164 digits)
+- Normalised contact columns: `email_normalized` (lower-cased, trimmed), `phone_normalized` (E.164 digits, VARCHAR(32) since migrations 2026_09_14_200001–200003: sized for a 30-character phone normalised to digits)
   maintained by observers; used by duplicate detection and global search.
 - Index naming: `{table}_{cols}_{index|unique}`; every FK column indexed; composite indexes listed per table.
 - One table per migration file; hand-numbered timestamps `2026_09_XX_NNNNNN`; docblock names the purpose
   and the decision it implements.
+
+### Engine-aware migrations (D-1, A-21)
+
+The production engine is confirmed in writing before the first production migration, so every statement the two engines
+spell differently branches on `App\Support\Database\DatabaseEngine::isMariaDb()` (Laravel's `MySqlConnection::isMaria()`;
+works with both the `mysql` and `mariadb` drivers). The full round trip — `migrate:fresh --seed`, `migrate:rollback --step=500`,
+`migrate`, `db:seed` twice, `app:preflight` — exits 0 on MySQL 8.4.11 and MariaDB 10.4.32.
+
+| Topic | MySQL 8.4 | MariaDB 10.4 |
+|---|---|---|
+| Nullability on a generated column (`lead_scoring_rules` key columns) | `NOT NULL` declared | refused (error 1064), so declared without it; `information_schema` shows `IS_NULLABLE = YES`, but `COALESCE` stores no NULL and the unique key refuses the same duplicates |
+| FK on a STORED generated column | accepted, enforced | accepted, enforced; `SHOW CREATE TABLE` omits the default `ON DELETE RESTRICT`, `REFERENTIAL_CONSTRAINTS` reports RESTRICT |
+| Dropping a CHECK (`EnumCheck`) | `DROP CHECK` | `DROP CONSTRAINT IF EXISTS` |
+| Implicit TIMESTAMP default | `explicit_defaults_for_timestamp` on | off on 10.4: `lead_status_logs.changed_at` and `deal_stage_logs.changed_at` carry `DEFAULT current_timestamp() ON UPDATE current_timestamp()` between their create migration and `400008` / `400009` (and again if those are rolled back); after a full migrate no column has `ON UPDATE` |
+| `json` columns | native JSON | `LONGTEXT` with a `json_valid()` CHECK (nine across the app tables) |
+
+Only 10.4 was exercised; recheck on the host's exact version.
+
+### DATETIME rollback refusal
+
+Migrations `2026_09_14_400006` … `400010` widen workflow moments from TIMESTAMP to DATETIME (leads `scored_at`, `qualified_at`,
+`converted_at`, `last_activity_at`, `stale_notified_at`; deals `won_at`, `lost_at`, `last_activity_at`; `lead_status_logs.changed_at`;
+`deal_stage_logs.changed_at`; `notes.edited_at`). Their `down()` first calls `App\Support\Database\TimestampRange::refuseValuesOutside()`,
+which throws before any DDL when a value lies outside the TIMESTAMP range (1970-01-01 00:00:01 to 2038-01-19 03:14:07 UTC, read in the
+session time zone through `FROM_UNIXTIME`), naming each `table.column` and the offending row ids. Pinned by
+`tests/Feature/Database/TimestampRollbackGuardTest.php` on both engines.
 
 Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** index · **N** nullable · **SD** soft deletes
 
@@ -28,7 +58,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 | Table | Notes |
 |---|---|
-| `users` | Laravel base + `phone` N, `locale` VARCHAR(5) N, `timezone` VARCHAR(64) N, `status` enum(`pending`,`active`,`disabled`) CHECK default `pending`, `team_id` FK→teams N SET NULL (I), `last_login_at` N, `avatar_path` N, MFA columns (`app_authentication_secret` text N, `app_authentication_recovery_codes` text N, `has_email_authentication` bool) (D-11), `password` N (set through invitation), `remember_token`, SD. `email` U. |
+| `users` | Laravel base + `phone` N, `locale` VARCHAR(5) N, `timezone` VARCHAR(64) N, `status` enum(`pending`,`active`,`disabled`) CHECK default `pending` (I `users_status_index`), `team_id` FK→teams N SET NULL (I), `last_login_at` N, MFA columns (`app_authentication_secret` text N, `app_authentication_recovery_codes` text N, `has_email_authentication` bool) (D-11), `password` N (set through invitation), `remember_token`, SD. `email` U. |
 | `password_reset_tokens`, `sessions`, `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs` | Laravel defaults |
 | `notifications` | Laravel/Filament database notifications (`php artisan make:notifications-table`) |
 | `roles`, `permissions`, `model_has_roles`, `model_has_permissions`, `role_has_permissions` | spatie/laravel-permission defaults; `teams` feature off (D-2) |
@@ -52,7 +82,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `deal_close_reasons` | `kind` enum(`won`,`lost`) CHECK (I), `name_ar`, `name_en`, `is_active`, `sort`, timestamps. U (`kind`,`name_en`), U (`kind`,`name_ar`). |
 | `competitors` | `name` VARCHAR(150) U, `website` N, `notes` TEXT N, `is_active`, timestamps, SD. |
 | `tags` | `name_ar`, `name_en`, `color`, `is_active`, timestamps. U names. |
-| `lead_scoring_rules` (D-7) | `kind` enum(`source`,`status`,`field_filled`,`activity_recency`) CHECK (I), `reference_id` BIGINT N (source/status id), `field` VARCHAR(50) N (for `field_filled`), `within_days` SMALLINT N (for `activity_recency`), `points` SMALLINT, `is_active`, `sort`, timestamps. U (`kind`,`reference_id`,`field`,`within_days`). |
+| `lead_scoring_rules` (D-7) | `kind` enum(`source`,`status`,`field_filled`,`activity_recency`) CHECK (I), `reference_id` BIGINT UNSIGNED N (source/status id), `field` VARCHAR(50) N (for `field_filled`), `within_days` SMALLINT UNSIGNED N (for `activity_recency`), `points` SMALLINT, `is_active`, `sort` SMALLINT UNSIGNED, timestamps. I (`is_active`,`sort`). The observer nulls the columns a kind does not use. **STORED generated columns** (migration `2026_09_14_400011`, never written by the application): `reference_key` BIGINT UNSIGNED = `COALESCE(reference_id, 0)`, `field_key` VARCHAR(50) = `COALESCE(field, '')`, `within_days_key` SMALLINT UNSIGNED = `COALESCE(within_days, 0)` — NOT NULL on MySQL, declared without a nullability attribute on MariaDB (see *Engine-aware migrations*); `lead_source_id` BIGINT UNSIGNED N = `IF(kind = 'source', reference_id, NULL)` FK→lead_sources RESTRICT (I `lead_scoring_rules_lead_source_id_index`); `lead_status_id` BIGINT UNSIGNED N = `IF(kind = 'status', reference_id, NULL)` FK→lead_statuses RESTRICT (I `lead_scoring_rules_lead_status_id_index`). U `lead_scoring_rules_rule_unique` (`kind`,`reference_key`,`field_key`,`within_days_key`) — effective although unused columns are NULL. A lead source or status a rule uses cannot be deleted. |
 | `email_templates` (D-10) | `name_ar`, `name_en`, `subject_ar`, `subject_en`, `body_ar` TEXT, `body_en` TEXT (merge tags `{{contact.first_name}}` …), `entity` VARCHAR(32) N CHECK (lead/contact/account/deal; the UI offers lead and contact) (I), `is_active`, `sort`, timestamps, SD. U names; I (`is_active`,`sort`). |
 | `taggables` | `tag_id` FK→tags CASCADE, `taggable_type` VARCHAR(100), `taggable_id` BIGINT. PK (`tag_id`,`taggable_type`,`taggable_id`); I (`taggable_type`,`taggable_id`). Keyless. |
 | `products` (D-8) | `code` VARCHAR(50) U N (normalised to trimmed uppercase on save; blank → NULL), `name_ar`, `name_en`, `unit_price` DECIMAL(14,2), `is_active`, timestamps, SD. |
@@ -256,6 +286,9 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 ## 6. Data integrity rules enforced outside the schema (services + observers + tests)
 
+Quality-pass amendments (migrations dated 2026-09-14): `leads`, `contacts` and `accounts` `phone_normalized` widened to VARCHAR(32); indexes added on `leads.created_at`, `leads.qualified_at`, `deals.created_at`, `deals.lost_at`, `tasks.starts_at` and `lead_status_logs.changed_at` for the dashboard, reports and timeline; `activity_types.color` carries the `BadgeColor` CHECK; the lead, deal, status-log, stage-log and note timestamps that hold business moments (`qualified_at`, `converted_at`, `won_at`, `lost_at`, `last_activity_at`, `changed_at`, `edited_at`) are DATETIME rather than TIMESTAMP so they never shift with the session timezone or overflow in 2038; `lead_scoring_rules` uniqueness is made effective through STORED generated key columns because MySQL treats NULLs in a composite unique index as distinct, and its `reference_id` gains per-kind generated `lead_source_id` / `lead_status_id` columns with RESTRICT foreign keys; the DATETIME conversions refuse to roll back while a value is outside the TIMESTAMP range (see *DATETIME rollback refusal*). The unique indexes on `teams.name_ar/name_en`, `pipelines.name_ar/name_en` and `users.email` are global: the forms refuse a soft-deleted namesake with a translated "restore instead" message rather than failing on insert.
+
+
 - Lead status / deal stage changes only through workflows (observer rejects direct writes).
 - Exactly one default lead status, one default pipeline, one default stage per pipeline, one won and one lost stage per pipeline.
 - `deals.status` always matches `stage.kind`; `close_reason_id` required on won/lost; `won_at`/`lost_at` set by the workflow only. A deal is created only in an Open stage of its own pipeline (`DealObserver`); closed deals change only through `reopen()`.
@@ -268,5 +301,5 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).
 - Normalised email/phone recomputed on save; duplicate warning surfaces on create/import when an exact normalised match exists in the same entity.
-- Last super admin cannot be demoted or disabled.
+- The last active super admin cannot be demoted, disabled, set to pending or deleted; nobody may delete, disable or set back to pending their own account; only a `roles.manage` holder grants, removes or edits `super_admin` (`RoleService::syncUserRoles` / `assertStatusChange` / `isLastActiveSuperAdmin`, `UserPolicy`, A-12).
 - Lookups referenced by rows cannot be deleted (RESTRICT) — they are deactivated instead.

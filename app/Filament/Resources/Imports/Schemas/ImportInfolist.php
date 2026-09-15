@@ -62,7 +62,7 @@ final class ImportInfolist
                     ->columns(1),
 
                 Section::make(__('imports.sections.failed_rows'))
-                    ->description(__('imports.helpers.failed_rows', ['limit' => (string) self::FAILED_ROWS_SHOWN]))
+                    ->description(trans_choice('imports.helpers.failed_rows', self::FAILED_ROWS_SHOWN, ['limit' => (string) self::FAILED_ROWS_SHOWN]))
                     ->visible(fn (Import $record): bool => $record->getFailedRowsCount() > 0)
                     ->schema([
                         RepeatableEntry::make('failed_rows')

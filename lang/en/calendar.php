@@ -33,6 +33,7 @@ return [
         'all_day' => 'All day',
         'no_events' => 'Nothing scheduled in this period',
         'more' => '+:count more',
+        'truncated' => 'This period holds more than :count entries, so only the first :count are shown. Switch to the week or day view to see the rest.',
     ],
 
     'actions' => [

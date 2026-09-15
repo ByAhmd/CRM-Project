@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
  * the actor's visible scope — with the account, contact, pipeline, stage,
  * source and close reason by name in the actor's locale, enums as labels,
  * money with two decimals, the effective probability and weighted amount
- * as the panel shows them, tags joined, dates as Y-m-d H:i. Free-text cells
+ * as the panel shows them, tags joined, dates as Y-m-d H:i. All text cells
  * are protected against spreadsheet formula injection.
  */
 final class DealExporter extends Exporter
@@ -42,15 +42,16 @@ final class DealExporter extends Exporter
                 ->label(__('exports.columns.deal.contact'))
                 ->state(fn (Deal $record): ?string => $record->contact?->full_name)
                 ->preventFormulaInjection(),
-            ExportColumn::make('pipeline.display_name')->label(__('exports.columns.deal.pipeline')),
-            ExportColumn::make('stage.display_name')->label(__('exports.columns.deal.stage')),
+            ExportColumn::make('pipeline.display_name')->label(__('exports.columns.deal.pipeline'))->preventFormulaInjection(),
+            ExportColumn::make('stage.display_name')->label(__('exports.columns.deal.stage'))->preventFormulaInjection(),
             ExportColumn::make('status')
                 ->label(__('exports.columns.deal.status'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
             ExportColumn::make('amount')
                 ->label(__('exports.columns.deal.amount'))
                 ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::money($state)),
-            ExportColumn::make('currency')->label(__('exports.columns.deal.currency')),
+            ExportColumn::make('currency')->label(__('exports.columns.deal.currency'))->preventFormulaInjection(),
             ExportColumn::make('effective_probability')
                 ->label(__('exports.columns.deal.probability'))
                 ->state(fn (Deal $record): int => $record->effective_probability),
@@ -62,19 +63,21 @@ final class DealExporter extends Exporter
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::date($state)),
             ExportColumn::make('forecast_category')
                 ->label(__('exports.columns.deal.forecast_category'))
-                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state)),
-            ExportColumn::make('source.display_name')->label(__('exports.columns.deal.source')),
-            ExportColumn::make('owner.name')->label(__('exports.columns.deal.owner')),
+                ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
+                ->preventFormulaInjection(),
+            ExportColumn::make('source.display_name')->label(__('exports.columns.deal.source'))->preventFormulaInjection(),
+            ExportColumn::make('owner.name')->label(__('exports.columns.deal.owner'))->preventFormulaInjection(),
             ExportColumn::make('tags')
                 ->label(__('exports.columns.deal.tags'))
-                ->state(fn (Deal $record): array => $record->tags->map(fn (Model $tag): string => (string) $tag->getAttribute('display_name'))->all()),
+                ->state(fn (Deal $record): array => $record->tags->map(fn (Model $tag): string => (string) $tag->getAttribute('display_name'))->all())
+                ->preventFormulaInjection(),
             ExportColumn::make('won_at')
                 ->label(__('exports.columns.deal.won_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
             ExportColumn::make('lost_at')
                 ->label(__('exports.columns.deal.lost_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
-            ExportColumn::make('closeReason.display_name')->label(__('exports.columns.deal.close_reason')),
+            ExportColumn::make('closeReason.display_name')->label(__('exports.columns.deal.close_reason'))->preventFormulaInjection(),
             ExportColumn::make('description')->label(__('exports.columns.deal.description'))->preventFormulaInjection(),
             ExportColumn::make('created_at')
                 ->label(__('exports.columns.deal.created_at'))
@@ -117,9 +120,11 @@ final class DealExporter extends Exporter
     {
         ImportExportActions::applyLocale($export->getOptions());
 
-        return __('exports.notifications.completed', [
-            'successful' => (string) $export->successful_rows,
-            'failed' => (string) $export->getFailedRowsCount(),
-        ]);
+        $body = trans_choice('exports.notifications.completed', (int) $export->successful_rows);
+        $failed = $export->getFailedRowsCount();
+
+        return $failed > 0
+            ? $body.' '.trans_choice('exports.notifications.failed', $failed)
+            : $body;
     }
 }

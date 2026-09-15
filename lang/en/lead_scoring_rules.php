@@ -21,7 +21,7 @@ return [
         'status' => 'Lead status',
         'field' => 'Field',
         'within_days' => 'Within the last (days)',
-        'within_days_value' => 'Activity within :days days',
+        'within_days_value' => '{1} Activity within :days day|[2,*] Activity within :days days',
         'points' => 'Points',
         'is_active' => 'Active',
         'sort' => 'Sort order',
@@ -32,6 +32,10 @@ return [
         'rule' => 'A lead\'s score is the sum of the points of every active rule that matches it, kept between 0 and 100.',
         'within_days' => 'The rule matches when the lead had activity within this many days.',
         'points' => 'Negative points lower the score.',
+    ],
+
+    'validation' => [
+        'duplicate' => 'A rule with the same type and target already exists. Change its points instead of adding a second rule.',
     ],
 
     'filters' => [

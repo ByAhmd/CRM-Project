@@ -7,6 +7,8 @@ namespace App\Filament\Resources\Accounts\Pages;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\OwnerSelect;
+use App\Models\Account;
 use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\RestoreAction;
@@ -30,6 +32,9 @@ final class EditAccount extends EditRecord
      * @var array<string, mixed>
      */
     private array $customFieldState = [];
+
+    /** The owner the form submitted, or false when the actor may not reassign (D-4). */
+    private int|false|null $submittedOwnerId = false;
 
     protected function getHeaderActions(): array
     {
@@ -64,12 +69,34 @@ final class EditAccount extends EditRecord
         // against the saved record by afterSave() (D-9).
         unset($data[CustomFieldsSchema::STATE_PATH]);
 
+        $record = $this->getRecord();
+        assert($record instanceof Account);
+        $actor = auth()->user();
+
+        // The lifecycle type follows the deals unless the actor may set it by
+        // hand (D-6); the form never saves it for anyone else, and a crafted
+        // payload is dropped here as well.
+        if (! $actor instanceof User || ! $actor->can('setType', $record)) {
+            unset($data['type'], $data['customer_since']);
+        }
+
+        // A change of owner is a reassignment (audit row + notification, D-4),
+        // handed to RecordAssignmentService by afterSave().
+        $this->submittedOwnerId = OwnerSelect::pull($data, $record);
+
         return $data;
     }
 
     protected function afterSave(): void
     {
-        $this->persistCustomFields($this->getRecord());
+        $record = $this->getRecord();
+        assert($record instanceof Account);
+
+        $ownerId = $this->submittedOwnerId;
+        $this->submittedOwnerId = false;
+        OwnerSelect::reassign($record, $ownerId);
+
+        $this->persistCustomFields($record);
     }
 
     protected function getRedirectUrl(): string

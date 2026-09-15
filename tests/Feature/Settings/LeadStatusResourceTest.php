@@ -6,16 +6,21 @@ namespace Tests\Feature\Settings;
 
 use App\Enums\ActivityLogEvent;
 use App\Enums\BadgeColor;
+use App\Enums\LeadScoringRuleKind;
 use App\Enums\LeadStatusKind;
 use App\Exceptions\Settings\InvalidLeadStatusException;
 use App\Filament\Resources\LeadStatuses\LeadStatusResource;
 use App\Filament\Resources\LeadStatuses\Pages\CreateLeadStatus;
 use App\Filament\Resources\LeadStatuses\Pages\EditLeadStatus;
 use App\Filament\Resources\LeadStatuses\Pages\ListLeadStatuses;
+use App\Models\Lead;
+use App\Models\LeadScoringRule;
 use App\Models\LeadStatus;
+use App\Services\Leads\LeadStatusWorkflow;
 use App\Services\Settings\LeadStatusService;
 use Database\Seeders\LeadStatusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -385,6 +390,56 @@ final class LeadStatusResourceTest extends TestCase
             'subject_type' => LeadStatus::class,
             'subject_id' => $status->getKey(),
         ]);
+    }
+
+    #[Test]
+    public function a_status_used_by_a_lead_its_history_or_a_scoring_rule_is_never_deleted(): void
+    {
+        Queue::fake();
+        $this->seedLookups();
+        $admin = $this->admin();
+        $byTrashedLead = $this->makeStatus('Callback', 'معاودة الاتصال');
+        $inHistoryOnly = $this->makeStatus('Nurturing', 'رعاية');
+        $byRule = $this->makeStatus('Dormant', 'خامل');
+        $unused = $this->makeStatus('Archived', 'مؤرشف');
+
+        $trashed = Lead::factory()->create(['lead_status_id' => $byTrashedLead->getKey(), 'owner_id' => $admin->getKey()]);
+        $trashed->delete();
+
+        $moved = Lead::factory()->create(['owner_id' => $admin->getKey()]);
+        app(LeadStatusWorkflow::class)->transition($moved, $inHistoryOnly, $admin);
+        app(LeadStatusWorkflow::class)->transition($moved, $this->statusOfKind(LeadStatusKind::Working), $admin);
+
+        LeadScoringRule::factory()->create(['kind' => LeadScoringRuleKind::Status, 'reference_id' => $byRule->getKey(), 'field' => null]);
+
+        $service = app(LeadStatusService::class);
+
+        foreach ([$byTrashedLead, $inHistoryOnly, $byRule] as $used) {
+            $this->assertFalse($service->isDeletable($used));
+            $this->assertFalse($admin->can('delete', $used));
+
+            Livewire::actingAs($admin)
+                ->test(EditLeadStatus::class, ['record' => $used->getRouteKey()])
+                ->assertActionHidden('delete');
+
+            try {
+                $service->delete($used);
+                $this->fail("{$used->name_en} is in use and was deleted.");
+            } catch (InvalidLeadStatusException $exception) {
+                $this->assertSame(__('lead_statuses.validation.in_use'), $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('lead_statuses', ['id' => $used->getKey()]);
+        }
+
+        $this->assertTrue($admin->can('delete', $unused));
+
+        Livewire::actingAs($admin)
+            ->test(ListLeadStatuses::class)
+            ->callTableBulkAction('delete', [$byTrashedLead, $inHistoryOnly, $byRule, $unused]);
+
+        $this->assertSame(3, LeadStatus::query()->whereKey([$byTrashedLead->getKey(), $inHistoryOnly->getKey(), $byRule->getKey()])->count());
+        $this->assertDatabaseMissing('lead_statuses', ['id' => $unused->getKey()]);
     }
 
     #[Test]

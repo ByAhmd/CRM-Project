@@ -37,10 +37,21 @@ final class LeadScoringService
         return max(0, min(100, $score));
     }
 
-    /** Persists a fresh computed score without touching the audit ledger. */
+    /**
+     * Persists a fresh computed score without touching the audit ledger. An
+     * unchanged score is not written again, so the daily rescore of every open
+     * lead costs one write per lead whose score actually moved; `scored_at`
+     * is the moment the stored score was last computed differently or saved.
+     */
     public function rescore(Lead $lead): void
     {
-        $lead->forceFill(['score' => $this->calculate($lead), 'scored_at' => now()])->saveQuietly();
+        $score = $this->calculate($lead);
+
+        if ($lead->exists && ! $lead->isDirty('score') && $lead->score === $score) {
+            return;
+        }
+
+        $lead->forceFill(['score' => $score, 'scored_at' => now()])->saveQuietly();
     }
 
     /** Drops the memoised rule set so a later calculation reads the database again. */

@@ -46,7 +46,7 @@ final class NoteServiceTest extends TestCase
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
 
-        $note = $this->service()->create($lead, $rep, 'Called twice, no answer.');
+        $note = app(NoteService::class)->create($lead, $rep, 'Called twice, no answer.');
 
         $this->assertDatabaseHas('notes', [
             'id' => $note->getKey(),
@@ -70,7 +70,7 @@ final class NoteServiceTest extends TestCase
         $account = Account::factory()->create(['owner_id' => $rep->getKey()]);
         $contact = Contact::factory()->create(['owner_id' => $rep->getKey(), 'account_id' => $account->getKey()]);
 
-        $note = $this->service()->create($contact, $rep, 'Prefers WhatsApp.', pinned: true);
+        $note = app(NoteService::class)->create($contact, $rep, 'Prefers WhatsApp.', pinned: true);
 
         $this->assertDatabaseHas('notes', [
             'id' => $note->getKey(),
@@ -90,7 +90,7 @@ final class NoteServiceTest extends TestCase
         $rep = $this->salesRep();
         $deal = Deal::factory()->create(['owner_id' => $rep->getKey()]);
 
-        $note = $this->service()->create($deal, $rep, 'Budget approved for Q4.');
+        $note = app(NoteService::class)->create($deal, $rep, 'Budget approved for Q4.');
 
         $this->assertDatabaseHas('notes', [
             'id' => $note->getKey(),
@@ -109,7 +109,7 @@ final class NoteServiceTest extends TestCase
         $rep = $this->salesRep();
         $account = Account::factory()->create(['owner_id' => $rep->getKey()]);
 
-        $note = $this->service()->create($account, $rep, 'Head office moved to Jeddah.');
+        $note = app(NoteService::class)->create($account, $rep, 'Head office moved to Jeddah.');
 
         $this->assertDatabaseHas('notes', ['id' => $note->getKey(), 'account_id' => $account->getKey(), 'lead_id' => null, 'contact_id' => null, 'deal_id' => null]);
         $this->assertTrue($note->subjectRecord()?->is($account));
@@ -121,7 +121,7 @@ final class NoteServiceTest extends TestCase
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
 
-        $note = $this->service()->create($lead, $rep, "  First line\r\nSecond line\r\n\n");
+        $note = app(NoteService::class)->create($lead, $rep, "  First line\r\nSecond line\r\n\n");
 
         $this->assertSame("First line\nSecond line", $note->body);
         $this->assertSame('First line Second line', $note->excerpt());
@@ -136,7 +136,7 @@ final class NoteServiceTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        $this->service()->create($lead, $rep, "   \n\t ");
+        app(NoteService::class)->create($lead, $rep, "   \n\t ");
     }
 
     #[Test]
@@ -146,7 +146,7 @@ final class NoteServiceTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        $this->service()->create(User::factory()->create(), $rep, 'Not a subject.');
+        app(NoteService::class)->create(User::factory()->create(), $rep, 'Not a subject.');
     }
 
     #[Test]
@@ -154,12 +154,12 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Original text');
+        $note = app(NoteService::class)->create($lead, $rep, 'Original text');
 
         $editedAt = Carbon::parse('2026-09-06 14:30:00', 'Asia/Riyadh');
         $this->travelTo($editedAt);
 
-        $updated = $this->service()->update($note, $rep, "  Revised text\r\n");
+        $updated = app(NoteService::class)->update($note, $rep, "  Revised text\r\n");
 
         $this->assertSame('Revised text', $updated->body);
         $this->assertTrue($updated->edited_at?->equalTo($editedAt));
@@ -180,9 +180,9 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Same text');
+        $note = app(NoteService::class)->create($lead, $rep, 'Same text');
 
-        $this->service()->update($note, $rep, "Same text\n");
+        app(NoteService::class)->update($note, $rep, "Same text\n");
 
         $this->assertNull($note->fresh()?->edited_at);
         $this->assertSame(0, ActivityLog::query()->where('description', ActivityLogEvent::NoteUpdated->value)->count());
@@ -193,11 +193,11 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Keep me');
+        $note = app(NoteService::class)->create($lead, $rep, 'Keep me');
 
         $this->expectException(ValidationException::class);
 
-        $this->service()->update($note, $rep, '');
+        app(NoteService::class)->update($note, $rep, '');
     }
 
     #[Test]
@@ -205,9 +205,9 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $deal = Deal::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($deal, $rep, 'Decision maker is the CFO, meet her first.');
+        $note = app(NoteService::class)->create($deal, $rep, 'Decision maker is the CFO, meet her first.');
 
-        $this->service()->pin($note, $rep);
+        app(NoteService::class)->pin($note, $rep);
 
         $this->assertTrue($note->fresh()?->is_pinned);
 
@@ -217,7 +217,7 @@ final class NoteServiceTest extends TestCase
         $this->assertSame($rep->getKey(), (int) $pinned->causer_id);
         $this->assertSame($note->excerpt(), $pinned->properties->get('subject_label'));
 
-        $this->service()->unpin($note, $rep);
+        app(NoteService::class)->unpin($note, $rep);
 
         $this->assertFalse($note->refresh()->is_pinned);
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::NoteUnpinned->value, 'subject_id' => $note->getKey()]);
@@ -228,9 +228,9 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Already pinned', pinned: true);
+        $note = app(NoteService::class)->create($lead, $rep, 'Already pinned', pinned: true);
 
-        $this->service()->pin($note, $rep);
+        app(NoteService::class)->pin($note, $rep);
 
         $this->assertSame(0, ActivityLog::query()->where('description', ActivityLogEvent::NotePinned->value)->count());
     }
@@ -240,15 +240,15 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Temporary');
+        $note = app(NoteService::class)->create($lead, $rep, 'Temporary');
 
-        $this->service()->delete($note, $rep);
+        app(NoteService::class)->delete($note, $rep);
 
         $this->assertSoftDeleted('notes', ['id' => $note->getKey()]);
         $this->assertSame(0, $lead->notes()->count());
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::NoteDeleted->value, 'subject_id' => $note->getKey()]);
 
-        $this->service()->restore($note, $rep);
+        app(NoteService::class)->restore($note, $rep);
 
         $this->assertNull($note->fresh()?->deleted_at);
         $this->assertSame(1, $lead->notes()->count());
@@ -262,13 +262,13 @@ final class NoteServiceTest extends TestCase
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
 
         $this->travelTo(Carbon::parse('2026-09-01 09:00:00'));
-        $oldest = $this->service()->create($lead, $rep, 'Oldest');
+        $oldest = app(NoteService::class)->create($lead, $rep, 'Oldest');
 
         $this->travelTo(Carbon::parse('2026-09-02 09:00:00'));
-        $pinned = $this->service()->create($lead, $rep, 'Pinned', pinned: true);
+        $pinned = app(NoteService::class)->create($lead, $rep, 'Pinned', pinned: true);
 
         $this->travelTo(Carbon::parse('2026-09-03 09:00:00'));
-        $newest = $this->service()->create($lead, $rep, 'Newest');
+        $newest = app(NoteService::class)->create($lead, $rep, 'Newest');
 
         $this->assertSame(
             [$pinned->getKey(), $newest->getKey(), $oldest->getKey()],
@@ -287,7 +287,7 @@ final class NoteServiceTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        $this->service()->update($note, $rep, 'Nobody owns me');
+        app(NoteService::class)->update($note, $rep, 'Nobody owns me');
     }
 
     #[Test]
@@ -296,12 +296,12 @@ final class NoteServiceTest extends TestCase
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
 
-        $this->service()->create($lead, $rep, str_repeat('x', Note::MAX_BODY_LENGTH));
+        app(NoteService::class)->create($lead, $rep, str_repeat('x', Note::MAX_BODY_LENGTH));
 
         $this->assertSame(1, Note::query()->count());
 
         try {
-            $this->service()->create($lead, $rep, str_repeat('y', Note::MAX_BODY_LENGTH + 1));
+            app(NoteService::class)->create($lead, $rep, str_repeat('y', Note::MAX_BODY_LENGTH + 1));
             $this->fail('An oversized body was accepted.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('body', $exception->errors());
@@ -315,18 +315,18 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Gone for now');
+        $note = app(NoteService::class)->create($lead, $rep, 'Gone for now');
 
-        $this->service()->delete($note, $rep);
+        app(NoteService::class)->delete($note, $rep);
 
         try {
-            $this->service()->update($note, $rep, 'Edited while trashed');
+            app(NoteService::class)->update($note, $rep, 'Edited while trashed');
             $this->fail('A trashed note was edited.');
         } catch (InvalidArgumentException) {
         }
 
         try {
-            $this->service()->pin($note, $rep);
+            app(NoteService::class)->pin($note, $rep);
             $this->fail('A trashed note was pinned.');
         } catch (InvalidArgumentException) {
         }
@@ -336,8 +336,8 @@ final class NoteServiceTest extends TestCase
         $this->assertNull($fresh->edited_at);
         $this->assertFalse($fresh->is_pinned);
 
-        $this->service()->restore($note, $rep);
-        $this->service()->update($note, $rep, 'Edited after restore');
+        app(NoteService::class)->restore($note, $rep);
+        app(NoteService::class)->update($note, $rep, 'Edited after restore');
 
         $this->assertSame('Edited after restore', $note->fresh()?->body);
     }
@@ -347,7 +347,7 @@ final class NoteServiceTest extends TestCase
     {
         $rep = $this->salesRep();
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
-        $note = $this->service()->create($lead, $rep, 'Survives the lead being trashed');
+        $note = app(NoteService::class)->create($lead, $rep, 'Survives the lead being trashed');
 
         $lead->delete();
 
@@ -356,13 +356,12 @@ final class NoteServiceTest extends TestCase
         $this->assertTrue($fresh->subjectRecord()?->is($lead));
         $this->assertSame($lead->full_name, $fresh->subjectLabel());
         $this->assertTrue($rep->can('view', $fresh));
-        $this->assertTrue($rep->can('update', $fresh));
-        $this->assertTrue($rep->can('pin', $fresh));
+        // A soft-deleted subject is frozen (D-13): its notes stay readable and the
+        // author may delete or restore them, but nobody edits or pins them.
+        $this->assertFalse($rep->can('update', $fresh));
+        $this->assertFalse($rep->can('pin', $fresh));
+        $this->assertTrue($rep->can('delete', $fresh));
+        $this->assertTrue($rep->can('restore', $fresh));
         $this->assertFalse($this->salesRep()->can('view', $fresh));
-    }
-
-    private function service(): NoteService
-    {
-        return app(NoteService::class);
     }
 }

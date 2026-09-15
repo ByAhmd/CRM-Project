@@ -10,7 +10,9 @@ use App\Filament\Resources\DealCloseReasons\DealCloseReasonResource;
 use App\Filament\Resources\DealCloseReasons\Pages\CreateDealCloseReason;
 use App\Filament\Resources\DealCloseReasons\Pages\EditDealCloseReason;
 use App\Filament\Resources\DealCloseReasons\Pages\ListDealCloseReasons;
+use App\Models\Deal;
 use App\Models\DealCloseReason;
+use App\Services\Deals\DealCloseService;
 use Database\Seeders\DealCloseReasonSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -334,6 +336,38 @@ final class DealCloseReasonResourceTest extends TestCase
 
         $this->assertDatabaseMissing('deal_close_reasons', ['id' => $first->getKey()]);
         $this->assertDatabaseMissing('deal_close_reasons', ['id' => $second->getKey()]);
+    }
+
+    #[Test]
+    public function a_reason_recorded_on_a_closed_deal_is_never_deleted_even_when_the_deal_is_trashed(): void
+    {
+        $this->seedLookups();
+        $admin = $this->admin();
+        $used = $this->makeReason(CloseReasonKind::Won, 'Long relationship', 'علاقة طويلة');
+        $unused = $this->makeReason(CloseReasonKind::Won, 'Fast delivery', 'سرعة التسليم');
+        $deal = Deal::factory()->create(['owner_id' => $admin->getKey()]);
+        app(DealCloseService::class)->win($deal, $used, $admin);
+
+        $assertRefused = function () use ($admin, $used): void {
+            $this->assertFalse($admin->can('delete', $used));
+
+            Livewire::actingAs($admin)
+                ->test(EditDealCloseReason::class, ['record' => $used->getRouteKey()])
+                ->assertActionHidden('delete');
+        };
+
+        $assertRefused();
+
+        $deal->refresh()->delete();
+
+        $assertRefused();
+
+        Livewire::actingAs($admin)
+            ->test(ListDealCloseReasons::class)
+            ->callTableBulkAction('delete', [$used, $unused]);
+
+        $this->assertDatabaseHas('deal_close_reasons', ['id' => $used->getKey()]);
+        $this->assertDatabaseMissing('deal_close_reasons', ['id' => $unused->getKey()]);
     }
 
     #[Test]

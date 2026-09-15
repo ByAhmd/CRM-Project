@@ -21,13 +21,19 @@ use Illuminate\Support\Collection;
  * reason with each reason's share of its outcome (the table, rows()).
  *
  * A reopened deal is open again and appears nowhere. Months are folded in
- * PHP from daily aggregates bucketed with DATE() in SQL: stored dates are
- * in the application timezone, which is the organisation timezone (D-8),
- * and the series is zero-filled from the first to the last month of the
- * period. Every figure is inside the viewer's deal scope (D-4, D-13).
+ * PHP in the organisation timezone (A-19): each closing moment (won_at or
+ * lost_at, stored in the application timezone) is placed by comparing it
+ * with the first instant of every organisation month of the period — never
+ * with SQL DATE(), which would name the day in the application timezone
+ * while the organisation timezone is a runtime setting (D-8). The series is
+ * zero-filled from the first to the last month of the period. Every figure
+ * is inside the viewer's deal scope (D-4, D-13).
  */
 final class WinLossReport
 {
+    /** Closed deals read per batch when the months are folded in PHP. */
+    private const BATCH_SIZE = 2000;
+
     public function __construct(
         private readonly RecordVisibilityResolver $visibility,
         private readonly SettingsRepository $settings,
@@ -93,35 +99,38 @@ final class WinLossReport
      */
     public function monthly(User $viewer, ReportFilters $filters): Collection
     {
-        $dayExpression = sprintf(
-            "DATE(CASE WHEN deals.status = '%s' THEN deals.won_at ELSE deals.lost_at END)",
-            DealStatus::Won->value,
-        );
-
         $months = [];
+        $keys = [];
+        $starts = [];
         $timezone = $this->settings->timezone();
+        $appTimezone = (string) config('app.timezone');
         $month = CarbonImmutable::parse($filters->fromDate($timezone), $timezone)->startOfMonth();
         $last = CarbonImmutable::parse($filters->toDate($timezone), $timezone)->startOfMonth();
 
         while ($month->lessThanOrEqualTo($last)) {
             $months[$month->format('Y-m')] = ['won_count' => 0, 'won_amount' => 0.0, 'lost_count' => 0, 'lost_amount' => 0.0];
+            $keys[] = $month->format('Y-m');
+            $starts[] = $month->setTimezone($appTimezone)->format('Y-m-d H:i:s');
             $month = $month->addMonth();
         }
 
-        foreach ($this->query($viewer, $filters)
-            ->selectRaw("deals.status AS status, {$dayExpression} AS day, COUNT(*) AS deals, SUM(deals.amount) AS amount")
-            ->groupBy('deals.status', 'day')
+        $closed = $this->query($viewer, $filters)
+            ->select(['deals.id', 'deals.status', 'deals.won_at', 'deals.lost_at', 'deals.amount'])
             ->toBase()
-            ->get() as $aggregate) {
-            $key = substr((string) $aggregate->day, 0, 7);
+            ->lazyById(self::BATCH_SIZE, 'deals.id', 'id');
 
-            if (! isset($months[$key])) {
+        foreach ($closed as $deal) {
+            $won = (string) $deal->status === DealStatus::Won->value;
+            $index = self::bucketIndex($starts, (string) ($won ? $deal->won_at : $deal->lost_at));
+
+            if ($index === null) {
                 continue;
             }
 
-            $prefix = (string) $aggregate->status === DealStatus::Won->value ? 'won' : 'lost';
-            $months[$key][$prefix.'_count'] += (int) $aggregate->deals;
-            $months[$key][$prefix.'_amount'] = round($months[$key][$prefix.'_amount'] + (float) $aggregate->amount, 2);
+            $key = $keys[$index];
+            $prefix = $won ? 'won' : 'lost';
+            $months[$key][$prefix.'_count']++;
+            $months[$key][$prefix.'_amount'] = round($months[$key][$prefix.'_amount'] + (float) $deal->amount, 2);
         }
 
         $rows = new Collection;
@@ -184,6 +193,33 @@ final class WinLossReport
         return CarbonImmutable::parse($key.'-01')
             ->locale(app()->getLocale())
             ->isoFormat('MMMM YYYY');
+    }
+
+    /**
+     * The bucket a stored moment (application timezone, Y-m-d H:i:s) falls
+     * in: the last bucket starting at or before it, found by binary search
+     * over the ascending bucket starts; null before the first one.
+     *
+     * @param  list<string>  $starts
+     */
+    private static function bucketIndex(array $starts, string $moment): ?int
+    {
+        $low = 0;
+        $high = count($starts) - 1;
+        $found = null;
+
+        while ($low <= $high) {
+            $middle = intdiv($low + $high, 2);
+
+            if (strcmp($starts[$middle], $moment) <= 0) {
+                $found = $middle;
+                $low = $middle + 1;
+            } else {
+                $high = $middle - 1;
+            }
+        }
+
+        return $found;
     }
 
     /**

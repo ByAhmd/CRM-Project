@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Contacts\Schemas;
 
 use App\Enums\CustomFieldEntity;
+use App\Filament\Resources\Accounts\Schemas\AccountForm;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
 use App\Filament\Support\OwnerSelect;
 use App\Filament\Support\TagsSelect;
 use App\Models\Contact;
+use App\Models\User;
+use App\Services\Contacts\ContactService;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
+use Closure;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -19,7 +23,17 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Create / edit contact (decisions D-4, D-6).
+ *
+ * The account picker offers only the accounts the actor may read, plus the
+ * contact's current account even when it has since been deleted or moved
+ * out of the actor's scope; ContactService::mayLinkAccount() re-checks the
+ * submitted id server-side, so a crafted id cannot attach the contact to a
+ * company the actor cannot see.
+ */
 final class ContactForm
 {
     public static function configure(Schema $schema, bool $withAccount = true): Schema
@@ -45,7 +59,17 @@ final class ContactForm
                         Select::make('account_id')
                             ->label(__('contacts.fields.account'))
                             ->helperText(__('contacts.helpers.account'))
-                            ->relationship('account', 'name')
+                            ->relationship('account', 'name', fn (Builder $query, ?Contact $record): Builder => AccountForm::constrainToPickableAccounts(
+                                $query,
+                                $record?->getOriginal('account_id') === null ? null : (int) $record->getOriginal('account_id'),
+                            ))
+                            ->rule(fn (?Contact $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                                $actor = auth()->user();
+
+                                if (! $actor instanceof User || ! app(ContactService::class)->mayLinkAccount($actor, $value, $record)) {
+                                    $fail(__('contacts.validation.account_out_of_reach'));
+                                }
+                            })
                             ->searchable()
                             ->preload()
                             ->nullable()

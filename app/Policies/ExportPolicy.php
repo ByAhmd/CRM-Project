@@ -4,15 +4,29 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Contracts\OwnedRecord;
 use App\Enums\Permission;
-use App\Models\Export;
 use App\Models\User;
+use Filament\Actions\Exports\Exporter;
+use Filament\Actions\Exports\Models\Export;
 
 /**
- * Export history (module 18, decision D-13). A user always sees their own runs
- * and downloads their own files; `exports.view` opens every run. Rows are
- * written by Filament's ExportAction only — retention pruning is the only way
- * one disappears.
+ * Export history (module 18, decisions D-4, D-13).
+ *
+ * An export file is record data, so reaching it must never widen the reader's
+ * scope: a user always sees their own runs and downloads their own files;
+ * `exports.view` opens another user's run only when the holder reaches every
+ * record of the run's entity (`{entity}.view_all`) — a team-scoped manager
+ * reviews their own runs only, an organisation-wide reader reviews all.
+ *
+ * An account that may no longer sign in (disabled, pending) reaches nothing,
+ * even with a live session: Filament's download route runs outside the panel
+ * middleware, so the status is checked here.
+ *
+ * The policy is registered for Filament's base Export model as well
+ * (AppServiceProvider), because Filament's download route binds that class
+ * rather than App\Models\Export. Rows are written by Filament's ExportAction
+ * only — retention pruning is the only way one disappears.
  */
 final class ExportPolicy
 {
@@ -28,9 +42,13 @@ final class ExportPolicy
         Permission::ActivityExport,
     ];
 
-    /** Anyone who may export something, or who may review every run. */
+    /** Anyone who may export something, or who may review runs. */
     public function viewAny(User $user): bool
     {
+        if (! $user->status->canAuthenticate()) {
+            return false;
+        }
+
         if ($user->can(Permission::ExportsView->value)) {
             return true;
         }
@@ -46,7 +64,38 @@ final class ExportPolicy
 
     public function view(User $user, Export $export): bool
     {
-        return $export->isOwnedBy($user) || $user->can(Permission::ExportsView->value);
+        if (! $user->status->canAuthenticate()) {
+            return false;
+        }
+
+        if ((int) $export->user_id === (int) $user->getKey()) {
+            return true;
+        }
+
+        return $this->reviews($user, (string) $export->exporter);
+    }
+
+    /**
+     * Whether the user may review other users' runs of this exporter:
+     * `exports.view` plus all-level reach on the exporter's entity.
+     */
+    public function reviews(User $user, string $exporter): bool
+    {
+        if (! $user->can(Permission::ExportsView->value)) {
+            return false;
+        }
+
+        if (! is_subclass_of($exporter, Exporter::class)) {
+            return false;
+        }
+
+        $model = $exporter::getModel();
+
+        if (! is_subclass_of($model, OwnedRecord::class)) {
+            return false;
+        }
+
+        return $user->can($model::permissionGroup().'.view_all');
     }
 
     public function create(User $user): bool

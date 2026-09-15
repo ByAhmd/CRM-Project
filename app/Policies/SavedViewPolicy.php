@@ -14,6 +14,11 @@ use App\Models\User;
  * changes it; deleting is the owner's, plus a `users.manage` holder for the
  * shared views of others (an administrator tidying up after a leaver);
  * sharing itself is the cross-cutting `saved_view.share` permission.
+ *
+ * Saved views are hard-deleted one at a time from the views menu; there is
+ * no bulk surface and nothing to restore. The bulk and permanent-deletion
+ * abilities are still defined — and refused — because Filament's
+ * authorisation helper allows an ability a policy does not define.
  */
 final class SavedViewPolicy
 {
@@ -44,6 +49,26 @@ final class SavedViewPolicy
         }
 
         return $view->is_shared && $user->can(Permission::UsersManage->value);
+    }
+
+    public function deleteAny(User $user): bool
+    {
+        return false;
+    }
+
+    public function restoreAny(User $user): bool
+    {
+        return false;
+    }
+
+    public function forceDelete(User $user, SavedView $view): bool
+    {
+        return false;
+    }
+
+    public function forceDeleteAny(User $user): bool
+    {
+        return false;
     }
 
     public function share(User $user): bool

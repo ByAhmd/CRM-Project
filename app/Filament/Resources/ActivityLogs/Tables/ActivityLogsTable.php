@@ -8,6 +8,7 @@ use App\Enums\ActivityLogEvent;
 use App\Models\ActivityLog;
 use App\Models\User;
 use App\Services\Audit\ActivityLogPresenter;
+use App\Services\Settings\SettingsRepository;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Support\Icons\Heroicon;
@@ -62,8 +63,8 @@ final class ActivityLogsTable
                     ->columns(2)
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
-                            ->when(filled($data['from'] ?? null), fn (Builder $nested): Builder => $nested->whereDate('created_at', '>=', $data['from']))
-                            ->when(filled($data['until'] ?? null), fn (Builder $nested): Builder => $nested->whereDate('created_at', '<=', $data['until']));
+                            ->when(filled($data['from'] ?? null), fn (Builder $nested): Builder => $nested->where('created_at', '>=', app(SettingsRepository::class)->startOfOrganisationDay((string) $data['from'])))
+                            ->when(filled($data['until'] ?? null), fn (Builder $nested): Builder => $nested->where('created_at', '<=', app(SettingsRepository::class)->endOfOrganisationDay((string) $data['until'])));
                     }),
 
                 SelectFilter::make('log_name')

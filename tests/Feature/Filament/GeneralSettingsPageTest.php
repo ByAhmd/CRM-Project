@@ -56,7 +56,7 @@ final class GeneralSettingsPageTest extends TestCase
             ])
             ->call('save')
             ->assertHasNoFormErrors()
-            ->assertNotified();
+            ->assertNotified(__('settings.notifications.saved'));
 
         $settings = app(SettingsRepository::class);
 

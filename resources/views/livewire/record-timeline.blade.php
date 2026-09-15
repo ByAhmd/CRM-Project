@@ -106,7 +106,7 @@
 
     @if ($capped)
         <p class="text-center text-xs text-gray-500 dark:text-gray-400">
-            {{ __('timeline.hints.capped', ['count' => $shown]) }}
+            {{ trans_choice('timeline.hints.capped', $shown, ['count' => $shown]) }}
         </p>
     @endif
 </div>

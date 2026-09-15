@@ -20,7 +20,6 @@ use App\Models\Deal;
 use App\Models\DealStageLog;
 use App\Models\Lead;
 use App\Models\LeadSource;
-use App\Models\LeadStatus;
 use App\Models\LeadStatusLog;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
@@ -573,7 +572,7 @@ final class LeadConversionTest extends TestCase
             ->set('activeTab', 'qualified')
             ->callTableAction('convert', $lead, data: ['account_mode' => 'none', 'contact_mode' => 'new', 'create_deal' => false])
             ->assertHasNoTableActionErrors()
-            ->assertNotified()
+            ->assertNotified(__('leads.notifications.converted', ['name' => $lead->full_name]))
             ->assertNoRedirect();
 
         $this->assertTrue($lead->refresh()->isConverted());
@@ -639,10 +638,5 @@ final class LeadConversionTest extends TestCase
         app(LeadStatusWorkflow::class)->transition($lead, $this->statusOfKind(LeadStatusKind::Qualified), $owner, 'Budget confirmed.');
 
         return $lead->refresh();
-    }
-
-    private function statusOfKind(LeadStatusKind $kind): LeadStatus
-    {
-        return LeadStatus::query()->where('kind', $kind->value)->where('is_active', true)->orderBy('sort')->firstOrFail();
     }
 }

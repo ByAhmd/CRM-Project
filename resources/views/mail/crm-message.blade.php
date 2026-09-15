@@ -9,14 +9,21 @@
     name that contains `*` or `_` pairs, stays literal text. Each block
     carries the paragraph typography of Laravel's mail theme explicitly,
     because the theme inlines its `p` rules only on real paragraphs. Every
-    fixed string comes from lang/email.php in the recipient's locale.
+    fixed string comes from lang/email.php in the recipient's locale, and the
+    fixed lines take that locale's direction and alignment (the published mail
+    layout sets dir on the document); the body keeps dir="auto" so a message
+    written in the other language still reads in its own order.
 --}}
-<x-mail::message>
-<div dir="auto" style="font-size: 16px; line-height: 1.5em; margin: 0 0 1em 0;">{{ __('email.mail.greeting', ['name' => $recipientName]) }}</div>
+@php
+    $crmDirection = __('filament-panels::layout.direction') === 'rtl' ? 'rtl' : 'ltr';
+    $crmAlign = $crmDirection === 'rtl' ? 'right' : 'left';
+@endphp
+<x-mail::message :brand="$organisationName">
+<div dir="{{ $crmDirection }}" style="font-size: 16px; line-height: 1.5em; margin: 0 0 1em 0; text-align: {{ $crmAlign }};">{{ __('email.mail.greeting', ['name' => $recipientName]) }}</div>
 
-<div dir="auto" style="white-space: normal; font-size: 16px; line-height: 1.5em; margin: 0 0 1em 0;">{!! nl2br(e($messageBody)) !!}</div>
+<div dir="auto" style="white-space: normal; font-size: 16px; line-height: 1.5em; margin: 0 0 1em 0; text-align: start;">{!! nl2br(e($messageBody)) !!}</div>
 
-<div dir="auto" style="font-size: 16px; line-height: 1.5em; margin: 0 0 1em 0;">{{ __('email.mail.reply_hint', ['name' => $replyToName]) }}</div>
+<div dir="{{ $crmDirection }}" style="font-size: 16px; line-height: 1.5em; margin: 0 0 1em 0; text-align: {{ $crmAlign }};">{{ __('email.mail.reply_hint', ['name' => $replyToName]) }}</div>
 
-<div dir="auto" style="font-size: 16px; line-height: 1.5em; margin: 0;">{{ __('email.mail.footer', ['organisation' => $organisationName]) }}</div>
+<div dir="{{ $crmDirection }}" style="font-size: 16px; line-height: 1.5em; margin: 0; text-align: {{ $crmAlign }};">{{ __('email.mail.footer', ['organisation' => $organisationName]) }}</div>
 </x-mail::message>

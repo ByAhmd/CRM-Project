@@ -6,7 +6,6 @@ declare(strict_types=1);
 return [
 
     'navigation' => [
-        'label' => 'الملاحظات',
         'model' => 'ملاحظة',
         'plural_model' => 'الملاحظات',
     ],

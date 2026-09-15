@@ -17,14 +17,11 @@ use App\Models\Import;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\Tag;
-use App\Models\Team;
 use App\Models\User;
 use App\Services\Settings\SettingsRepository;
 use Filament\Actions\Imports\Jobs\ImportCsv;
-use Filament\Actions\Imports\Models\FailedImportRow;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use League\Csv\Reader;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -56,7 +53,7 @@ final class DealImporterTest extends TestCase
         $contact = Contact::factory()->create(['owner_id' => $rep->getKey(), 'account_id' => $account->getKey(), 'first_name' => 'Noura', 'last_name' => 'Alotaibi']);
         Tag::factory()->create(['name_en' => 'VIP', 'name_ar' => 'كبار العملاء']);
 
-        $import = $this->runImport($rep, $this->rows('deals.csv'));
+        $import = $this->runImport($rep, $this->importFixtureRows('deals.csv'));
 
         $this->assertSame(2, $import->successful_rows);
         $this->assertSame(0, $import->getFailedRowsCount());
@@ -98,19 +95,19 @@ final class DealImporterTest extends TestCase
         $rep = $this->salesRep();
         Account::factory()->create(['owner_id' => $rep->getKey(), 'name' => 'Horizon Trading']);
 
-        $import = $this->runImport($rep, $this->rows('deals_invalid.csv'));
+        $import = $this->runImport($rep, $this->importFixtureRows('deals_invalid.csv'));
 
         $this->assertSame(1, $import->successful_rows);
         $this->assertSame(7, $import->getFailedRowsCount());
         $this->assertTrue(Deal::query()->where('title', 'Good Deal')->exists());
 
-        $this->assertSame(__('imports.validation.account_not_found', ['value' => '']), $this->failure($import, 'title', 'No Account'));
-        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Nonexistent Co']), $this->failure($import, 'title', 'Ghost Account'));
-        $this->assertSame(__('imports.validation.stage_not_open', ['value' => 'Won']), $this->failure($import, 'title', 'Closed Stage'));
-        $this->assertSame(__('imports.validation.unknown_lookup', ['value' => 'Moon']), $this->failure($import, 'title', 'Unknown Stage'));
-        $this->assertSame(__('imports.validation.unknown_lookup', ['value' => 'Nobody Here']), $this->failure($import, 'title', 'Unknown Contact'));
-        $this->assertSame(__('validation.max.numeric', ['attribute' => __('imports.columns.deal.probability'), 'max' => 100]), $this->failure($import, 'title', 'Bad Probability'));
-        $this->assertSame(__('validation.date_format', ['attribute' => __('imports.columns.deal.expected_close_date'), 'format' => 'Y-m-d']), $this->failure($import, 'title', 'Bad Date'));
+        $this->assertSame(__('imports.validation.account_not_found', ['value' => '']), $this->failedImportReason($import, 'title', 'No Account'));
+        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Nonexistent Co']), $this->failedImportReason($import, 'title', 'Ghost Account'));
+        $this->assertSame(__('imports.validation.stage_not_open', ['value' => 'Won']), $this->failedImportReason($import, 'title', 'Closed Stage'));
+        $this->assertSame(__('imports.validation.unknown_lookup', ['value' => 'Moon']), $this->failedImportReason($import, 'title', 'Unknown Stage'));
+        $this->assertSame(__('imports.validation.unknown_lookup', ['value' => 'Nobody Here']), $this->failedImportReason($import, 'title', 'Unknown Contact'));
+        $this->assertSame(__('validation.max.numeric', ['attribute' => __('imports.columns.deal.probability'), 'max' => 100]), $this->failedImportReason($import, 'title', 'Bad Probability'));
+        $this->assertSame(__('validation.date_format', ['attribute' => __('imports.columns.deal.expected_close_date'), 'format' => 'Y-m-d']), $this->failedImportReason($import, 'title', 'Bad Date'));
     }
 
     #[Test]
@@ -126,7 +123,7 @@ final class DealImporterTest extends TestCase
         ]);
 
         $this->assertSame(0, $import->successful_rows);
-        $this->assertSame(__('imports.validation.stage_outside_pipeline', ['value' => 'Discovery']), $this->failure($import, 'title', 'Wrong Pipeline'));
+        $this->assertSame(__('imports.validation.stage_outside_pipeline', ['value' => 'Discovery']), $this->failedImportReason($import, 'title', 'Wrong Pipeline'));
     }
 
     #[Test]
@@ -139,7 +136,7 @@ final class DealImporterTest extends TestCase
         $import = $this->runImport($rep, [['title' => 'Out of reach', 'account' => 'Far Away Co']]);
 
         $this->assertSame(0, $import->successful_rows);
-        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Far Away Co']), $this->failure($import, 'title', 'Out of reach'));
+        $this->assertSame(__('imports.validation.account_not_found', ['value' => 'Far Away Co']), $this->failedImportReason($import, 'title', 'Out of reach'));
         $this->assertSame(0, Deal::query()->count());
     }
 
@@ -155,7 +152,7 @@ final class DealImporterTest extends TestCase
         $skipped = $this->runImport($rep, [$row]);
 
         $this->assertSame(0, $skipped->successful_rows);
-        $this->assertSame(__('imports.validation.duplicate', ['id' => (string) $existing->getKey()]), $this->failure($skipped, 'title', 'server supply'));
+        $this->assertSame(__('imports.validation.duplicate', ['id' => (string) $existing->getKey()]), $this->failedImportReason($skipped, 'title', 'server supply'));
         $this->assertSame(1, Deal::query()->count());
 
         $updated = $this->runImport($rep, [$row], ['duplicate_strategy' => 'update']);
@@ -215,8 +212,8 @@ final class DealImporterTest extends TestCase
         ], ['duplicate_strategy' => 'update']);
 
         $this->assertSame(0, $refused->successful_rows);
-        $this->assertSame(__('imports.validation.update_forbidden', ['id' => (string) $theirs->getKey()]), $this->failure($refused, 'title', 'Server Supply'));
-        $this->assertSame(__('imports.validation.create_forbidden'), $this->failure($refused, 'title', 'Fresh Deal'));
+        $this->assertSame(__('imports.validation.update_forbidden', ['id' => (string) $theirs->getKey()]), $this->failedImportReason($refused, 'title', 'Server Supply'));
+        $this->assertSame(__('imports.validation.create_forbidden'), $this->failedImportReason($refused, 'title', 'Fresh Deal'));
         $this->assertSame('100.00', $theirs->refresh()->amount);
         $this->assertSame(1, Deal::query()->count());
 
@@ -229,26 +226,9 @@ final class DealImporterTest extends TestCase
         ]);
 
         $this->assertSame(1, $handed->successful_rows);
-        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failure($handed, 'title', 'Handed Deal'));
+        $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failedImportReason($handed, 'title', 'Handed Deal'));
         $this->assertFalse(Deal::query()->where('title', 'Handed Deal')->exists());
         $this->assertSame($importer->getKey(), Deal::query()->where('title', 'Kept Deal')->firstOrFail()->owner_id);
-    }
-
-    /**
-     * A user holding exactly the given permissions and nothing through a
-     * role (buildable through the Roles resource, D-3), in the team.
-     *
-     * @param  list<Permission>  $permissions
-     */
-    private function userWithPermissions(Team $team, array $permissions): User
-    {
-        $user = User::factory()->create(['team_id' => $team->getKey()]);
-        $user->syncRoles([]);
-        $user->syncPermissions(array_map(fn (Permission $permission): string => $permission->value, $permissions));
-
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        return $user->fresh() ?? $user;
     }
 
     /**
@@ -272,28 +252,5 @@ final class DealImporterTest extends TestCase
         $import->touch('completed_at');
 
         return $import->refresh();
-    }
-
-    /**
-     * @return list<array<string, string>>
-     */
-    private function rows(string $fixture): array
-    {
-        $reader = Reader::createFromPath(base_path('tests/Fixtures/imports/'.$fixture));
-        $reader->setHeaderOffset(0);
-
-        return array_values(iterator_to_array($reader->getRecords()));
-    }
-
-    /** The reason the row whose $column holds $value was refused. */
-    private function failure(Import $import, string $column, string $value): ?string
-    {
-        foreach (FailedImportRow::query()->where('import_id', $import->getKey())->get() as $row) {
-            if (($row->data[$column] ?? null) === $value) {
-                return $row->validation_error;
-            }
-        }
-
-        $this->fail("no failed row with {$column} = {$value}");
     }
 }
