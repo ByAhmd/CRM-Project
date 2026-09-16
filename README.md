@@ -27,12 +27,32 @@ php artisan app:onboard     # seeds all reference data (roles, permissions, sett
                             # system activity types, email templates), then creates the first super admin
 php artisan app:preflight   # fails on pending migrations or missing reference data
 herd link crm               # http://crm.test/admin
+php artisan view:cache      # REQUIRED, and again after every `optimize:clear` — see "Compiled views" below
 php artisan app:demo-data   # optional: bilingual demo dataset through the real services (8 demo users, one password
                             # printed once); never in production; remove it with `php artisan app:demo-data --fresh`
 ```
 
 The reference seed is idempotent and never overwrites an administrator's edits: `php artisan db:seed --force` after a
 deploy only recreates missing rows.
+
+### Compiled views
+
+`php artisan view:cache` is part of the setup, not an optimisation. Without it Blade compiles the whole Filament view
+tree on every request, and a panel page issues several requests at once (the page itself, each lazy widget, the
+notification poll). On Windows two of them renaming the same compiled file at the same moment fails with
+`rename(...\storage\framework\views\xxx.tmp, ...php): Access is denied (code: 5)` and the page 500s. Always run it
+after anything that empties the cache:
+
+```bash
+php artisan optimize:clear && php artisan view:cache
+```
+
+Then load one page. That first request is part of the warm-up: it materialises the handful of templates Blade
+generates at runtime (inline component strings), which no warm-up command can precompile. After it the cache is
+complete and concurrent requests never compile anything.
+
+In production `php artisan optimize` already does this (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)), and Linux is
+not affected by the rename failure — but an uncached view tree is a large, needless cost there too.
 
 Databases `crm` and `crm_testing` must exist on the local MySQL 8.4 (user `crm` / `crm`). Tests run on
 `crm_testing` and rebuild it on every run:
@@ -69,3 +89,9 @@ Laravel Pint · Vite 8 · Tailwind 4.
 - Local MySQL 8.4 listens on 127.0.0.1:3306. The CRM uses databases `crm` and `crm_testing`.
   Never start XAMPP's MariaDB on port 3306.
 - The site is served by Herd at `http://crm.test` (`herd link crm`).
+- `view:cache` is overridden by `App\Console\Commands\CacheViewsCommand`. The framework's version compiles each
+  template under `SplFileInfo::getRealPath()`, which Windows returns fully back-slashed, while a request resolves the
+  same template through `FileViewFinder`, which joins with a forward slash. The two strings hash to different compiled
+  filenames, so on Windows the stock `view:cache` reports success while leaving the cache the request reads stone
+  cold. The override compiles both spellings; on Linux and macOS they are byte-identical and it compiles exactly what
+  the framework's does.
