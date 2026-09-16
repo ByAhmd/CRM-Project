@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Name the release
         id: name
@@ -68,7 +68,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-nodev-${{ hashFiles('composer.lock') }}
@@ -78,7 +78,7 @@ jobs:
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -119,7 +119,7 @@ jobs:
           ls -l "$RUNNER_TEMP/crm-$RELEASE.tar.gz"
 
       - name: Upload the release archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: crm-release-${{ steps.name.outputs.release }}
           path: ${{ runner.temp }}/crm-${{ steps.name.outputs.release }}.tar.gz
@@ -168,7 +168,7 @@ jobs:
 
       - name: Download the release archive
         if: steps.gate.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: crm-release-${{ needs.build.outputs.release }}
           path: artifact
