@@ -41,7 +41,9 @@ concurrency:
 jobs:
   build:
     name: Build release archive
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: a release archive must be reproducible, and the `-latest`
+    # label is migrated to a new Ubuntu release without notice. Raise it deliberately.
+    runs-on: ubuntu-24.04
     outputs:
       release: ${{ steps.name.outputs.release }}
 
@@ -83,6 +85,16 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
+
+      # Same reason as ci.yml: `npm ci` empties node_modules, where laravel-vite-plugin keeps
+      # the web fonts it downloads, so without this cache a release depends on the font
+      # provider being reachable at that minute. Restored after `npm ci`, before the build.
+      - name: Cache the downloaded web fonts
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/laravel-vite-plugin/fonts
+          key: ${{ runner.os }}-vite-fonts-${{ hashFiles('vite.config.js', 'package-lock.json') }}
+          restore-keys: ${{ runner.os }}-vite-fonts-
 
       - name: Build frontend assets
         run: npm run build
@@ -142,7 +154,7 @@ jobs:
   deploy:
     name: Deploy over SSH (only when the DEPLOY_* secrets exist)
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Check the deployment secrets

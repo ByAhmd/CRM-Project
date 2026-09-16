@@ -402,7 +402,11 @@ final class ReportPagesTest extends TestCase
     {
         app()->setLocale('en');
 
-        $this->assertSame('SAR 1,234.50', BaseReportPage::format(ReportRow::FORMAT_MONEY, 1234.5));
+        // ICU decides which space joins the currency code to the amount: a plain space up to
+        // CLDR 41, U+00A0 from CLDR 42 (ICU 72) on. Pinning that byte would tie the suite to the
+        // ICU build of whichever machine runs it, so the separator is normalised first and the
+        // assertion keeps the part that is ours: the code, the grouping and the two decimals.
+        $this->assertSame('SAR 1,234.50', self::withPlainSpaces(BaseReportPage::format(ReportRow::FORMAT_MONEY, 1234.5)));
         $this->assertSame('66.7%', BaseReportPage::format(ReportRow::FORMAT_PERCENT, 66.7));
         $this->assertSame('12.0', BaseReportPage::format(ReportRow::FORMAT_DECIMAL, 12));
         $this->assertSame('1,200', BaseReportPage::format(ReportRow::FORMAT_COUNT, 1200));
@@ -439,5 +443,17 @@ final class ReportPagesTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * Turns every space ICU may emit inside a formatted figure into a plain ASCII space.
+     *
+     * ICU places a no-break space (U+00A0) or a narrow no-break space (U+202F) between the
+     * parts of a formatted number depending on its CLDR version, so an assertion that spelled
+     * one of them out would pass on one ICU build and fail on the next.
+     */
+    private static function withPlainSpaces(string $value): string
+    {
+        return str_replace(["\u{00a0}", "\u{202f}", "\u{2009}"], ' ', $value);
     }
 }

@@ -12,7 +12,10 @@ concurrency:
 jobs:
   check:
     name: Lint, analyse, test
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: the `-latest` label is migrated to a new Ubuntu release
+    # over a one-to-two month window, which silently changes PHP, ICU and the preinstalled
+    # database clients under the suite. Raise this deliberately, like any other tool version.
+    runs-on: ubuntu-24.04
 
     services:
       mysql:
@@ -45,11 +48,14 @@ jobs:
         uses: actions/checkout@v4
 
       # PHP 8.3 is the production floor (decision D-1); local development runs 8.4.
+      # The list names every `ext-*` in composer.json explicitly - dom, fileinfo, intl,
+      # mbstring, openssl, pdo_mysql, xmlreader and zip - so `composer install` can never
+      # fail a platform check because an extension only happened to be in the base image.
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: bcmath, ctype, curl, dom, fileinfo, gd, intl, mbstring, pdo_mysql, xml, zip
+          extensions: bcmath, ctype, curl, dom, fileinfo, gd, intl, mbstring, openssl, pdo_mysql, xml, xmlreader, zip
           coverage: none
 
       - name: Get Composer cache directory
@@ -75,6 +81,17 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      # `npm ci` empties node_modules, and that is where laravel-vite-plugin keeps the web
+      # fonts it downloads (node_modules/.cache/laravel-vite-plugin/fonts). Without this cache
+      # every run fetches them again from the provider named in vite.config.js and the whole
+      # job fails on someone else's outage. Restored after `npm ci` so it is not deleted again.
+      - name: Cache the downloaded web fonts
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/laravel-vite-plugin/fonts
+          key: ${{ runner.os }}-vite-fonts-${{ hashFiles('vite.config.js', 'package-lock.json') }}
+          restore-keys: ${{ runner.os }}-vite-fonts-
+
       - name: Build frontend assets
         run: npm run build
 
@@ -84,15 +101,21 @@ jobs:
       - name: PHPStan
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 
+      # Waits with the PHP set up above, through the very credentials and database the suite
+      # uses, so the step proves what PHPUnit needs instead of proving that a `mysql` client
+      # happens to be installed on the runner image and that root can connect.
       - name: Wait for MySQL
         run: |
+          connect='new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD"));'
           for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent; then
+            if php -r "$connect" 2>/dev/null; then
+              echo "MySQL is ready for $DB_USERNAME@$DB_HOST:$DB_PORT/$DB_DATABASE."
               exit 0
             fi
             sleep 2
           done
-          echo "MySQL did not become ready in time."
+          echo "::error::MySQL did not become ready in time. The last connection attempt reported:"
+          php -r "$connect"
           exit 1
 
       - name: PHPUnit
