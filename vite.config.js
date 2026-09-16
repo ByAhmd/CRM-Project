@@ -1,18 +1,16 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import { bunny } from 'laravel-vite-plugin/fonts';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
     plugins: [
+        // Only what a page actually loads: the panel theme, registered with
+        // Filament through ->viteTheme(), and the calendar page's FullCalendar
+        // bootstrap, pulled in by resources/views/filament/pages/calendar.blade.php.
+        // The admin panel is the whole front end; there is no non-panel stylesheet.
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/calendar.js', 'resources/css/filament/admin/theme.css'],
+            input: ['resources/js/calendar.js', 'resources/css/filament/admin/theme.css'],
             refresh: true,
-            fonts: [
-                bunny('Instrument Sans', {
-                    weights: [400, 500, 600],
-                }),
-            ],
         }),
         tailwindcss(),
     ],

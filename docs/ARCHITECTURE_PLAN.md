@@ -561,8 +561,8 @@ CRM_Project/
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
 │                                  views, imports, reports, activity, notifications
 ├── lang/vendor/                   Filament Arabic gap patches
-├── resources/css/                 app.css, filament/admin/theme.css
-├── resources/js/                  app.js, deal-board.js, calendar.js
+├── resources/css/                 filament/admin/theme.css (the panel is the whole front end; no non-panel stylesheet)
+├── resources/js/                  calendar.js
 ├── resources/views/filament/      pages/, widgets/, components/timeline/, activity-log/
 ├── routes/                        web.php, console.php
 ├── tests/                         Concerns/, Support/, Feature/{Access,Audit,Leads,Contacts,Accounts,Deals,Activities,Tasks,Attachments,Imports,
