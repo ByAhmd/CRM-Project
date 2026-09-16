@@ -86,16 +86,6 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      # Same reason as ci.yml: `npm ci` empties node_modules, where laravel-vite-plugin keeps
-      # the web fonts it downloads, so without this cache a release depends on the font
-      # provider being reachable at that minute. Restored after `npm ci`, before the build.
-      - name: Cache the downloaded web fonts
-        uses: actions/cache@v4
-        with:
-          path: node_modules/.cache/laravel-vite-plugin/fonts
-          key: ${{ runner.os }}-vite-fonts-${{ hashFiles('vite.config.js', 'package-lock.json') }}
-          restore-keys: ${{ runner.os }}-vite-fonts-
-
       - name: Build frontend assets
         run: npm run build
 

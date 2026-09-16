@@ -81,7 +81,7 @@ final class SettingsRepository
         }
 
         /** @var array<string, mixed> $all */
-        $all = Cache::remember(self::CACHE_KEY, now()->addHours(12), static function (): array {
+        $all = Cache::remember($this->cacheKey(), now()->addHours(12), static function (): array {
             return Setting::query()->pluck('value', 'key')->all();
         });
 
@@ -186,8 +186,24 @@ final class SettingsRepository
 
     private function forget(): void
     {
-        Cache::forget(self::CACHE_KEY);
+        Cache::forget($this->cacheKey());
         $this->values = null;
+    }
+
+    /**
+     * The cache key for the settings of the database this connection points at.
+     *
+     * One organisation means one set of settings rows (D-2), so the suffix never
+     * varies within a running deployment. It matters when the same cache store is
+     * reached by a process pointed at another database — a restore drill, a
+     * maintenance shell with DB_DATABASE overridden, a staging copy that shares a
+     * cache prefix. Without it that process warms `crm.settings` from its own
+     * database and every later request reads the wrong currency, timezone and
+     * week start until the entry expires twelve hours later.
+     */
+    private function cacheKey(): string
+    {
+        return self::CACHE_KEY.':'.DB::connection()->getDatabaseName();
     }
 
     /** The calendar date alone, placed in the organisation timezone. */

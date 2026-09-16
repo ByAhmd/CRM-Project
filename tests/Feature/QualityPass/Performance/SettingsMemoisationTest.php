@@ -81,7 +81,7 @@ final class SettingsMemoisationTest extends TestCase
     {
         $reads = 0;
         $listener = static function (CacheHit|CacheMissed $event) use (&$reads): void {
-            if (str_ends_with($event->key, 'crm.settings')) {
+            if (str_contains($event->key, 'crm.settings')) {
                 $reads++;
             }
         };
