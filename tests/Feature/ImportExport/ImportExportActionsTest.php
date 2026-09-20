@@ -14,6 +14,7 @@ use App\Filament\Resources\Deals\Pages\ListDeals;
 use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\SpreadsheetImportAction;
 use App\Models\Lead;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
@@ -22,6 +23,7 @@ use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\Concerns\BuildsUploadBytes;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
@@ -31,6 +33,7 @@ use Tests\TestCase;
  */
 final class ImportExportActionsTest extends TestCase
 {
+    use BuildsUploadBytes;
     use CreatesCrmFixtures;
     use RefreshDatabase;
 
@@ -135,5 +138,86 @@ final class ImportExportActionsTest extends TestCase
         $this->assertSame('+966501234567', $lead->phone_normalized);
         $this->assertTrue($lead->status->isDefault());
         $this->assertDatabaseHas('imports', ['user_id' => $manager->getKey(), 'total_rows' => 2, 'successful_rows' => 2]);
+    }
+
+    #[Test]
+    public function a_manager_imports_an_excel_workbook_through_the_panel_and_the_rows_land_like_a_csv(): void
+    {
+        // The workbook is converted to CSV before Filament's reader sees it, so
+        // the column mapping, the validation and the history behave exactly as
+        // they do above, and the run keeps the name the user uploaded.
+        $manager = $this->salesManager();
+        $workbook = UploadedFile::fake()->createWithContent('leads.xlsx', $this->xlsxBytes([
+            'العملاء' => [
+                ['first_name', 'last_name', 'email', 'phone'],
+                ['مها', 'الشمري', 'maha@example.com', '0501234567'],
+                ['Sheet', 'Reader', 'sheet@example.com', null],
+            ],
+        ]));
+
+        Livewire::actingAs($manager)
+            ->test(ListLeads::class)
+            ->callAction('import', data: [
+                'file' => $workbook,
+                'columnMap' => [
+                    'first_name' => 'first_name',
+                    'last_name' => 'last_name',
+                    'email' => 'email',
+                    'phone' => 'phone',
+                ],
+                'duplicate_strategy' => 'skip',
+            ])
+            ->assertHasNoActionErrors();
+
+        $lead = Lead::query()->where('email', 'maha@example.com')->firstOrFail();
+
+        $this->assertSame('مها', $lead->first_name);
+        $this->assertSame('الشمري', $lead->last_name);
+        $this->assertSame('+966501234567', $lead->phone_normalized);
+        $this->assertSame($manager->getKey(), $lead->owner_id);
+
+        $this->assertDatabaseHas('leads', ['email' => 'sheet@example.com', 'last_name' => 'Reader']);
+        $this->assertDatabaseHas('imports', [
+            'user_id' => $manager->getKey(),
+            'file_name' => 'leads.xlsx',
+            'total_rows' => 2,
+            'successful_rows' => 2,
+        ]);
+    }
+
+    #[Test]
+    public function only_the_workbook_format_the_reader_handles_faithfully_is_offered_and_accepted(): void
+    {
+        // OpenSpout cannot read .xls at all and reads an .ods boolean cell
+        // wrongly, so the picker advertises neither and the upload rules let
+        // neither through (module 18).
+        $this->assertNotContains('application/vnd.ms-excel', SpreadsheetImportAction::ACCEPTED_FILE_TYPES);
+        $this->assertNotContains('application/vnd.oasis.opendocument.spreadsheet', SpreadsheetImportAction::ACCEPTED_FILE_TYPES);
+        $this->assertContains('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', SpreadsheetImportAction::ACCEPTED_FILE_TYPES);
+        $this->assertSame(['csv', 'txt', 'xlsx'], SpreadsheetImportAction::ACCEPTED_EXTENSIONS);
+
+        $rules = ImportExportActions::import(LeadImporter::class, Lead::class)->getFileValidationRules();
+
+        $this->assertContains('extensions:csv,txt,xlsx', $rules);
+        $this->assertNotContains('extensions:csv,txt', $rules, "Filament's own rule would refuse a workbook before it is read");
+
+        // Real workbook bytes under each refused extension: the refusal is by
+        // declared format, not by a container the reader could not have opened.
+        $refused = [
+            'legacy.xls' => $this->xlsxBytes(['Sheet1' => [['first_name'], ['Refused']]]),
+            'contacts.ods' => $this->odsBytes(['Sheet1' => [['first_name'], ['Refused']]]),
+        ];
+
+        foreach ($refused as $name => $bytes) {
+            Livewire::actingAs($this->salesManager())
+                ->test(ListLeads::class)
+                ->callAction('import', data: [
+                    'file' => UploadedFile::fake()->createWithContent($name, $bytes),
+                    'duplicate_strategy' => 'skip',
+                ])
+                ->assertHasActionErrors(['file']);
+        }
+
+        $this->assertDatabaseCount('leads', 0);
     }
 }

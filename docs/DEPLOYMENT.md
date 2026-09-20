@@ -331,7 +331,7 @@ Asia/Riyadh). While the site is in maintenance mode (`php artisan down`) **no** 
 | `leads:notify-stale` | daily at 07:00 | Tells the owner of each open lead quiet for `CRM_LEAD_STALE_DAYS` days, once (`stale_notified_at`). |
 | `RescoreLeads` (queued job) | daily at 03:00 | Queued; the next drain recomputes open lead scores in batches of 500 so activity-recency points expire (D-7). |
 | `attachments:prune-temporary` (named callback) | daily at 00:00 | Deletes abandoned uploads older than a day under `tmp/` on the attachments disk. |
-| `uploads:prune-livewire-temporary` (named callback) | daily at 00:00 | Deletes Livewire temporary uploads older than a day under `livewire-tmp/` (`livewire.temporary_file_upload.directory`) on the upload disk — import CSV/XLSX files included, which the import never deletes and which would otherwise stay in `storage/app/private` and its backups. |
+| `uploads:prune-livewire-temporary` (named callback) | daily at 00:00 | Deletes Livewire temporary uploads older than a day under `livewire-tmp/` (`livewire.temporary_file_upload.directory`) on the upload disk — the CSV and `.xlsx` files an import reads included, which the import never deletes and which would otherwise stay in `storage/app/private` and its backups. A workbook is converted to CSV in a `php://temp` stream inside the request, so an import leaves no second file to prune. |
 | `activitylog:clean --days=<CRM_AUDIT_RETENTION_DAYS> --force` | weekly, Sunday 00:00 | Audit retention, 730 days by default (D-13). |
 | `queue:prune-failed --hours=168` | weekly, Sunday 00:00 | Deletes failed-job records older than seven days. |
 | `model:prune --model=App\Models\Import --model=App\Models\Export` | daily at 00:00 | Import history after 90 days (`Import::RETENTION_DAYS`), export history and files after 30 days (`Export::RETENTION_DAYS`). |
@@ -513,10 +513,12 @@ Set them in the host's PHP configuration for the website (and check the CLI valu
 |---|---|---|
 | `upload_max_filesize` | at least `CRM_ATTACHMENT_MAX_KB` (default 10240 KB) — `12M` covers the default | Attachments and import files are uploaded through Livewire's temporary upload, whose own unpublished default rule is `max:12288` (12 MB); a larger `CRM_ATTACHMENT_MAX_KB` has no effect beyond 12 MB. |
 | `post_max_size` | above `upload_max_filesize`, e.g. `16M` | The upload request carries the file plus form fields. |
-| `memory_limit` | `256M` (web and CLI) | XLSX import and export (OpenSpout), report exports and the queue drain. |
+| `memory_limit` | `256M` (web and CLI) | Reading an uploaded `.xlsx` workbook and writing an XLSX export (OpenSpout), report exports and the queue drain. |
 | `max_execution_time` | web: `120`; CLI: `0` (the CLI default) | Report exports are written and streamed in the request; queued work runs in the CLI drain, which stops itself after 50 seconds (`--max-time=50`). |
 
-Built-in bounds that keep the work inside those limits: imports up to 5 000 rows in chunks of 100, exports up to 20 000
+Built-in bounds that keep the work inside those limits: imports up to 5 000 rows in chunks of 100 — an uploaded workbook
+is streamed a row at a time into CSV and refused with the same message as an oversized CSV once it passes that ceiling,
+so a huge sheet costs bounded memory — exports up to 20 000
 rows in chunks of 500, 5 imports and 10 exports per client IP address per list page per minute
 (`App\Filament\Support\ImportExportActions`; behind an untrusted proxy every user shares that limit, section 3.6);
 `RescoreLeads` has `$timeout = 45` under the 50-second drain and `DB_QUEUE_RETRY_AFTER=90`.

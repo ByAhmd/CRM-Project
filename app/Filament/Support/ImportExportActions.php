@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Filament\Support;
 
 use Carbon\CarbonInterface;
+use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Actions\ExportBulkAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\ImportAction;
 use Filament\Actions\Imports\Importer;
+use Filament\Facades\Filament;
+use Filament\Resources\Resource;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Database\Eloquent\Model;
 
@@ -29,6 +32,9 @@ use Illuminate\Database\Eloquent\Model;
  * Resource has already passed through RecordVisibilityResolver — a rep
  * exports the rows they can see and nothing else. The bulk action exports
  * the selected rows, each re-authorised through the policy's `view`.
+ *
+ * Import reads CSV and, through SpreadsheetImportAction, Excel (.xlsx)
+ * workbooks.
  */
 final class ImportExportActions
 {
@@ -54,8 +60,9 @@ final class ImportExportActions
      */
     public static function import(string $importer, string $model): ImportAction
     {
-        return ImportAction::make()
+        return SpreadsheetImportAction::make()
             ->importer($importer)
+            ->pluralModelLabel(fn (ImportAction $action): string => self::pluralModelLabel($model, $action))
             ->label(fn (ImportAction $action): string => __('imports.actions.import', ['label' => $action->getPluralModelLabel()]))
             ->authorize(fn (): bool => auth()->user()?->can('import', $model) ?? false)
             ->options(fn (): array => [self::LOCALE_OPTION => app()->getLocale()])
@@ -153,6 +160,36 @@ final class ImportExportActions
     }
 
     /**
+     * The plural name of the entity an import or export action works on.
+     *
+     * Filament works it out from the table behind the action, and falls back to
+     * `Str::plural()` when there is none (Filament\Actions\Concerns\
+     * InteractsWithRecord::getPluralModelLabel). An import or export button on a
+     * List page is a page header action with no table, so the fallback ran the
+     * English pluraliser over an Arabic noun and printed «عميل محتملs».
+     *
+     * The entity's own Resource already holds that name, translated, so the panel
+     * is asked for the Resource registered against the model and the Resource for
+     * its plural label. A model with no Resource in the panel falls back to the
+     * action's singular model label — the Resource's, the table's or Filament's
+     * own humanised class name, in that order — which is wrong in number but
+     * never in language. Str::plural() is never reached, and the action's own
+     * plural label is never read back here: it is the closure calling this.
+     *
+     * @param  class-string<Model>  $model
+     */
+    private static function pluralModelLabel(string $model, Action $action): string
+    {
+        $resource = Filament::getModelResource($model);
+
+        if (is_string($resource) && is_a($resource, Resource::class, allow_string: true)) {
+            return $resource::getPluralModelLabel();
+        }
+
+        return (string) $action->getModelLabel();
+    }
+
+    /**
      * @template TAction of ExportAction|ExportBulkAction
      *
      * @param  TAction  $action
@@ -164,6 +201,7 @@ final class ImportExportActions
     {
         return $action
             ->exporter($exporter)
+            ->pluralModelLabel(fn (ExportAction|ExportBulkAction $action): string => self::pluralModelLabel($model, $action))
             ->authorize(fn (): bool => auth()->user()?->can('export', $model) ?? false)
             ->options(fn (): array => [self::LOCALE_OPTION => app()->getLocale()])
             ->formats([ExportFormat::Csv, ExportFormat::Xlsx])
