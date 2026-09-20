@@ -30,7 +30,13 @@ final class SalesKpisWidget extends StatsOverviewWidget
 
     protected static ?int $sort = 1;
 
-    protected int|string|array $columnSpan = 'full';
+    /**
+     * The KPI strip spans the whole grid at every width. A scalar span only
+     * applies from the lg breakpoint (the widget view's gridColumn() macro
+     * wraps it as ['lg' => …]), so the default breakpoint is declared
+     * explicitly; the stats inside carry their own container grid.
+     */
+    protected int|string|array $columnSpan = ['default' => 'full'];
 
     public static function canView(): bool
     {

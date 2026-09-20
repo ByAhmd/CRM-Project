@@ -1,0 +1,25 @@
+<?php
+
+namespace Filament\Widgets;
+
+class Widget
+{
+    /**
+     * The vendor PHPDoc documents the array values as `int | null`, but the
+     * framework's own renderer accepts `'full'` per breakpoint:
+     * vendor/filament/support/src/View/ComponentAttributeBag.php:160-163 maps
+     * each span with `fn (string $breakpoint, int | string $span)` and matches
+     * `'full' => '1 / -1'`. This stub declares the type the implementation
+     * actually honours; delete it when the upstream PHPDoc catches up.
+     *
+     * @var int | string | array<string, int | string | null>
+     */
+    protected int | string | array $columnSpan;
+
+    /**
+     * @return int | string | array<string, int | string | null>
+     */
+    public function getColumnSpan(): int | string | array
+    {
+    }
+}

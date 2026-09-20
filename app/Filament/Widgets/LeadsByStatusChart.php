@@ -24,6 +24,13 @@ final class LeadsByStatusChart extends ChartWidget
 
     protected static ?int $sort = 2;
 
+    /**
+     * Full width alone on phones, half the grid from md up so it pairs
+     * with the pipeline chart — declared per breakpoint instead of relying
+     * on the grid's implicit auto placement.
+     */
+    protected int|string|array $columnSpan = ['default' => 'full', 'md' => 1];
+
     protected ?string $maxHeight = '300px';
 
     public static function canView(): bool

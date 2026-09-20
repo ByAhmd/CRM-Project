@@ -233,9 +233,21 @@ final class Dashboard extends BaseDashboard
         ];
     }
 
-    public function getColumns(): int
+    /**
+     * The widget grid: one column on phones, two from the md breakpoint up.
+     * The base page feeds this straight into Grid::make(), and the grid
+     * attribute macro treats a bare int as ['lg' => …] — which left the
+     * md range single-column by accident — so every breakpoint is declared
+     * here and no width relies on an implicit fallback.
+     *
+     * @return array<string, int>
+     */
+    public function getColumns(): array
     {
-        return 2;
+        return [
+            'default' => 1,
+            'md' => 2,
+        ];
     }
 
     /** Whether the two dates span more than the widest period the dashboard aggregates. */

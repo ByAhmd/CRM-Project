@@ -26,5 +26,14 @@ parameters:
     # invisible to the schema, so every cast needs a @property docblock on the model.
     checkModelProperties: true
 
+    # Corrects a vendor PHPDoc that is narrower than the vendor's own runtime:
+    # Widget::$columnSpan documents its array values as `int | null`, while
+    # ComponentAttributeBag::gridColumn() (support/src/View, lines 160-163) accepts and
+    # renders 'full' per breakpoint. A stub is PHPStan's own mechanism for fixing
+    # third-party types - it corrects the type, it suppresses nothing, and it is not an
+    # ignoreErrors entry. Delete stub and this block when the upstream PHPDoc catches up.
+    stubFiles:
+        - phpstan-stubs/FilamentWidget.stub
+
     # No baseline and no inline ignores. A genuine false positive is documented with the vendor
     # line that proves it in docs/Static_Analysis_Known_False_Positives.md.

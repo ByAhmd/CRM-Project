@@ -24,7 +24,12 @@ final class RevenueWonByMonthChart extends ChartWidget
 
     protected static ?int $sort = 4;
 
-    protected int|string|array $columnSpan = 'full';
+    /**
+     * A twelve-month line wants the whole row at every width; a scalar
+     * 'full' would only apply from lg (gridColumn() wraps a scalar as
+     * ['lg' => …]), so the default breakpoint is declared explicitly.
+     */
+    protected int|string|array $columnSpan = ['default' => 'full'];
 
     protected string $color = 'success';
 

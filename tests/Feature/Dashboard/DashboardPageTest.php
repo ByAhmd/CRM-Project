@@ -254,6 +254,37 @@ final class DashboardPageTest extends TestCase
         $this->assertNull(DashboardFilters::fromArray(['owner_id' => $other->getKey()], $rep)->ownerId);
     }
 
+    /**
+     * The responsive layout, asserted through the public API Filament reads
+     * it from: the page's getColumns() feeds Grid::make(), and each widget's
+     * getColumnSpan() is what the widget view hands to the gridColumn()
+     * attribute macro. A scalar span only applies from the lg breakpoint, so
+     * every widget must declare its 'default' breakpoint explicitly — this
+     * test keeps a scalar from creeping back in.
+     */
+    #[Test]
+    public function the_widget_grid_and_every_widget_span_are_declared_per_breakpoint(): void
+    {
+        $this->assertSame(['default' => 1, 'md' => 2], (new Dashboard)->getColumns());
+
+        // Full width at every breakpoint. ActivityCounts is the LAST widget
+        // and has no partner: at half width it would sit beside a permanently
+        // empty cell from md up, so it spans the row like the KPI strip.
+        foreach ([SalesKpisWidget::class, RevenueWonByMonthChart::class, StaleDealsWidget::class, ActivityCountsWidget::class] as $widget) {
+            $this->assertSame(['default' => 'full'], (new $widget)->getColumnSpan(), $widget);
+        }
+
+        // Stacked on phones, paired from tablets up.
+        foreach ([LeadsByStatusChart::class, PipelineByStageChart::class] as $widget) {
+            $this->assertSame(['default' => 'full', 'md' => 1], (new $widget)->getColumnSpan(), $widget);
+        }
+
+        // Tables: full width up to lg — half a tablet cannot hold one — then paired.
+        foreach ([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class] as $widget) {
+            $this->assertSame(['default' => 'full', 'lg' => 1], (new $widget)->getColumnSpan(), $widget);
+        }
+    }
+
     #[Test]
     public function a_user_without_any_permission_sees_the_page_without_widgets(): void
     {

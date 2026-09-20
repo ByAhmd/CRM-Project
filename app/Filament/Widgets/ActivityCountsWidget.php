@@ -29,6 +29,13 @@ final class ActivityCountsWidget extends ChartWidget
 
     protected static ?int $sort = 8;
 
+    /**
+     * The LAST widget of the dashboard, with no partner: at half width a
+     * permanently empty cell would sit beside it from md up, so it spans the
+     * row at every breakpoint like the KPI strip.
+     */
+    protected int|string|array $columnSpan = ['default' => 'full'];
+
     protected ?string $maxHeight = '300px';
 
     public static function canView(): bool

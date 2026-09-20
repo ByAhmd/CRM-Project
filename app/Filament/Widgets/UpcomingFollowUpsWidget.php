@@ -37,6 +37,13 @@ final class UpcomingFollowUpsWidget extends TableWidget
 
     protected static ?int $sort = 6;
 
+    /**
+     * A five-column table is unusable in half a tablet: full width up to
+     * the lg breakpoint, then half the grid so it pairs with the tasks
+     * list on desktop.
+     */
+    protected int|string|array $columnSpan = ['default' => 'full', 'lg' => 1];
+
     public static function canView(): bool
     {
         $user = auth()->user();
@@ -58,10 +65,14 @@ final class UpcomingFollowUpsWidget extends TableWidget
                     ->label(__('dashboard.tables.columns.title'))
                     ->weight('semibold'),
 
+                // The glance is the follow-up and its moment; the qualifiers
+                // step in from md/lg (same budget rule as the resource
+                // tables, MobileColumnBudgetTest).
                 TextColumn::make('kind')
                     ->label(__('dashboard.tables.columns.kind'))
                     ->badge()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('md'),
 
                 TextColumn::make('due_at')
                     ->label(__('dashboard.tables.columns.due_at'))
@@ -70,12 +81,14 @@ final class UpcomingFollowUpsWidget extends TableWidget
 
                 TextColumn::make('assignee.name')
                     ->label(__('dashboard.tables.columns.assignee'))
-                    ->placeholder(__('assignment.placeholders.unassigned')),
+                    ->placeholder(__('assignment.placeholders.unassigned'))
+                    ->visibleFrom('md'),
 
                 TextColumn::make('subject_record')
                     ->label(__('dashboard.tables.columns.subject'))
                     ->state(static fn (Task $record): ?string => $record->subjectLabel())
-                    ->placeholder(__('common.placeholders.empty')),
+                    ->placeholder(__('common.placeholders.empty'))
+                    ->visibleFrom('lg'),
             ])
             ->defaultSort('due_at')
             ->recordUrl(static fn (Task $record): string => TaskResource::getUrl('view', ['record' => $record]))
