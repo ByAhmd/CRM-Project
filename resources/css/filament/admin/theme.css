@@ -28,27 +28,36 @@
 }
 
 :root {
-    --crm-bg: #f4f6f9;
+    /*
+     | «فيروز» (Fayrouz) — the identity the owner chose on 2026-09-20 from
+     | seven AA-validated directions previewed live on the running panel
+     | (decision A-9, amended). Sea-teal primary on water-white: deliberately
+     | clear of every semantic colour the CRM trades in — success-green
+     | (qualified, won), danger-red (lost), amber (warnings), info-blue — so
+     | brand and status never compete in a table. Every pair below holds
+     | WCAG AA (text 4.5:1+, large/ui 3:1+) in both themes.
+     */
+    --crm-bg: #f2f7f8;
     --crm-card: #ffffff;
-    --crm-text: #172033;
-    --crm-text-2: #3d4b5f;
-    --crm-muted: #6b7a8c;
-    --crm-border: #e1e7ee;
-    --crm-border-2: #c9d3de;
+    --crm-text: #14262b;
+    --crm-text-2: #3b5259;
+    --crm-muted: #5d737a;
+    --crm-border: #dfe9ec;
+    --crm-border-2: #c4d5da;
 
-    /* Sidebar surface: deep navy in both themes. */
-    --crm-sidebar: #16284a;
-    --crm-sidebar-2: #1d3461;
-    --crm-sidebar-hover: #24407a;
-    --crm-on-sidebar: #e8eef8;
+    /* Sidebar surface: deep sea-teal in both themes. */
+    --crm-sidebar: #103b47;
+    --crm-sidebar-2: #14495a;
+    --crm-sidebar-hover: #1a5a6e;
+    --crm-on-sidebar: #dff0f4;
 
     /* Text and icons drawn on a solid accent fill (calendar events and buttons). */
     --crm-on-accent: #ffffff;
 
     /*
-     | Focus ring drawn on the navy sidebar. The sidebar keeps the same deep
+     | Focus ring drawn on the sea-teal sidebar. The sidebar keeps the same deep
      | ground in both themes, so one definition serves both; primary-300 is
-     | the lightest ramp step that still reads as the brand blue on it. The
+     | the lightest ramp step that still reads as the brand teal on it. The
      | --primary-* form is the panel's own runtime injection (AssetManager
      | renders every palette shade on :root), not Tailwind's usage-pruned
      | --color-* mapping.
@@ -66,18 +75,18 @@
 }
 
 .dark {
-    --crm-bg: #0f151c;
-    --crm-card: #161e27;
-    --crm-text: #e6ecf1;
-    --crm-text-2: #c2ccd6;
-    --crm-muted: #8e9ba8;
-    --crm-border: #27313c;
-    --crm-border-2: #34404b;
+    --crm-bg: #0d1619;
+    --crm-card: #141f23;
+    --crm-text: #e4eef1;
+    --crm-text-2: #bfd0d5;
+    --crm-muted: #8aa2aa;
+    --crm-border: #24343a;
+    --crm-border-2: #31454c;
 
-    --crm-sidebar: #0f1a30;
-    --crm-sidebar-2: #162542;
-    --crm-sidebar-hover: #1e315a;
-    --crm-on-sidebar: #dbe4f2;
+    --crm-sidebar: #0a2830;
+    --crm-sidebar-2: #103b47;
+    --crm-sidebar-hover: #174b5b;
+    --crm-on-sidebar: #d3e8ee;
 }
 
 /*
@@ -304,9 +313,9 @@ html.dark {
  |
  | The sidebar is the gap: vendor sidebar.css marks focus only by
  | focus-visible:bg-gray-100 (dark: bg-white/5) and sets outline-hidden —
- | on the CRM's navy sidebar that is a light pill under light text in the
+ | on the CRM's sea-teal sidebar that is a light pill under light text in the
  | light theme and near-invisible in the dark one, and the icon buttons'
- | primary-600 ring vanishes against the navy. The ring is inset because
+ | primary-600 ring vanishes against the deep teal. The ring is inset because
  | the sidebar nav is a scroll container that would clip an outset outline
  | on its first and last items.
  * ------------------------------------------------------------------------- */

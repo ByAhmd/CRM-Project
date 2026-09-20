@@ -64,10 +64,11 @@ final class AdminPanelProvider extends PanelProvider
             ])
             ->strictAuthorization()
             ->colors([
-                'primary' => Color::hex('#2F5FA6'),
+                'primary' => Color::hex('#0e7490'),
                 'gray' => Color::Slate,
             ])
             ->font('Tajawal')
+            ->favicon(asset('favicon.svg'))
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->darkMode()
             ->defaultThemeMode(ThemeMode::System)

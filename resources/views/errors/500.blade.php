@@ -22,25 +22,29 @@
     <meta name="robots" content="noindex">
     <title>{{ __('errors.pages.'.$crmCode.'.title') }} · {{ __('app.name') }}</title>
     <style>
+        /* «فيروز» (Fayrouz, A-9 as amended 2026-09-20) — the panel identity,
+           copied inline on purpose: an error page must not depend on the
+           build that may be exactly what broke. Keep in step with
+           resources/css/filament/admin/theme.css. */
         :root {
-            --crm-bg: #f4f6f9;
+            --crm-bg: #f2f7f8;
             --crm-card: #ffffff;
-            --crm-text: #172033;
-            --crm-muted: #6b7a8c;
-            --crm-border: #e1e7ee;
-            --crm-accent: #24497f;
+            --crm-text: #14262b;
+            --crm-muted: #5d737a;
+            --crm-border: #dfe9ec;
+            --crm-accent: #155e75;
             --crm-on-accent: #ffffff;
             color-scheme: light dark;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --crm-bg: #0f151c;
-                --crm-card: #161e27;
-                --crm-text: #e6ecf1;
-                --crm-muted: #8e9ba8;
-                --crm-border: #27313c;
-                --crm-accent: #3a6fbf;
+                --crm-bg: #0d1619;
+                --crm-card: #141f23;
+                --crm-text: #e4eef1;
+                --crm-muted: #8aa2aa;
+                --crm-border: #24343a;
+                --crm-accent: #0e7490;
             }
         }
 
