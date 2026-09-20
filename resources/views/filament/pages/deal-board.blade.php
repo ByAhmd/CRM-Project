@@ -20,7 +20,12 @@
             </x-filament::input.wrapper>
         </div>
 
-        <div class="flex items-start gap-4 overflow-x-auto pb-4">
+        {{--
+            snap-x (proximity) + snap-start: a phone swipe settles on a whole
+            column (w-72 = 288px against a 375px viewport) without hijacking
+            desktop scrolling or the drag auto-scroll between columns.
+        --}}
+        <div class="flex snap-x items-start gap-4 overflow-x-auto pb-4">
             @foreach ($columns as $column)
                 @php
                     $stage = $column['stage'];
@@ -28,7 +33,7 @@
 
                 <div
                     wire:key="stage-{{ $stage->getKey() }}"
-                    class="flex w-72 min-w-72 shrink-0 flex-col rounded-xl bg-white ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
+                    class="flex w-72 min-w-72 shrink-0 snap-start flex-col rounded-xl bg-white ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
                 >
                     <div class="flex items-center justify-between gap-2 border-b border-gray-200 px-3 py-2 dark:border-white/10">
                         <div class="flex min-w-0 items-center gap-2">

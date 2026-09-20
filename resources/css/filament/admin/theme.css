@@ -44,6 +44,25 @@
 
     /* Text and icons drawn on a solid accent fill (calendar events and buttons). */
     --crm-on-accent: #ffffff;
+
+    /*
+     | Focus ring drawn on the navy sidebar. The sidebar keeps the same deep
+     | ground in both themes, so one definition serves both; primary-300 is
+     | the lightest ramp step that still reads as the brand blue on it. The
+     | --primary-* form is the panel's own runtime injection (AssetManager
+     | renders every palette shade on :root), not Tailwind's usage-pruned
+     | --color-* mapping.
+     */
+    --crm-sidebar-focus: var(--primary-300);
+
+    /*
+     | Opaque surface for the pinned table header: the text token mixed into
+     | the card token, so it tracks both themes from :root alone (var()
+     | resolves at use, and both inputs flip under .dark). Light lands on the
+     | vendor's gray-50; dark lands just above the card so rows never show
+     | through the sticky header.
+     */
+    --crm-table-header: color-mix(in oklab, var(--crm-text) 4%, var(--crm-card));
 }
 
 .dark {
@@ -271,4 +290,156 @@ html.dark {
 .crm-calendar-event-muted {
     opacity: 0.6;
     text-decoration: line-through;
+}
+
+/* ---------------------------------------------------------------------------
+ | Focus visibility
+ |
+ | Filament 5 already draws focus rings where the CRM palette leaves them
+ | legible: .fi-btn and .fi-icon-btn (support/css/components/button.css,
+ | icon-button.css: focus-visible ring-2), .fi-link (link.css: outline-2
+ | outline-current), the input wrapper (input/wrapper.css: focus-within
+ | ring-2), pagination (pagination.css) and the sort header button
+ | (tables/css/header-cell.css: focus-visible ring-2 primary). Those stay.
+ |
+ | The sidebar is the gap: vendor sidebar.css marks focus only by
+ | focus-visible:bg-gray-100 (dark: bg-white/5) and sets outline-hidden —
+ | on the CRM's navy sidebar that is a light pill under light text in the
+ | light theme and near-invisible in the dark one, and the icon buttons'
+ | primary-600 ring vanishes against the navy. The ring is inset because
+ | the sidebar nav is a scroll container that would clip an outset outline
+ | on its first and last items.
+ * ------------------------------------------------------------------------- */
+
+.fi-sidebar-item-btn:focus-visible,
+.fi-sidebar-group-dropdown-trigger-btn:focus-visible,
+.fi-sidebar-database-notifications-btn:focus-visible {
+    background-color: var(--crm-sidebar-hover);
+    outline: 2px solid var(--crm-sidebar-focus);
+    outline-offset: -2px;
+}
+
+.fi-sidebar .fi-icon-btn:focus-visible {
+    outline: 2px solid var(--crm-sidebar-focus);
+    outline-offset: -2px;
+}
+
+/* ---------------------------------------------------------------------------
+ | Touch targets
+ |
+ | On coarse pointers every primary control offers the 44px hit height the
+ | platform guidelines ask for; minimums only, so a taller layout is never
+ | shrunk and fine pointers (desktop density) are untouched. The row-action
+ | menu trigger is an .fi-icon-btn (ActionGroup::toIconButtonTriggerHtml()),
+ | so the icon-button rule covers it.
+ * ------------------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+    .fi-btn,
+    .fi-icon-btn,
+    .fi-sidebar-item-btn,
+    .fi-sidebar-group-dropdown-trigger-btn,
+    .fi-sidebar-database-notifications-btn,
+    .fi-pagination-item-btn {
+        min-block-size: 2.75rem;
+    }
+
+    .fi-icon-btn,
+    .fi-pagination-item-btn {
+        min-inline-size: 2.75rem;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ | Sticky table header
+ |
+ | Vendor facts (filament/tables): the record table renders as
+ | .fi-ta-content-ctn > table.fi-ta-table > thead (views/index.blade.php),
+ | and the container is `relative overflow-x-auto` (css/content.css) — a
+ | non-visible overflow-x makes it the nearest scrollport, so the page
+ | scroll can never pin the header. Bounding the container's block size
+ | turns it into the vertical scrollport the header sticks in; tables
+ | shorter than the bound are unaffected.
+ |
+ | Sticky lands on the cells as well as the row group, because collapsed
+ | table borders do not travel with sticky cells — the bottom rule is an
+ | inset shadow (vertical offset only) for the same reason. The vendor
+ | header surface is translucent in dark mode (`dark:bg-white/5`,
+ | css/table.css), so the pinned cells repaint on the opaque token. The
+ | z-index stays below the dropdown panels' z-20 (support dropdown css),
+ | and a row menu near the bounded edge flips upward (ActionGroup dropdown
+ | flip defaults to true). Horizontal scrolling is untouched: the header
+ | scrolls inline with its columns in both directions.
+ * ------------------------------------------------------------------------- */
+
+.fi-ta-content-ctn {
+    max-block-size: max(24rem, calc(100vh - 16rem));
+    max-block-size: max(24rem, calc(100dvh - 16rem));
+}
+
+/* Only the LAST header row pins: every panel table renders a single header
+   row today, and if one ever grows a second (a grouping row, say) the extra
+   rows scroll away instead of stacking on top of each other at the same
+   offset. The thead element itself stays unpositioned for the same reason. */
+.fi-ta-table > thead > tr:last-child > th,
+.fi-ta-table > thead > tr:last-child > td {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 5;
+    background-color: var(--crm-table-header);
+    box-shadow: inset 0 -1px 0 var(--crm-border);
+}
+
+/* The bound exists only on screens, for the sticky header; paper gets every row. */
+@media print {
+    .fi-ta-content-ctn {
+        max-block-size: none;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ | Calendar on narrow viewports
+ |
+ | Companion to the compact layout in resources/js/calendar.js: the same
+ | 640px cutoff (the full toolbar — prev/next/today, title and four view
+ | buttons — needs roughly that much inline space in either language). The
+ | JS trims the toolbars and swaps the default view; here the chunks are
+ | allowed to wrap instead of overflowing, and the title steps down one
+ | size so month-plus-year fits a phone in Arabic and English alike.
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+    .fi-crm-calendar .fc .fc-toolbar {
+        flex-wrap: wrap;
+        row-gap: 0.5rem;
+        column-gap: 0.75rem;
+    }
+
+    .fi-crm-calendar .fc .fc-toolbar-title {
+        font-size: 1rem;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ | Reduced motion
+ |
+ | Zero out decorative transitions (hover fades, sidebar collapse slides,
+ | Alpine enter/leave — Alpine reads the computed duration, so a 0s value
+ | completes them instantly and nothing is left half-shown). Deliberately
+ | scoped to transitions only, without !important:
+ | - Filament's loading indicators are animations, not transitions, and
+ |   stay untouched (loading-indicator.css and loading-section.css are
+ |   already motion-safe:, the table's loading pulse keeps running).
+ | - FullCalendar's drag-revert writes an inline transition and waits for
+ |   its transitionend (interaction doRevertAnimation); an unimportant
+ |   rule cannot override an inline style, so that callback still fires.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .fi-body *,
+    .fi-body *::before,
+    .fi-body *::after {
+        transition-duration: 0s;
+        transition-delay: 0s;
+    }
 }
