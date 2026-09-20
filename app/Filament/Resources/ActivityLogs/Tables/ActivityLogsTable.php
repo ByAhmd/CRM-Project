@@ -32,11 +32,14 @@ final class ActivityLogsTable
                     ->dateTime('Y-m-d H:i:s')
                     ->sortable(),
 
+                // Phone budget: when, what, to which record and by whom stay
+                // at every width; only the area badge steps in from `md`.
                 TextColumn::make('log_name')
                     ->label(__('activity.fields.area'))
                     ->badge()
                     ->color('gray')
-                    ->formatStateUsing(fn (ActivityLog $record): string => app(ActivityLogPresenter::class)->for($record)->logNameLabel()),
+                    ->formatStateUsing(fn (ActivityLog $record): string => app(ActivityLogPresenter::class)->for($record)->logNameLabel())
+                    ->visibleFrom('md'),
 
                 TextColumn::make('description')
                     ->label(__('activity.fields.action'))

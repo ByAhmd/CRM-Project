@@ -56,6 +56,9 @@ final class CompetitorsRelationManager extends RelationManager
                 TextColumn::make('name')
                     ->label(__('competitors.fields.name'))
                     ->searchable()
+                    // Qualified: the pivot join would otherwise make the bare
+                    // column name ambiguous.
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('competitors.name', $direction))
                     ->weight('semibold'),
                 LtrText::column(
                     TextColumn::make('website')
@@ -71,6 +74,7 @@ final class CompetitorsRelationManager extends RelationManager
                     ->label(__('deals.fields.competitor_notes'))
                     ->state(fn (Competitor $record): ?string => self::pivot($record)?->getAttribute('notes'))
                     ->limit(60)
+                    ->tooltip(fn (?string $state): ?string => $state !== null && mb_strlen($state) > 60 ? $state : null)
                     ->placeholder(__('common.placeholders.empty')),
             ])
             ->defaultSort('competitors.name')

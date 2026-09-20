@@ -44,6 +44,10 @@ final class LeadsTable
             // Every listed custom column reads the record's values, so the
             // relation is loaded once for the page instead of per cell (D-9).
             ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
+            // Phone budget: identity, status and score stay at every width;
+            // secondary attributes step in from `md`, owner and dates from `lg`.
+            // The cells stay in the DOM (CSS breakpoints), so nothing rendered
+            // or asserted changes — only what a narrow screen shows.
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('leads.fields.name'))
@@ -56,7 +60,10 @@ final class LeadsTable
                     ->label(__('leads.fields.company_name'))
                     ->searchable()
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->limit(40)
+                    ->tooltip(fn (?string $state): ?string => $state !== null && mb_strlen($state) > 40 ? $state : null)
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('status.display_name')
                     ->label(__('leads.fields.status'))
@@ -74,17 +81,20 @@ final class LeadsTable
                     ->label(__('leads.fields.priority'))
                     ->badge()
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('source.display_name')
                     ->label(__('leads.fields.source'))
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('owner.name')
                     ->label(__('leads.fields.owner'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
 
                 LtrText::column(
                     TextColumn::make('phone')
@@ -102,13 +112,15 @@ final class LeadsTable
                         ->toggleable(isToggledHiddenByDefault: true),
                 ),
 
-                TagsSelect::column(),
+                TagsSelect::column()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
                     ->label(__('leads.fields.created_at'))
                     ->dateTime('Y-m-d')
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 ...CustomFieldsSchema::tableColumns(CustomFieldEntity::Lead),
             ])

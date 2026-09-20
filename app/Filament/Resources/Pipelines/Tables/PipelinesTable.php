@@ -30,10 +30,13 @@ final class PipelinesTable
                         ->orWhere('name_en', 'like', "%{$search}%"))
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy(Pipeline::localisedNameColumn(), $direction)),
 
+                // Phone budget: name, stage count and both flags stay at every
+                // width; the default stage steps in from `md`.
                 TextColumn::make('defaultStage.display_name')
                     ->label(__('pipelines.fields.default_stage'))
                     ->state(fn (Pipeline $record): ?string => $record->defaultStage?->display_name)
-                    ->placeholder(__('pipelines.placeholders.no_default_stage')),
+                    ->placeholder(__('pipelines.placeholders.no_default_stage'))
+                    ->visibleFrom('md'),
 
                 TextColumn::make('stages_count')
                     ->label(__('pipelines.fields.stages_count'))

@@ -70,6 +70,8 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('original_name')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('uploader'))
+            // Phone budget: file name, kind and size stay at every width; the
+            // description steps in from `md`, uploader and date from `lg`.
             ->columns([
                 LtrText::column(
                     TextColumn::make('original_name')
@@ -77,6 +79,7 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
                         ->icon(fn (Attachment $record): Heroicon => $record->isImage() ? Heroicon::OutlinedPhoto : Heroicon::OutlinedDocument)
                         ->url(fn (Attachment $record): ?string => $this->canDownload($record) ? $record->downloadUrl() : null, shouldOpenInNewTab: true)
                         ->searchable()
+                        ->sortable()
                         ->weight('semibold'),
                 ),
                 TextColumn::make('mime_type')
@@ -94,15 +97,19 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
                     ->label(__('attachments.fields.description'))
                     ->placeholder(__('common.placeholders.empty'))
                     ->limit(60)
-                    ->wrap(),
+                    ->tooltip(fn (?string $state): ?string => $state !== null && mb_strlen($state) > 60 ? $state : null)
+                    ->wrap()
+                    ->visibleFrom('md'),
                 TextColumn::make('uploader.name')
                     ->label(__('attachments.fields.uploaded_by'))
-                    ->placeholder(__('common.placeholders.empty')),
+                    ->placeholder(__('common.placeholders.empty'))
+                    ->visibleFrom('lg'),
                 LtrText::column(
                     TextColumn::make('created_at')
                         ->label(__('attachments.fields.created_at'))
                         ->dateTime('Y-m-d H:i')
-                        ->sortable(),
+                        ->sortable()
+                        ->visibleFrom('lg'),
                 ),
             ])
             ->defaultSort('created_at', 'desc')

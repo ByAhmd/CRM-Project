@@ -71,10 +71,14 @@ final class StagesRelationManager extends RelationManager
                     ->suffix('%')
                     ->sortable(),
 
+                // Phone budget: the colour swatch is the one column a narrow
+                // screen can spare — name, kind, probability and the default
+                // flag stay.
                 TextColumn::make('color')
                     ->label(__('pipelines.stages.fields.color'))
                     ->badge()
-                    ->color(fn (PipelineStage $record): string => $record->color->value),
+                    ->color(fn (PipelineStage $record): string => $record->color->value)
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_default')
                     ->label(__('pipelines.stages.fields.is_default'))

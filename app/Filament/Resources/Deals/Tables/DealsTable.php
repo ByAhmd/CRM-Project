@@ -47,6 +47,10 @@ final class DealsTable
             // Every listed custom column reads the record's values, so the
             // relation is loaded once for the page instead of per cell (D-9).
             ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
+            // Phone budget: title, stage, status and amount stay at every
+            // width; the account and close date step in from `md`, forecasting
+            // detail, owner and dates from `lg`. CSS breakpoints only — the
+            // cells stay in the DOM.
             ->columns([
                 TextColumn::make('title')
                     ->label(__('deals.fields.title'))
@@ -58,7 +62,8 @@ final class DealsTable
                     ->label(__('deals.fields.account'))
                     ->searchable()
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('stage.display_name')
                     ->label(__('deals.fields.stage'))
@@ -82,44 +87,51 @@ final class DealsTable
                         ->label(__('deals.fields.weighted_amount'))
                         ->state(fn (Deal $record): string => $record->weighted_amount)
                         ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
-                        ->toggleable(),
+                        ->toggleable()
+                        ->visibleFrom('lg'),
                 ),
 
                 TextColumn::make('effective_probability')
                     ->label(__('deals.fields.effective_probability'))
                     ->state(fn (Deal $record): int => $record->effective_probability)
                     ->formatStateUsing(fn (int $state): string => Number::percentage($state, locale: app()->getLocale()))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('forecast_category')
                     ->label(__('deals.fields.forecast_category'))
                     ->badge()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('expected_close_date')
                     ->label(__('deals.fields.expected_close_date'))
                     ->date('Y-m-d')
                     ->color(fn (Deal $record): ?string => DealInfolist::isOverdue($record) ? 'danger' : null)
                     ->placeholder(__('common.placeholders.empty'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('owner.name')
                     ->label(__('deals.fields.owner'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('products_count')
                     ->label(__('deals.fields.products_count'))
                     ->counts('products')
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TagsSelect::column(),
+                TagsSelect::column()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
                     ->label(__('deals.fields.created_at'))
                     ->dateTime('Y-m-d')
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 ...CustomFieldsSchema::tableColumns(CustomFieldEntity::Deal),
             ])

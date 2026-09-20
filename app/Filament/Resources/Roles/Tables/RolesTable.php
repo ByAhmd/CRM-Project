@@ -20,6 +20,8 @@ final class RolesTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Phone budget: name and both counts stay at every width; the
+            // technical key and the seeded flag step in from `md`.
             ->columns([
                 TextColumn::make('display_name')
                     ->label(__('roles.fields.name'))
@@ -27,19 +29,22 @@ final class RolesTable
                     ->searchable(query: fn ($query, string $search) => $query
                         ->where('name_ar', 'like', "%{$search}%")
                         ->orWhere('name_en', 'like', "%{$search}%")
-                        ->orWhere('name', 'like', "%{$search}%")),
+                        ->orWhere('name', 'like', "%{$search}%"))
+                    ->sortable(query: fn ($query, string $direction) => $query->orderBy(Role::localisedNameColumn(), $direction)),
 
                 LtrText::column(
                     TextColumn::make('name')
                         ->label(__('roles.fields.key'))
                         ->fontFamily('mono')
-                        ->sortable(),
+                        ->sortable()
+                        ->visibleFrom('md'),
                 ),
 
                 IconColumn::make('seeded')
                     ->label(__('roles.fields.seeded'))
                     ->state(fn (Role $record): bool => $record->isSeeded())
-                    ->boolean(),
+                    ->boolean()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('permissions_count')
                     ->label(__('roles.fields.permissions_count'))

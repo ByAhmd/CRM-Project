@@ -46,6 +46,10 @@ final class TasksTable
     public static function configure(Table $table, bool $withSubject = true): Table
     {
         return $table
+            // Phone budget: title, status and due date stay at every width;
+            // kind, priority and the recurrence marker step in from `md`, the
+            // assignee and the related record from `lg`. CSS breakpoints only —
+            // the cells stay in the DOM.
             ->columns([
                 TextColumn::make('title')
                     ->label(__('tasks.fields.title'))
@@ -57,7 +61,8 @@ final class TasksTable
                 TextColumn::make('kind')
                     ->label(__('tasks.fields.kind'))
                     ->badge()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('md'),
 
                 TextColumn::make('status')
                     ->label(__('tasks.fields.status'))
@@ -67,7 +72,8 @@ final class TasksTable
                 TextColumn::make('priority')
                     ->label(__('tasks.fields.priority'))
                     ->badge()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('due_at')
                     ->label(__('tasks.fields.due_at'))
@@ -79,7 +85,8 @@ final class TasksTable
                 TextColumn::make('assignee.name')
                     ->label(__('tasks.fields.assignee'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
 
                 ...$withSubject ? [
                     TextColumn::make('subject_record')
@@ -90,14 +97,16 @@ final class TasksTable
 
                             return $subject === null ? null : TaskResource::urlForSubject($subject);
                         })
-                        ->placeholder(__('common.placeholders.empty')),
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->visibleFrom('lg'),
                 ] : [],
 
                 IconColumn::make('recurrence_frequency')
                     ->label(__('tasks.fields.recurrence_frequency'))
                     ->icon(fn (Task $record): ?Heroicon => $record->repeats() ? Heroicon::OutlinedArrowPath : null)
                     ->tooltip(fn (Task $record): ?string => $record->repeats() ? TaskInfolist::recurrenceSummary($record) : null)
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('md'),
 
                 TextColumn::make('created_at')
                     ->label(__('tasks.fields.created_at'))

@@ -33,11 +33,16 @@ final class ExportsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Phone budget: the file, its status and when it ran stay at every
+            // width; the entity and the row counts step in from `md`, the
+            // launcher and the success count from `lg`. CSS breakpoints only —
+            // the cells stay in the DOM.
             ->columns([
                 LtrText::column(
                     TextColumn::make('file_name')
                         ->label(__('exports.fields.file_name'))
                         ->searchable()
+                        ->sortable()
                         ->placeholder(__('common.placeholders.empty'))
                         ->weight('semibold'),
                 ),
@@ -46,28 +51,33 @@ final class ExportsTable
                     ->label(__('exports.fields.entity'))
                     ->formatStateUsing(fn (string $state): string => ExportResource::entityLabel($state))
                     ->badge()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('md'),
 
                 TextColumn::make('user.name')
                     ->label(__('exports.fields.user'))
                     ->placeholder(__('common.placeholders.empty'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('total_rows')
                     ->label(__('exports.fields.total_rows'))
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('successful_rows')
                     ->label(__('exports.fields.successful_rows'))
                     ->numeric()
-                    ->color('success'),
+                    ->color('success')
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('failed_rows_count')
                     ->label(__('exports.fields.failed_rows'))
                     ->state(fn (Export $record): int => $record->getFailedRowsCount())
                     ->numeric()
-                    ->color(fn (int $state): ?string => $state > 0 ? 'danger' : null),
+                    ->color(fn (int $state): ?string => $state > 0 ? 'danger' : null)
+                    ->visibleFrom('md'),
 
                 TextColumn::make('status')
                     ->label(__('exports.fields.status'))

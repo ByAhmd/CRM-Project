@@ -59,10 +59,13 @@ final class DealsRelationManager extends RelationManager
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->whereIn('deals.id', DealResource::getEloquentQuery()->select('deals.id'))
                 ->with(['stage', 'owner']))
+            // Phone budget: title, stage, status and amount stay at every
+            // width; the close date steps in from `md`, the owner from `lg`.
             ->columns([
                 TextColumn::make('title')
                     ->label(__('deals.fields.title'))
                     ->searchable()
+                    ->sortable()
                     ->weight('semibold')
                     ->url(fn (Deal $record): string => DealResource::getUrl('view', ['record' => $record])),
                 TextColumn::make('stage.display_name')
@@ -80,13 +83,15 @@ final class DealsRelationManager extends RelationManager
                 ),
                 TextColumn::make('owner.name')
                     ->label(__('deals.fields.owner'))
-                    ->placeholder(__('assignment.placeholders.unassigned')),
+                    ->placeholder(__('assignment.placeholders.unassigned'))
+                    ->visibleFrom('lg'),
                 TextColumn::make('expected_close_date')
                     ->label(__('deals.fields.expected_close_date'))
                     ->date('Y-m-d')
                     ->color(fn (Deal $record): ?string => DealInfolist::isOverdue($record) ? 'danger' : null)
                     ->placeholder(__('common.placeholders.empty'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
             ])
             ->defaultSort('created_at', 'desc')
             ->headerActions([

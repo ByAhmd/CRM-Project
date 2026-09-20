@@ -42,6 +42,10 @@ final class ContactsTable
             // Every listed custom column reads the record's values, so the
             // relation is loaded once for the page instead of per cell (D-9).
             ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
+            // Phone budget: name, account and mobile stay at every width;
+            // e-mail, job title and the primary flag step in from `md`, owner
+            // and tags from `lg`. CSS breakpoints only — the cells stay in
+            // the DOM.
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('contacts.fields.name'))
@@ -59,14 +63,18 @@ final class ContactsTable
                 TextColumn::make('job_title')
                     ->label(__('contacts.fields.job_title'))
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->limit(40)
+                    ->tooltip(fn (?string $state): ?string => $state !== null && mb_strlen($state) > 40 ? $state : null)
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 LtrText::column(
                     TextColumn::make('email')
                         ->label(__('contacts.fields.email'))
                         ->searchable()
                         ->placeholder(__('common.placeholders.empty'))
-                        ->toggleable(),
+                        ->toggleable()
+                        ->visibleFrom('md'),
                 ),
 
                 LtrText::column(
@@ -79,14 +87,17 @@ final class ContactsTable
                 IconColumn::make('is_primary')
                     ->label(__('contacts.fields.is_primary'))
                     ->boolean()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('owner.name')
                     ->label(__('contacts.fields.owner'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
 
-                TagsSelect::column(),
+                TagsSelect::column()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
                     ->label(__('contacts.fields.created_at'))

@@ -44,6 +44,10 @@ final class CustomFieldsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Phone budget: entity, label, type and the active flag stay at
+            // every width; the key, the required flag and the value count step
+            // in from `md`, the listing flags from `lg`. CSS breakpoints only —
+            // the cells stay in the DOM.
             ->columns([
                 TextColumn::make('entity')
                     ->label(__('custom_fields.fields.entity'))
@@ -54,7 +58,8 @@ final class CustomFieldsTable
                     TextColumn::make('key')
                         ->label(__('custom_fields.fields.key'))
                         ->searchable()
-                        ->sortable(),
+                        ->sortable()
+                        ->visibleFrom('md'),
                 ),
 
                 TextColumn::make('display_label')
@@ -71,23 +76,27 @@ final class CustomFieldsTable
 
                 IconColumn::make('is_required')
                     ->label(__('custom_fields.fields.is_required'))
-                    ->boolean(),
+                    ->boolean()
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_listed')
                     ->label(__('custom_fields.fields.is_listed'))
                     ->boolean()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 IconColumn::make('is_filterable')
                     ->label(__('custom_fields.fields.is_filterable'))
                     ->boolean()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('values_count')
                     ->label(__('custom_fields.fields.values_count'))
                     ->counts('values')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_active')
                     ->label(__('custom_fields.fields.is_active'))

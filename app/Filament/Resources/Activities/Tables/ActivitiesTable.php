@@ -39,6 +39,10 @@ final class ActivitiesTable
     public static function configure(Table $table, bool $withSubject = true): Table
     {
         return $table
+            // Phone budget: when, kind and what stay at every width; the type
+            // and the related record step in from `md`, direction, duration
+            // and owner from `lg`. CSS breakpoints only — the cells stay in
+            // the DOM.
             ->columns([
                 TextColumn::make('occurred_at')
                     ->label(__('activities.fields.occurred_at'))
@@ -51,13 +55,16 @@ final class ActivitiesTable
 
                 TextColumn::make('type.display_name')
                     ->label(__('activities.fields.type'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('subject')
                     ->label(__('activities.fields.subject'))
                     ->searchable()
+                    ->sortable()
                     ->weight('semibold')
-                    ->limit(60),
+                    ->limit(60)
+                    ->tooltip(fn (?string $state): ?string => $state !== null && mb_strlen($state) > 60 ? $state : null),
 
                 ...$withSubject ? [
                     TextColumn::make('subject_record')
@@ -68,7 +75,8 @@ final class ActivitiesTable
 
                             return $subject === null ? null : ActivityResource::urlForSubject($subject);
                         })
-                        ->placeholder(__('common.placeholders.empty')),
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->visibleFrom('md'),
                 ] : [],
 
                 TextColumn::make('direction')
@@ -76,18 +84,21 @@ final class ActivitiesTable
                     ->badge()
                     ->color('gray')
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('duration_minutes')
                     ->label(__('activities.fields.duration_minutes'))
                     ->numeric()
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('owner.name')
                     ->label(__('activities.fields.owner'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
             ])
             ->defaultSort('occurred_at', 'desc')
             ->filters([

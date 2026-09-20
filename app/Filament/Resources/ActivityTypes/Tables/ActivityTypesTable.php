@@ -41,14 +41,19 @@ final class ActivityTypesTable
                     ->badge()
                     ->sortable(),
 
+                // Phone budget: icon, name, kind and the active flag stay at
+                // every width; the colour swatch and the system flag step in
+                // from `md`.
                 TextColumn::make('color')
                     ->label(__('activity_types.fields.color'))
                     ->badge()
-                    ->color(fn (ActivityType $record): string => $record->color->value),
+                    ->color(fn (ActivityType $record): string => $record->color->value)
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_system')
                     ->label(__('activity_types.fields.is_system'))
-                    ->boolean(),
+                    ->boolean()
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_active')
                     ->label(__('activity_types.fields.is_active'))

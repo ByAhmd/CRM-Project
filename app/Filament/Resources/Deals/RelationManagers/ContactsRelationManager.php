@@ -63,6 +63,9 @@ final class ContactsRelationManager extends RelationManager
                     ->label(__('contacts.fields.name'))
                     ->state(fn (Contact $record): string => $record->full_name)
                     ->searchable(['first_name', 'last_name'])
+                    // Qualified: the pivot join would otherwise make the bare
+                    // column names ambiguous.
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('contacts.last_name', $direction)->orderBy('contacts.first_name', $direction))
                     ->weight('semibold'),
                 TextColumn::make('job_title')->label(__('contacts.fields.job_title'))->placeholder(__('common.placeholders.empty')),
                 LtrText::column(TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))),

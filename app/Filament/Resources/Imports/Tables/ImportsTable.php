@@ -25,11 +25,16 @@ final class ImportsTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Phone budget: the file, its status and when it ran stay at every
+            // width; the entity and the row counts step in from `md`, the
+            // launcher and the success count from `lg`. CSS breakpoints only —
+            // the cells stay in the DOM.
             ->columns([
                 LtrText::column(
                     TextColumn::make('file_name')
                         ->label(__('imports.fields.file_name'))
                         ->searchable()
+                        ->sortable()
                         ->weight('semibold'),
                 ),
 
@@ -37,17 +42,20 @@ final class ImportsTable
                     ->label(__('imports.fields.entity'))
                     ->formatStateUsing(fn (string $state): string => ImportResource::entityLabel($state))
                     ->badge()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('md'),
 
                 TextColumn::make('user.name')
                     ->label(__('imports.fields.user'))
                     ->placeholder(__('common.placeholders.empty'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('total_rows')
                     ->label(__('imports.fields.total_rows'))
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('processed_rows')
                     ->label(__('imports.fields.processed_rows'))
@@ -57,13 +65,15 @@ final class ImportsTable
                 TextColumn::make('successful_rows')
                     ->label(__('imports.fields.successful_rows'))
                     ->numeric()
-                    ->color('success'),
+                    ->color('success')
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('failed_rows_count')
                     ->label(__('imports.fields.failed_rows'))
                     ->state(fn (Import $record): int => $record->getFailedRowsCount())
                     ->numeric()
-                    ->color(fn (int $state): ?string => $state > 0 ? 'danger' : null),
+                    ->color(fn (int $state): ?string => $state > 0 ? 'danger' : null)
+                    ->visibleFrom('md'),
 
                 TextColumn::make('status')
                     ->label(__('imports.fields.status'))

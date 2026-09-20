@@ -35,10 +35,13 @@ final class LeadStatusesTable
                     ->badge()
                     ->sortable(),
 
+                // Phone budget: the colour swatch is the one column a narrow
+                // screen can spare — name, kind and both flags stay.
                 TextColumn::make('color')
                     ->label(__('lead_statuses.fields.color'))
                     ->badge()
-                    ->color(fn (LeadStatus $record): string => $record->color->value),
+                    ->color(fn (LeadStatus $record): string => $record->color->value)
+                    ->visibleFrom('md'),
 
                 IconColumn::make('is_default')
                     ->label(__('lead_statuses.fields.is_default'))

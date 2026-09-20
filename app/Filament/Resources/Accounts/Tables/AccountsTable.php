@@ -40,6 +40,9 @@ final class AccountsTable
             // Every listed custom column reads the record's values, so the
             // relation is loaded once for the page instead of per cell (D-9).
             ->modifyQueryUsing(fn (Builder $query): Builder => CustomFieldsSchema::eagerLoad($query))
+            // Phone budget: name, type and the contact count stay at every
+            // width; industry and owner step in from `md`, phone and tags from
+            // `lg`. CSS breakpoints only — the cells stay in the DOM.
             ->columns([
                 TextColumn::make('name')
                     ->label(__('accounts.fields.name'))
@@ -55,19 +58,22 @@ final class AccountsTable
                 TextColumn::make('industry.display_name')
                     ->label(__('accounts.fields.industry'))
                     ->placeholder(__('common.placeholders.empty'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('md'),
 
                 TextColumn::make('owner.name')
                     ->label(__('accounts.fields.owner'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('md'),
 
                 LtrText::column(
                     TextColumn::make('phone')
                         ->label(__('accounts.fields.phone'))
                         ->searchable()
                         ->placeholder(__('common.placeholders.empty'))
-                        ->toggleable(),
+                        ->toggleable()
+                        ->visibleFrom('lg'),
                 ),
 
                 LtrText::column(
@@ -84,7 +90,8 @@ final class AccountsTable
                     ->sortable()
                     ->toggleable(),
 
-                TagsSelect::column(),
+                TagsSelect::column()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
                     ->label(__('accounts.fields.created_at'))

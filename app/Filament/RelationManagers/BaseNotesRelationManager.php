@@ -144,9 +144,12 @@ abstract class BaseNotesRelationManager extends RelationManager
                     ->wrap()
                     ->searchable(),
 
+                // Phone budget: pin, excerpt and creation date stay at every
+                // width; the author steps in from `md`, the edit date from `lg`.
                 TextColumn::make('author.name')
                     ->label(__('notes.fields.author'))
-                    ->placeholder(__('common.placeholders.empty')),
+                    ->placeholder(__('common.placeholders.empty'))
+                    ->visibleFrom('md'),
 
                 TextColumn::make('created_at')
                     ->label(__('notes.fields.created_at'))
@@ -156,7 +159,8 @@ abstract class BaseNotesRelationManager extends RelationManager
                 TextColumn::make('edited_at')
                     ->label(__('notes.fields.edited_at'))
                     ->dateTime('Y-m-d H:i')
-                    ->placeholder(__('common.placeholders.empty')),
+                    ->placeholder(__('common.placeholders.empty'))
+                    ->visibleFrom('lg'),
             ])
             ->defaultSort(fn (Builder $query): Builder => $query->orderByDesc('is_pinned')->orderByDesc('created_at'))
             ->filters([

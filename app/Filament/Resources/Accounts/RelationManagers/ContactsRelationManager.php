@@ -68,17 +68,20 @@ final class ContactsRelationManager extends RelationManager
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'))
                 ->with('owner'))
+            // Phone budget: name, mobile and the primary flag stay at every
+            // width; job title and e-mail step in from `md`, the owner from `lg`.
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('contacts.fields.name'))
                     ->state(fn (Contact $record): string => $record->full_name)
                     ->searchable(['first_name', 'last_name'])
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('last_name', $direction)->orderBy('first_name', $direction))
                     ->weight('semibold'),
-                TextColumn::make('job_title')->label(__('contacts.fields.job_title'))->placeholder(__('common.placeholders.empty')),
-                LtrText::column(TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))),
+                TextColumn::make('job_title')->label(__('contacts.fields.job_title'))->placeholder(__('common.placeholders.empty'))->visibleFrom('md'),
+                LtrText::column(TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))->visibleFrom('md')),
                 LtrText::column(TextColumn::make('mobile')->label(__('contacts.fields.mobile'))->placeholder(__('common.placeholders.empty'))),
                 IconColumn::make('is_primary')->label(__('contacts.fields.is_primary'))->boolean(),
-                TextColumn::make('owner.name')->label(__('contacts.fields.owner'))->placeholder(__('assignment.placeholders.unassigned')),
+                TextColumn::make('owner.name')->label(__('contacts.fields.owner'))->placeholder(__('assignment.placeholders.unassigned'))->visibleFrom('lg'),
             ])
             ->defaultSort('is_primary', 'desc')
             ->headerActions([

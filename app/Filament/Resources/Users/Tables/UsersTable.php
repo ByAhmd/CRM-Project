@@ -30,6 +30,9 @@ final class UsersTable
     public static function configure(Table $table): Table
     {
         return $table
+            // Phone budget: name, roles and status stay at every width; the
+            // e-mail steps in from `md`, team and last login from `lg`. CSS
+            // breakpoints only — the cells stay in the DOM.
             ->columns([
                 TextColumn::make('name')
                     ->label(__('users.fields.name'))
@@ -39,7 +42,9 @@ final class UsersTable
                 LtrText::column(
                     TextColumn::make('email')
                         ->label(__('users.fields.email'))
-                        ->searchable(),
+                        ->searchable()
+                        ->sortable()
+                        ->visibleFrom('md'),
                 ),
 
                 TextColumn::make('roles')
@@ -53,7 +58,8 @@ final class UsersTable
                 TextColumn::make('team.display_name')
                     ->label(__('users.fields.team'))
                     ->placeholder(__('users.placeholders.no_team'))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('status')
                     ->label(__('users.fields.status'))
@@ -64,7 +70,8 @@ final class UsersTable
                     ->dateTime('Y-m-d H:i')
                     ->placeholder(__('users.placeholders.never_logged_in'))
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
             ])
             ->defaultSort('name')
             ->filters([
