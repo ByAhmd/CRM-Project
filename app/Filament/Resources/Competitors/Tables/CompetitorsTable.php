@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Competitors\Tables;
 
+use App\Filament\Support\LtrText;
 use App\Models\Competitor;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -26,14 +27,15 @@ final class CompetitorsTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('website')
-                    ->label(__('competitors.fields.website'))
-                    ->placeholder(__('competitors.placeholders.no_website'))
-                    ->url(fn (Competitor $record): ?string => $record->website)
-                    ->openUrlInNewTab()
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->searchable()
-                    ->toggleable(),
+                LtrText::column(
+                    TextColumn::make('website')
+                        ->label(__('competitors.fields.website'))
+                        ->placeholder(__('competitors.placeholders.no_website'))
+                        ->url(fn (Competitor $record): ?string => $record->website)
+                        ->openUrlInNewTab()
+                        ->searchable()
+                        ->toggleable(),
+                ),
 
                 IconColumn::make('is_active')
                     ->label(__('competitors.fields.is_active'))

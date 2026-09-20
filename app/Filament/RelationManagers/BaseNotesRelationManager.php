@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Notes\NoteService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -177,63 +178,70 @@ abstract class BaseNotesRelationManager extends RelationManager
                         self::mentionIds($data),
                     )),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make()
-                    ->label(__('notes.actions.view'))
-                    ->modalHeading(__('notes.actions.view'))
-                    ->authorize(fn (Note $record): bool => $this->actor()->can('view', $record)),
+                ActionGroup::make([
+                    ViewAction::make()
+                        ->label(__('notes.actions.view'))
+                        ->modalHeading(__('notes.actions.view'))
+                        ->authorize(fn (Note $record): bool => $this->actor()->can('view', $record)),
 
-                EditAction::make()
-                    ->label(__('notes.actions.edit'))
-                    ->modalHeading(__('notes.actions.edit'))
-                    ->schema([self::bodyField(), $this->mentionsField()])
-                    ->successNotificationTitle(__('notes.notifications.updated'))
-                    ->hidden(fn (Note $record): bool => $record->trashed())
-                    ->authorize(fn (Note $record): bool => $this->actor()->can('update', $record))
-                    ->using(fn (Note $record, array $data): Note => app(NoteService::class)->update(
-                        $record,
-                        $this->actor(),
-                        (string) ($data['body'] ?? ''),
-                        self::mentionIds($data),
-                    )),
+                    EditAction::make()
+                        ->label(__('notes.actions.edit'))
+                        ->modalHeading(__('notes.actions.edit'))
+                        ->schema([self::bodyField(), $this->mentionsField()])
+                        ->successNotificationTitle(__('notes.notifications.updated'))
+                        ->hidden(fn (Note $record): bool => $record->trashed())
+                        ->authorize(fn (Note $record): bool => $this->actor()->can('update', $record))
+                        ->using(fn (Note $record, array $data): Note => app(NoteService::class)->update(
+                            $record,
+                            $this->actor(),
+                            (string) ($data['body'] ?? ''),
+                            self::mentionIds($data),
+                        )),
 
-                Action::make('togglePin')
-                    ->label(fn (Note $record): string => $record->is_pinned ? __('notes.actions.unpin') : __('notes.actions.pin'))
-                    ->icon(fn (Note $record): Heroicon => $record->is_pinned ? Heroicon::OutlinedBookmarkSlash : Heroicon::OutlinedBookmark)
-                    ->color('gray')
-                    ->hidden(fn (Note $record): bool => $record->trashed())
-                    ->authorize(fn (Note $record): bool => $this->actor()->can('pin', $record))
-                    ->action(function (Note $record): void {
-                        $service = app(NoteService::class);
-                        $pinning = ! $record->is_pinned;
+                    Action::make('togglePin')
+                        ->label(fn (Note $record): string => $record->is_pinned ? __('notes.actions.unpin') : __('notes.actions.pin'))
+                        ->icon(fn (Note $record): Heroicon => $record->is_pinned ? Heroicon::OutlinedBookmarkSlash : Heroicon::OutlinedBookmark)
+                        ->color('gray')
+                        ->hidden(fn (Note $record): bool => $record->trashed())
+                        ->authorize(fn (Note $record): bool => $this->actor()->can('pin', $record))
+                        ->action(function (Note $record): void {
+                            $service = app(NoteService::class);
+                            $pinning = ! $record->is_pinned;
 
-                        $pinning ? $service->pin($record, $this->actor()) : $service->unpin($record, $this->actor());
+                            $pinning ? $service->pin($record, $this->actor()) : $service->unpin($record, $this->actor());
 
-                        Notification::make()
-                            ->title($pinning ? __('notes.notifications.pinned') : __('notes.notifications.unpinned'))
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title($pinning ? __('notes.notifications.pinned') : __('notes.notifications.unpinned'))
+                                ->success()
+                                ->send();
+                        }),
 
-                DeleteAction::make()
-                    ->label(__('notes.actions.delete'))
-                    ->successNotificationTitle(__('notes.notifications.deleted'))
-                    ->authorize(fn (Note $record): bool => $this->actor()->can('delete', $record))
-                    ->using(function (Note $record): bool {
-                        app(NoteService::class)->delete($record, $this->actor());
+                    DeleteAction::make()
+                        ->label(__('notes.actions.delete'))
+                        ->successNotificationTitle(__('notes.notifications.deleted'))
+                        ->authorize(fn (Note $record): bool => $this->actor()->can('delete', $record))
+                        ->using(function (Note $record): bool {
+                            app(NoteService::class)->delete($record, $this->actor());
 
-                        return true;
-                    }),
+                            return true;
+                        }),
 
-                RestoreAction::make()
-                    ->label(__('notes.actions.restore'))
-                    ->successNotificationTitle(__('notes.notifications.restored'))
-                    ->authorize(fn (Note $record): bool => $this->actor()->can('restore', $record))
-                    ->using(function (Note $record): bool {
-                        app(NoteService::class)->restore($record, $this->actor());
+                    RestoreAction::make()
+                        ->label(__('notes.actions.restore'))
+                        ->successNotificationTitle(__('notes.notifications.restored'))
+                        ->authorize(fn (Note $record): bool => $this->actor()->can('restore', $record))
+                        ->using(function (Note $record): bool {
+                            app(NoteService::class)->restore($record, $this->actor());
 
-                        return true;
-                    }),
+                            return true;
+                        }),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('notes.empty.heading'))
             ->emptyStateDescription(__('notes.empty.description'));

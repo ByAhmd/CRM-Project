@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Roles\Tables;
 
+use App\Filament\Support\LtrText;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Access\RoleService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
@@ -27,11 +29,12 @@ final class RolesTable
                         ->orWhere('name_en', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%")),
 
-                TextColumn::make('name')
-                    ->label(__('roles.fields.key'))
-                    ->fontFamily('mono')
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('name')
+                        ->label(__('roles.fields.key'))
+                        ->fontFamily('mono')
+                        ->sortable(),
+                ),
 
                 IconColumn::make('seeded')
                     ->label(__('roles.fields.seeded'))
@@ -49,14 +52,21 @@ final class RolesTable
                     ->sortable(),
             ])
             ->defaultSort('name')
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make()
-                    ->using(function (Role $record): void {
-                        $actor = auth()->user();
+                ActionGroup::make([
+                    EditAction::make(),
+                    DeleteAction::make()
+                        ->using(function (Role $record): void {
+                            $actor = auth()->user();
 
-                        app(RoleService::class)->delete($record, $actor instanceof User ? $actor : null);
-                    }),
+                            app(RoleService::class)->delete($record, $actor instanceof User ? $actor : null);
+                        }),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('roles.empty.heading'))
             ->emptyStateDescription(__('roles.empty.description'));

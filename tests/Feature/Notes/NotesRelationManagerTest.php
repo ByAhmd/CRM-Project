@@ -20,14 +20,18 @@ use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\Note;
 use App\Services\Notes\NoteService;
+use Filament\Actions\ActionGroup;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
+use Filament\Tables\Contracts\HasTable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * The notes managers on the lead, contact, account and deal pages (decisions
@@ -126,9 +130,19 @@ final class NotesRelationManagerTest extends TestCase
         $manager = Livewire::actingAs($support)
             ->test(LeadNotesRelationManager::class, ['ownerRecord' => $lead, 'pageClass' => ViewLead::class])
             ->assertCanSeeTableRecords([$repNote, $ownNote])
-            ->assertTableActionVisible('edit', $ownNote)
-            ->assertTableActionHidden('edit', $repNote)
-            ->assertTableActionHidden('togglePin', $repNote);
+            ->assertTableActionVisible('edit', $ownNote);
+
+        // These two are refused by ->authorize(), not by ->hidden(), and the
+        // actions now sit inside the row menu. Filament folds authorisation
+        // into isVisible() but not into isHidden() for a nested action, so
+        // assertTableActionHidden() would report them as shown and prove
+        // nothing. The property that actually matters is asserted instead: the
+        // menu does not offer them, and the write cannot be driven through
+        // anyway. Never relax this to assertTableActionHidden().
+        $this->assertFalse($this->menuOffers($manager, 'edit', $repNote), 'the menu offers edit on another user’s note');
+        $this->assertFalse($this->menuOffers($manager, 'togglePin', $repNote), 'the menu offers pin on another user’s note');
+
+        $this->assertNoteIsUnwritable($manager, $repNote);
 
         $manager
             ->callTableAction('edit', $ownNote, data: ['body' => 'Support revised'])
@@ -391,5 +405,62 @@ final class NotesRelationManagerTest extends TestCase
             ->assertCanSeeTableRecords([$oldest, $pinned, $newest], inOrder: true)
             ->sortTable('created_at', 'desc')
             ->assertCanSeeTableRecords([$newest, $pinned, $oldest], inOrder: true);
+    }
+
+    /**
+     * Whether the row menu offers $name on $record — what the viewer can
+     * actually reach. The group is handed the record and each action decides
+     * for itself, authorisation included, exactly as the table view does.
+     */
+    private function menuOffers(Testable $manager, string $name, Note $record): bool
+    {
+        $component = $manager->instance();
+
+        if (! $component instanceof HasTable) {
+            return false;
+        }
+
+        foreach ($component->getTable()->getRecordActions() as $action) {
+            if (! $action instanceof ActionGroup) {
+                continue;
+            }
+
+            $group = $action->getClone();
+            $group->record($record);
+
+            foreach ($group->getFlatActions() as $child) {
+                if ($child->getName() !== $name) {
+                    continue;
+                }
+
+                $child = $child->getClone();
+                $child->record($record);
+
+                return $child->isVisible();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The row cannot be written through the panel even if the menu were
+     * bypassed: mounting the action is refused and the note is untouched.
+     */
+    private function assertNoteIsUnwritable(Testable $manager, Note $record): void
+    {
+        $before = $record->body;
+
+        try {
+            $manager->callTableAction('edit', $record, data: ['body' => 'Rewritten by somebody who may not']);
+        } catch (Throwable) {
+            // Refused before the write — which is the point.
+        }
+
+        $this->assertSame(
+            $before,
+            $record->fresh()?->body,
+            'a user who may not update this note rewrote it through the row action',
+        );
     }
 }

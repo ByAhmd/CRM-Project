@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Users\Tables;
 
 use App\Enums\UserStatus;
+use App\Filament\Support\LtrText;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Users\UserInvitationService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -34,10 +36,11 @@ final class UsersTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('email')
-                    ->label(__('users.fields.email'))
-                    ->searchable()
-                    ->extraAttributes(['dir' => 'ltr']),
+                LtrText::column(
+                    TextColumn::make('email')
+                        ->label(__('users.fields.email'))
+                        ->searchable(),
+                ),
 
                 TextColumn::make('roles')
                     ->label(__('users.fields.roles'))
@@ -83,30 +86,37 @@ final class UsersTable
 
                 TrashedFilter::make()->label(__('users.filters.trashed')),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                // Visible only while the invitee has not accepted (see UserInvitationService::canBeInvited).
-                Action::make('resendInvitation')
-                    ->label(__('users.invitation.resend'))
-                    ->icon(Heroicon::OutlinedEnvelope)
-                    ->color('gray')
-                    ->requiresConfirmation()
-                    ->modalHeading(__('users.invitation.resend_heading'))
-                    ->modalDescription(__('users.invitation.resend_description'))
-                    ->authorize(fn (User $record): bool => auth()->user()?->can('invite', $record) ?? false)
-                    ->visible(fn (User $record): bool => app(UserInvitationService::class)->canBeInvited($record))
-                    ->action(function (User $record): void {
-                        $actor = auth()->user();
+                ActionGroup::make([
+                    // Visible only while the invitee has not accepted (see UserInvitationService::canBeInvited).
+                    Action::make('resendInvitation')
+                        ->label(__('users.invitation.resend'))
+                        ->icon(Heroicon::OutlinedEnvelope)
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading(__('users.invitation.resend_heading'))
+                        ->modalDescription(__('users.invitation.resend_description'))
+                        ->authorize(fn (User $record): bool => auth()->user()?->can('invite', $record) ?? false)
+                        ->visible(fn (User $record): bool => app(UserInvitationService::class)->canBeInvited($record))
+                        ->action(function (User $record): void {
+                            $actor = auth()->user();
 
-                        app(UserInvitationService::class)->invite($record, $actor instanceof User ? $actor : null);
+                            app(UserInvitationService::class)->invite($record, $actor instanceof User ? $actor : null);
 
-                        Notification::make()
-                            ->title(__('users.invitation.sent_title'))
-                            ->body(__('users.invitation.sent_body', ['email' => $record->email]))
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title(__('users.invitation.sent_title'))
+                                ->body(__('users.invitation.sent_body', ['email' => $record->email]))
+                                ->success()
+                                ->send();
+                        }),
 
-                EditAction::make(),
+                    EditAction::make(),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

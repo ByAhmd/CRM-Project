@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Exports\Tables;
 
 use App\Filament\Resources\Exports\ExportResource;
+use App\Filament\Support\LtrText;
 use App\Models\Export;
 use App\Services\Settings\SettingsRepository;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\DatePicker;
 use Filament\Support\Icons\Heroicon;
@@ -32,12 +34,13 @@ final class ExportsTable
     {
         return $table
             ->columns([
-                TextColumn::make('file_name')
-                    ->label(__('exports.fields.file_name'))
-                    ->searchable()
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->placeholder(__('common.placeholders.empty'))
-                    ->weight('semibold'),
+                LtrText::column(
+                    TextColumn::make('file_name')
+                        ->label(__('exports.fields.file_name'))
+                        ->searchable()
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->weight('semibold'),
+                ),
 
                 TextColumn::make('exporter')
                     ->label(__('exports.fields.entity'))
@@ -104,9 +107,16 @@ final class ExportsTable
                         filled($data['until'] ?? null) ? __('exports.filters.until').': '.$data['until'] : null,
                     ])),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                self::download(ExportFormat::Csv),
-                self::download(ExportFormat::Xlsx),
+                ActionGroup::make([
+                    self::download(ExportFormat::Csv),
+                    self::download(ExportFormat::Xlsx),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('exports.empty.heading'))
             ->emptyStateDescription(__('exports.empty.description'));

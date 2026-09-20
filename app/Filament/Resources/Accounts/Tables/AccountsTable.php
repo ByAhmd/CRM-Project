@@ -10,6 +10,7 @@ use App\Filament\Exports\AccountExporter;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\LtrText;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\QueryBuilderFilters;
@@ -18,6 +19,7 @@ use App\Models\Account;
 use App\Models\Industry;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -60,19 +62,21 @@ final class AccountsTable
                     ->placeholder(__('assignment.placeholders.unassigned'))
                     ->sortable(),
 
-                TextColumn::make('phone')
-                    ->label(__('accounts.fields.phone'))
-                    ->searchable()
-                    ->placeholder(__('common.placeholders.empty'))
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->toggleable(),
+                LtrText::column(
+                    TextColumn::make('phone')
+                        ->label(__('accounts.fields.phone'))
+                        ->searchable()
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->toggleable(),
+                ),
 
-                TextColumn::make('email')
-                    ->label(__('accounts.fields.email'))
-                    ->searchable()
-                    ->placeholder(__('common.placeholders.empty'))
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->toggleable(isToggledHiddenByDefault: true),
+                LtrText::column(
+                    TextColumn::make('email')
+                        ->label(__('accounts.fields.email'))
+                        ->searchable()
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->toggleable(isToggledHiddenByDefault: true),
+                ),
 
                 TextColumn::make('contacts_count')
                     ->label(__('accounts.fields.contacts_count'))
@@ -124,12 +128,19 @@ final class AccountsTable
             ])
             ->filtersLayout(QueryBuilderFilters::layout())
             ->filtersFormWidth(QueryBuilderFilters::width())
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make(),
-                // The custom section is part of the entity form, so an edit
-                // modal built from it pre-fills and writes the values too (D-9).
-                CustomFieldActions::editAction(EditAction::make()),
-                OwnershipActions::assign(Account::permissionGroup()),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    // The custom section is part of the entity form, so an edit
+                    // modal built from it pre-fills and writes the values too (D-9).
+                    CustomFieldActions::editAction(EditAction::make()),
+                    OwnershipActions::assign(Account::permissionGroup()),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 ImportExportActions::export(AccountExporter::class, Account::class),

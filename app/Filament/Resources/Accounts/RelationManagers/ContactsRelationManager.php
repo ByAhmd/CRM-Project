@@ -7,10 +7,12 @@ namespace App\Filament\Resources\Accounts\RelationManagers;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Contacts\Schemas\ContactForm;
 use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\LtrText;
 use App\Filament\Support\OwnerSelect;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Contacts\ContactService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -73,8 +75,8 @@ final class ContactsRelationManager extends RelationManager
                     ->searchable(['first_name', 'last_name'])
                     ->weight('semibold'),
                 TextColumn::make('job_title')->label(__('contacts.fields.job_title'))->placeholder(__('common.placeholders.empty')),
-                TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                TextColumn::make('mobile')->label(__('contacts.fields.mobile'))->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
+                LtrText::column(TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))),
+                LtrText::column(TextColumn::make('mobile')->label(__('contacts.fields.mobile'))->placeholder(__('common.placeholders.empty'))),
                 IconColumn::make('is_primary')->label(__('contacts.fields.is_primary'))->boolean(),
                 TextColumn::make('owner.name')->label(__('contacts.fields.owner'))->placeholder(__('assignment.placeholders.unassigned')),
             ])
@@ -94,23 +96,30 @@ final class ContactsRelationManager extends RelationManager
                     after: fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record),
                 ),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make()->url(fn (Contact $record): string => ContactResource::getUrl('view', ['record' => $record])),
-                CustomFieldActions::editAction(
-                    EditAction::make()
-                        // The owner is not saved as a plain attribute: a change
-                        // is handed to RecordAssignmentService (D-4).
-                        ->using(function (array $data, Contact $record): Contact {
-                            $ownerId = OwnerSelect::pull($data, $record);
+                ActionGroup::make([
+                    ViewAction::make()->url(fn (Contact $record): string => ContactResource::getUrl('view', ['record' => $record])),
+                    CustomFieldActions::editAction(
+                        EditAction::make()
+                            // The owner is not saved as a plain attribute: a change
+                            // is handed to RecordAssignmentService (D-4).
+                            ->using(function (array $data, Contact $record): Contact {
+                                $ownerId = OwnerSelect::pull($data, $record);
 
-                            $record->update($data);
+                                $record->update($data);
 
-                            OwnerSelect::reassign($record, $ownerId);
+                                OwnerSelect::reassign($record, $ownerId);
 
-                            return $record;
-                        }),
-                    after: fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record),
-                ),
+                                return $record;
+                            }),
+                        after: fn (Contact $record) => app(ContactService::class)->enforcePrimaryRule($record),
+                    ),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('contacts.empty.heading'))
             ->emptyStateDescription(__('contacts.empty.description'));

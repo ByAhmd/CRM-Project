@@ -11,6 +11,7 @@ use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\EmailActions;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\LtrText;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\QueryBuilderFilters;
@@ -18,6 +19,7 @@ use App\Filament\Support\TagsSelect;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -59,18 +61,20 @@ final class ContactsTable
                     ->placeholder(__('common.placeholders.empty'))
                     ->toggleable(),
 
-                TextColumn::make('email')
-                    ->label(__('contacts.fields.email'))
-                    ->searchable()
-                    ->placeholder(__('common.placeholders.empty'))
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->toggleable(),
+                LtrText::column(
+                    TextColumn::make('email')
+                        ->label(__('contacts.fields.email'))
+                        ->searchable()
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->toggleable(),
+                ),
 
-                TextColumn::make('mobile')
-                    ->label(__('contacts.fields.mobile'))
-                    ->searchable()
-                    ->placeholder(__('common.placeholders.empty'))
-                    ->extraAttributes(['dir' => 'ltr']),
+                LtrText::column(
+                    TextColumn::make('mobile')
+                        ->label(__('contacts.fields.mobile'))
+                        ->searchable()
+                        ->placeholder(__('common.placeholders.empty')),
+                ),
 
                 IconColumn::make('is_primary')
                     ->label(__('contacts.fields.is_primary'))
@@ -124,13 +128,20 @@ final class ContactsTable
             ])
             ->filtersLayout(QueryBuilderFilters::layout())
             ->filtersFormWidth(QueryBuilderFilters::width())
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make(),
-                // The custom section is part of the entity form, so an edit
-                // modal built from it pre-fills and writes the values too (D-9).
-                CustomFieldActions::editAction(EditAction::make()),
-                EmailActions::send(),
-                OwnershipActions::assign(Contact::permissionGroup()),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    // The custom section is part of the entity form, so an edit
+                    // modal built from it pre-fills and writes the values too (D-9).
+                    CustomFieldActions::editAction(EditAction::make()),
+                    EmailActions::send(),
+                    OwnershipActions::assign(Contact::permissionGroup()),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 ImportExportActions::export(ContactExporter::class, Contact::class),

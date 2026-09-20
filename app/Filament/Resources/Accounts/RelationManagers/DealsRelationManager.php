@@ -8,6 +8,7 @@ use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Deals\Schemas\DealForm;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
 use App\Filament\Support\CustomFieldActions;
+use App\Filament\Support\LtrText;
 use App\Models\Deal;
 use App\Models\User;
 use App\Services\Deals\DealAmountCalculator;
@@ -71,11 +72,12 @@ final class DealsRelationManager extends RelationManager
                 TextColumn::make('status')
                     ->label(__('deals.fields.status'))
                     ->badge(),
-                TextColumn::make('amount')
-                    ->label(__('deals.fields.amount'))
-                    ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('amount')
+                        ->label(__('deals.fields.amount'))
+                        ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
+                        ->sortable(),
+                ),
                 TextColumn::make('owner.name')
                     ->label(__('deals.fields.owner'))
                     ->placeholder(__('assignment.placeholders.unassigned')),

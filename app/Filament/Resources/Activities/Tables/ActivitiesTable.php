@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Activities\ActivityRecorder;
 use App\Services\Settings\SettingsRepository;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -144,9 +145,16 @@ final class ActivitiesTable
                         }),
                 ] : [],
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make(),
-                self::deleteAction(),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    self::deleteAction(),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 ...$withSubject ? [ImportExportActions::export(ActivityExporter::class, Activity::class)] : [],

@@ -17,6 +17,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Settings\SettingsRepository;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -147,13 +148,20 @@ final class TasksTable
 
                 TrashedFilter::make()->label(__('tasks.filters.trashed')),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
-                TaskActions::complete(),
-                TaskActions::cancel(),
-                TaskActions::reopen(),
-                OwnershipActions::assign(Task::permissionGroup()),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                    TaskActions::complete(),
+                    TaskActions::cancel(),
+                    TaskActions::reopen(),
+                    OwnershipActions::assign(Task::permissionGroup()),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 ...$withSubject ? [ImportExportActions::export(TaskExporter::class, Task::class)] : [],

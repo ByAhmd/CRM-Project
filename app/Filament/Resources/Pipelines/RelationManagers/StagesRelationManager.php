@@ -9,6 +9,7 @@ use App\Filament\Resources\Pipelines\Schemas\PipelineStageForm;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Services\Settings\PipelineService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -100,26 +101,33 @@ final class StagesRelationManager extends RelationManager
                         }
                     }),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                EditAction::make()
-                    ->using(function (PipelineStage $record, array $data): PipelineStage {
-                        try {
-                            return app(PipelineService::class)->updateStage($record, $data);
-                        } catch (InvalidPipelineException $exception) {
-                            $this->refuse($exception);
-                        }
-                    }),
-                DeleteAction::make()
-                    ->hidden(fn (PipelineStage $record): bool => ! app(PipelineService::class)->isStageDeletable($record))
-                    ->using(function (PipelineStage $record): bool {
-                        try {
-                            app(PipelineService::class)->deleteStage($record);
-                        } catch (InvalidPipelineException $exception) {
-                            $this->refuse($exception);
-                        }
+                ActionGroup::make([
+                    EditAction::make()
+                        ->using(function (PipelineStage $record, array $data): PipelineStage {
+                            try {
+                                return app(PipelineService::class)->updateStage($record, $data);
+                            } catch (InvalidPipelineException $exception) {
+                                $this->refuse($exception);
+                            }
+                        }),
+                    DeleteAction::make()
+                        ->hidden(fn (PipelineStage $record): bool => ! app(PipelineService::class)->isStageDeletable($record))
+                        ->using(function (PipelineStage $record): bool {
+                            try {
+                                app(PipelineService::class)->deleteStage($record);
+                            } catch (InvalidPipelineException $exception) {
+                                $this->refuse($exception);
+                            }
 
-                        return true;
-                    }),
+                            return true;
+                        }),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('pipelines.stages.empty.heading'))
             ->emptyStateDescription(__('pipelines.stages.empty.description'));

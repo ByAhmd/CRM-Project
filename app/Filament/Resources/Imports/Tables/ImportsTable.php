@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Imports\Tables;
 
 use App\Filament\Resources\Imports\ImportResource;
+use App\Filament\Support\LtrText;
 use App\Models\Import;
 use App\Services\Settings\SettingsRepository;
 use Filament\Actions\ViewAction;
@@ -25,11 +26,12 @@ final class ImportsTable
     {
         return $table
             ->columns([
-                TextColumn::make('file_name')
-                    ->label(__('imports.fields.file_name'))
-                    ->searchable()
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->weight('semibold'),
+                LtrText::column(
+                    TextColumn::make('file_name')
+                        ->label(__('imports.fields.file_name'))
+                        ->searchable()
+                        ->weight('semibold'),
+                ),
 
                 TextColumn::make('importer')
                     ->label(__('imports.fields.entity'))

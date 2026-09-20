@@ -12,6 +12,7 @@ use App\Filament\Support\TaskActions;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Tasks\TaskService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -97,32 +98,39 @@ abstract class BaseTasksRelationManager extends RelationManager
                     ))
                     ->successNotificationTitle(__('tasks.notifications.added')),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make()
-                    ->modalHeading(__('tasks.actions.view')),
+                ActionGroup::make([
+                    ViewAction::make()
+                        ->modalHeading(__('tasks.actions.view')),
 
-                EditAction::make()
-                    ->modalHeading(__('tasks.actions.edit'))
-                    ->hidden(fn (Task $record): bool => $record->trashed())
-                    ->authorize(fn (Task $record): bool => $this->actor()->can('update', $record))
-                    ->mutateRecordDataUsing(function (array $data): array {
-                        $data['owner_id'] = $data['assignee_id'] ?? null;
+                    EditAction::make()
+                        ->modalHeading(__('tasks.actions.edit'))
+                        ->hidden(fn (Task $record): bool => $record->trashed())
+                        ->authorize(fn (Task $record): bool => $this->actor()->can('update', $record))
+                        ->mutateRecordDataUsing(function (array $data): array {
+                            $data['owner_id'] = $data['assignee_id'] ?? null;
 
-                        return $data;
-                    })
-                    ->using(fn (Task $record, array $data): Task => app(TaskService::class)->update($record, $data, $this->actor()))
-                    ->successNotificationTitle(__('tasks.notifications.updated')),
+                            return $data;
+                        })
+                        ->using(fn (Task $record, array $data): Task => app(TaskService::class)->update($record, $data, $this->actor()))
+                        ->successNotificationTitle(__('tasks.notifications.updated')),
 
-                TaskActions::complete(),
-                TaskActions::cancel(),
-                TaskActions::reopen(),
-                OwnershipActions::assign(Task::permissionGroup()),
+                    TaskActions::complete(),
+                    TaskActions::cancel(),
+                    TaskActions::reopen(),
+                    OwnershipActions::assign(Task::permissionGroup()),
 
-                DeleteAction::make()
-                    ->authorize(fn (Task $record): bool => $this->actor()->can('delete', $record)),
+                    DeleteAction::make()
+                        ->authorize(fn (Task $record): bool => $this->actor()->can('delete', $record)),
 
-                RestoreAction::make()
-                    ->authorize(fn (Task $record): bool => $this->actor()->can('restore', $record)),
+                    RestoreAction::make()
+                        ->authorize(fn (Task $record): bool => $this->actor()->can('restore', $record)),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ]);
     }
 

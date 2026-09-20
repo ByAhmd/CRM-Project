@@ -6,10 +6,12 @@ namespace App\Filament\Resources\Deals\RelationManagers;
 
 use App\Enums\DealContactRole;
 use App\Filament\Resources\Contacts\ContactResource;
+use App\Filament\Support\LtrText;
 use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\DealContact;
 use App\Models\User;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\AttachAction;
 use Filament\Actions\DetachAction;
 use Filament\Actions\EditAction;
@@ -63,7 +65,7 @@ final class ContactsRelationManager extends RelationManager
                     ->searchable(['first_name', 'last_name'])
                     ->weight('semibold'),
                 TextColumn::make('job_title')->label(__('contacts.fields.job_title'))->placeholder(__('common.placeholders.empty')),
-                TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
+                LtrText::column(TextColumn::make('email')->label(__('contacts.fields.email'))->placeholder(__('common.placeholders.empty'))),
                 TextColumn::make('role')
                     ->label(__('deals.fields.role'))
                     ->state(fn (Contact $record): ?DealContactRole => self::pivot($record)?->role)
@@ -86,12 +88,19 @@ final class ContactsRelationManager extends RelationManager
                     ])
                     ->authorize(fn (): bool => $this->canUpdateDeal()),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                EditAction::make()
-                    ->schema([self::roleSelect()])
-                    ->authorize(fn (): bool => $this->canUpdateDeal()),
-                DetachAction::make()
-                    ->authorize(fn (): bool => $this->canUpdateDeal()),
+                ActionGroup::make([
+                    EditAction::make()
+                        ->schema([self::roleSelect()])
+                        ->authorize(fn (): bool => $this->canUpdateDeal()),
+                    DetachAction::make()
+                        ->authorize(fn (): bool => $this->canUpdateDeal()),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('deals.empty.contacts'));
     }

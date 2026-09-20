@@ -7,8 +7,10 @@ namespace App\Filament\Resources\CustomFields\Tables;
 use App\Enums\CustomFieldEntity;
 use App\Enums\CustomFieldType;
 use App\Exceptions\CustomFields\InvalidCustomFieldException;
+use App\Filament\Support\LtrText;
 use App\Models\CustomField;
 use App\Services\CustomFields\CustomFieldService;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -48,11 +50,12 @@ final class CustomFieldsTable
                     ->badge()
                     ->sortable(),
 
-                TextColumn::make('key')
-                    ->label(__('custom_fields.fields.key'))
-                    ->extraCellAttributes(['dir' => 'ltr'])
-                    ->searchable()
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('key')
+                        ->label(__('custom_fields.fields.key'))
+                        ->searchable()
+                        ->sortable(),
+                ),
 
                 TextColumn::make('display_label')
                     ->label(__('custom_fields.fields.label'))
@@ -115,29 +118,36 @@ final class CustomFieldsTable
 
                 TernaryFilter::make('is_active')->label(__('custom_fields.filters.is_active')),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make()
-                    ->successNotificationTitle(__('custom_fields.notifications.deleted'))
-                    ->authorize(fn (CustomField $record): bool => auth()->user()?->can('delete', $record) ?? false)
-                    ->disabled(fn (CustomField $record): bool => ! app(CustomFieldService::class)->isDeletable($record))
-                    ->tooltip(fn (CustomField $record): ?string => app(CustomFieldService::class)->isDeletable($record)
-                        ? null
-                        : __('custom_fields.helpers.delete_blocked'))
-                    ->using(function (CustomField $record): bool {
-                        try {
-                            app(CustomFieldService::class)->delete($record);
-                        } catch (InvalidCustomFieldException $exception) {
-                            Notification::make()
-                                ->title($exception->getMessage())
-                                ->danger()
-                                ->send();
+                ActionGroup::make([
+                    EditAction::make(),
+                    DeleteAction::make()
+                        ->successNotificationTitle(__('custom_fields.notifications.deleted'))
+                        ->authorize(fn (CustomField $record): bool => auth()->user()?->can('delete', $record) ?? false)
+                        ->disabled(fn (CustomField $record): bool => ! app(CustomFieldService::class)->isDeletable($record))
+                        ->tooltip(fn (CustomField $record): ?string => app(CustomFieldService::class)->isDeletable($record)
+                            ? null
+                            : __('custom_fields.helpers.delete_blocked'))
+                        ->using(function (CustomField $record): bool {
+                            try {
+                                app(CustomFieldService::class)->delete($record);
+                            } catch (InvalidCustomFieldException $exception) {
+                                Notification::make()
+                                    ->title($exception->getMessage())
+                                    ->danger()
+                                    ->send();
 
-                            throw new Halt;
-                        }
+                                throw new Halt;
+                            }
 
-                        return true;
-                    }),
+                            return true;
+                        }),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

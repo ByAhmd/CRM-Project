@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Deals\RelationManagers;
 
+use App\Filament\Support\LtrText;
 use App\Models\Competitor;
 use App\Models\DealCompetitor;
 use App\Models\User;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\AttachAction;
 use Filament\Actions\DetachAction;
 use Filament\Actions\EditAction;
@@ -55,11 +57,12 @@ final class CompetitorsRelationManager extends RelationManager
                     ->label(__('competitors.fields.name'))
                     ->searchable()
                     ->weight('semibold'),
-                TextColumn::make('website')
-                    ->label(__('competitors.fields.website'))
-                    ->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)
-                    ->placeholder(__('common.placeholders.empty'))
-                    ->extraAttributes(['dir' => 'ltr']),
+                LtrText::column(
+                    TextColumn::make('website')
+                        ->label(__('competitors.fields.website'))
+                        ->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)
+                        ->placeholder(__('common.placeholders.empty')),
+                ),
                 IconColumn::make('is_winner')
                     ->label(__('deals.fields.is_winner'))
                     ->state(fn (Competitor $record): bool => (bool) self::pivot($record)?->is_winner)
@@ -83,12 +86,19 @@ final class CompetitorsRelationManager extends RelationManager
                     ])
                     ->authorize(fn (): bool => $this->canUpdateDeal()),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                EditAction::make()
-                    ->schema(self::pivotFields())
-                    ->authorize(fn (): bool => $this->canUpdateDeal()),
-                DetachAction::make()
-                    ->authorize(fn (): bool => $this->canUpdateDeal()),
+                ActionGroup::make([
+                    EditAction::make()
+                        ->schema(self::pivotFields())
+                        ->authorize(fn (): bool => $this->canUpdateDeal()),
+                    DetachAction::make()
+                        ->authorize(fn (): bool => $this->canUpdateDeal()),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('deals.empty.competitors'));
     }

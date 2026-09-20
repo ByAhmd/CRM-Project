@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\RelationManagers;
 
 use App\Exceptions\Attachments\InvalidAttachmentException;
+use App\Filament\Support\LtrText;
 use App\Models\Attachment;
 use App\Models\User;
 use App\Services\Attachments\AttachmentStorage;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\FileUpload;
@@ -69,23 +71,25 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
             ->recordTitleAttribute('original_name')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('uploader'))
             ->columns([
-                TextColumn::make('original_name')
-                    ->label(__('attachments.fields.original_name'))
-                    ->icon(fn (Attachment $record): Heroicon => $record->isImage() ? Heroicon::OutlinedPhoto : Heroicon::OutlinedDocument)
-                    ->url(fn (Attachment $record): ?string => $this->canDownload($record) ? $record->downloadUrl() : null, shouldOpenInNewTab: true)
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->searchable()
-                    ->weight('semibold'),
+                LtrText::column(
+                    TextColumn::make('original_name')
+                        ->label(__('attachments.fields.original_name'))
+                        ->icon(fn (Attachment $record): Heroicon => $record->isImage() ? Heroicon::OutlinedPhoto : Heroicon::OutlinedDocument)
+                        ->url(fn (Attachment $record): ?string => $this->canDownload($record) ? $record->downloadUrl() : null, shouldOpenInNewTab: true)
+                        ->searchable()
+                        ->weight('semibold'),
+                ),
                 TextColumn::make('mime_type')
                     ->label(__('attachments.fields.mime_type'))
                     ->badge()
                     ->color('gray')
                     ->formatStateUsing(fn (Attachment $record): string => __('attachments.options.mime.'.$record->mimeFamily())),
-                TextColumn::make('size')
-                    ->label(__('attachments.fields.size'))
-                    ->formatStateUsing(fn (Attachment $record): string => $record->humanSize())
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('size')
+                        ->label(__('attachments.fields.size'))
+                        ->formatStateUsing(fn (Attachment $record): string => $record->humanSize())
+                        ->sortable(),
+                ),
                 TextColumn::make('description')
                     ->label(__('attachments.fields.description'))
                     ->placeholder(__('common.placeholders.empty'))
@@ -94,11 +98,12 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
                 TextColumn::make('uploader.name')
                     ->label(__('attachments.fields.uploaded_by'))
                     ->placeholder(__('common.placeholders.empty')),
-                TextColumn::make('created_at')
-                    ->label(__('attachments.fields.created_at'))
-                    ->dateTime('Y-m-d H:i')
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('created_at')
+                        ->label(__('attachments.fields.created_at'))
+                        ->dateTime('Y-m-d H:i')
+                        ->sortable(),
+                ),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
@@ -107,26 +112,33 @@ abstract class BaseAttachmentsRelationManager extends RelationManager
             ->headerActions([
                 $this->uploadAction(),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                $this->downloadAction(),
-                DeleteAction::make()
-                    ->label(__('attachments.actions.delete'))
-                    ->authorize(fn (Attachment $record): bool => $this->authorised('delete', $record))
-                    ->using(function (Attachment $record): bool {
-                        app(AttachmentStorage::class)->delete($record, $this->actor());
+                ActionGroup::make([
+                    $this->downloadAction(),
+                    DeleteAction::make()
+                        ->label(__('attachments.actions.delete'))
+                        ->authorize(fn (Attachment $record): bool => $this->authorised('delete', $record))
+                        ->using(function (Attachment $record): bool {
+                            app(AttachmentStorage::class)->delete($record, $this->actor());
 
-                        return true;
-                    })
-                    ->successNotificationTitle(__('attachments.notifications.deleted')),
-                RestoreAction::make()
-                    ->label(__('attachments.actions.restore'))
-                    ->authorize(fn (Attachment $record): bool => $this->authorised('restore', $record))
-                    ->using(function (Attachment $record): bool {
-                        app(AttachmentStorage::class)->restore($record, $this->actor());
+                            return true;
+                        })
+                        ->successNotificationTitle(__('attachments.notifications.deleted')),
+                    RestoreAction::make()
+                        ->label(__('attachments.actions.restore'))
+                        ->authorize(fn (Attachment $record): bool => $this->authorised('restore', $record))
+                        ->using(function (Attachment $record): bool {
+                            app(AttachmentStorage::class)->restore($record, $this->actor());
 
-                        return true;
-                    })
-                    ->successNotificationTitle(__('attachments.notifications.restored')),
+                            return true;
+                        })
+                        ->successNotificationTitle(__('attachments.notifications.restored')),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->emptyStateHeading(__('attachments.empty.heading'))
             ->emptyStateDescription(__('attachments.empty.description'));

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Products\Tables;
 
+use App\Filament\Support\LtrText;
 use App\Models\Product;
 use App\Services\Settings\SettingsRepository;
 use Filament\Actions\BulkActionGroup;
@@ -23,12 +24,13 @@ final class ProductsTable
     {
         return $table
             ->columns([
-                TextColumn::make('code')
-                    ->label(__('products.fields.code'))
-                    ->placeholder(__('products.placeholders.no_code'))
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->searchable()
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('code')
+                        ->label(__('products.fields.code'))
+                        ->placeholder(__('products.placeholders.no_code'))
+                        ->searchable()
+                        ->sortable(),
+                ),
 
                 TextColumn::make('display_name')
                     ->label(__('products.fields.name'))
@@ -38,14 +40,15 @@ final class ProductsTable
                         ->orWhere('name_en', 'like', "%{$search}%"))
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy(Product::localisedNameColumn(), $direction)),
 
-                TextColumn::make('unit_price')
-                    ->label(__('products.fields.unit_price'))
-                    ->money(
-                        currency: fn (): string => app(SettingsRepository::class)->currency(),
-                        locale: fn (): string => app()->getLocale(),
-                    )
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('unit_price')
+                        ->label(__('products.fields.unit_price'))
+                        ->money(
+                            currency: fn (): string => app(SettingsRepository::class)->currency(),
+                            locale: fn (): string => app()->getLocale(),
+                        )
+                        ->sortable(),
+                ),
 
                 IconColumn::make('is_active')
                     ->label(__('products.fields.is_active'))

@@ -14,6 +14,7 @@ use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\DealActions;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\LtrText;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\QueryBuilderFilters;
 use App\Filament\Support\TagsSelect;
@@ -22,6 +23,7 @@ use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -68,18 +70,20 @@ final class DealsTable
                     ->badge()
                     ->sortable(),
 
-                TextColumn::make('amount')
-                    ->label(__('deals.fields.amount'))
-                    ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->sortable(),
+                LtrText::column(
+                    TextColumn::make('amount')
+                        ->label(__('deals.fields.amount'))
+                        ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
+                        ->sortable(),
+                ),
 
-                TextColumn::make('weighted_amount')
-                    ->label(__('deals.fields.weighted_amount'))
-                    ->state(fn (Deal $record): string => $record->weighted_amount)
-                    ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
-                    ->extraAttributes(['dir' => 'ltr'])
-                    ->toggleable(),
+                LtrText::column(
+                    TextColumn::make('weighted_amount')
+                        ->label(__('deals.fields.weighted_amount'))
+                        ->state(fn (Deal $record): string => $record->weighted_amount)
+                        ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
+                        ->toggleable(),
+                ),
 
                 TextColumn::make('effective_probability')
                     ->label(__('deals.fields.effective_probability'))
@@ -179,16 +183,23 @@ final class DealsTable
             ])
             ->filtersLayout(QueryBuilderFilters::layout())
             ->filtersFormWidth(QueryBuilderFilters::width())
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                ViewAction::make(),
-                // The custom section is part of the entity form, so an edit
-                // modal built from it pre-fills and writes the values too (D-9).
-                CustomFieldActions::editAction(EditAction::make()),
-                DealActions::changeStage(),
-                DealActions::markWon(),
-                DealActions::markLost(),
-                DealActions::reopen(),
-                OwnershipActions::assign(Deal::permissionGroup()),
+                ActionGroup::make([
+                    ViewAction::make(),
+                    // The custom section is part of the entity form, so an edit
+                    // modal built from it pre-fills and writes the values too (D-9).
+                    CustomFieldActions::editAction(EditAction::make()),
+                    DealActions::changeStage(),
+                    DealActions::markWon(),
+                    DealActions::markLost(),
+                    DealActions::reopen(),
+                    OwnershipActions::assign(Deal::permissionGroup()),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 ImportExportActions::export(DealExporter::class, Deal::class),

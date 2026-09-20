@@ -6,6 +6,7 @@ namespace App\Filament\Resources\EmailTemplates\Tables;
 
 use App\Filament\Resources\EmailTemplates\Schemas\EmailTemplateForm;
 use App\Models\EmailTemplate;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -59,10 +60,17 @@ final class EmailTemplatesTable
                     ->options(fn (): array => EmailTemplateForm::entityOptions()),
                 TrashedFilter::make()->label(__('email_templates.filters.trashed')),
             ])
+            // One three-dot menu per row instead of a wall of links; every
+            // action keeps its own authorisation, and the menu hides itself
+            // when the policy refuses every action in it.
             ->recordActions([
-                EditAction::make(),
-                DeleteAction::make(),
-                RestoreAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+                    DeleteAction::make(),
+                    RestoreAction::make(),
+                ])
+                    ->label(__('app.actions.row_actions'))
+                    ->tooltip(__('app.actions.row_actions')),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
