@@ -56,7 +56,7 @@ final class TagForm
                             ->helperText(__('tags.helpers.is_active'))
                             ->default(true),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

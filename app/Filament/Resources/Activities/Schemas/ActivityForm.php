@@ -20,7 +20,6 @@ use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -43,32 +42,30 @@ final class ActivityForm
             ->components([
                 Section::make(__('activities.sections.details'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            Select::make('activity_type_id')
-                                ->label(__('activities.fields.type'))
-                                ->helperText(__('activities.helpers.type'))
-                                ->options(fn (): array => ActivityType::query()
-                                    ->where('is_active', true)
-                                    ->where('kind', '!=', ActivityKind::System->value)
-                                    ->orderBy('sort')
-                                    ->orderBy('id')
-                                    ->get()
-                                    ->mapWithKeys(fn (ActivityType $type): array => [$type->getKey() => $type->display_name])
-                                    ->all())
-                                ->required()
-                                ->live()
-                                ->afterStateUpdated(fn (Set $set, mixed $state) => $set('kind', self::kindOf($state)?->value))
-                                ->searchable()
-                                ->preload()
-                                ->native(false),
+                        Select::make('activity_type_id')
+                            ->label(__('activities.fields.type'))
+                            ->helperText(__('activities.helpers.type'))
+                            ->options(fn (): array => ActivityType::query()
+                                ->where('is_active', true)
+                                ->where('kind', '!=', ActivityKind::System->value)
+                                ->orderBy('sort')
+                                ->orderBy('id')
+                                ->get()
+                                ->mapWithKeys(fn (ActivityType $type): array => [$type->getKey() => $type->display_name])
+                                ->all())
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(fn (Set $set, mixed $state) => $set('kind', self::kindOf($state)?->value))
+                            ->searchable()
+                            ->preload()
+                            ->native(false),
 
-                            DateTimePicker::make('occurred_at')
-                                ->label(__('activities.fields.occurred_at'))
-                                ->default(fn (): Carbon => now())
-                                ->required()
-                                ->native(false)
-                                ->seconds(false),
-                        ]),
+                        DateTimePicker::make('occurred_at')
+                            ->label(__('activities.fields.occurred_at'))
+                            ->default(fn (): Carbon => now())
+                            ->required()
+                            ->native(false)
+                            ->seconds(false),
 
                         Hidden::make('kind')
                             ->dehydrated(false),
@@ -77,47 +74,47 @@ final class ActivityForm
                             ->label(__('activities.fields.subject'))
                             ->placeholder(__('activities.placeholders.subject'))
                             ->required()
-                            ->maxLength(200),
+                            ->maxLength(200)
+                            ->columnSpanFull(),
 
-                        Grid::make(3)->schema([
-                            Select::make('direction')
-                                ->label(__('activities.fields.direction'))
-                                ->options(ActivityDirection::class)
-                                ->nullable()
-                                ->native(false)
-                                ->visible(fn (Get $get): bool => self::kindFor($get)?->hasDirection() ?? false),
+                        Select::make('direction')
+                            ->label(__('activities.fields.direction'))
+                            ->options(ActivityDirection::class)
+                            ->nullable()
+                            ->native(false)
+                            ->visible(fn (Get $get): bool => self::kindFor($get)?->hasDirection() ?? false),
 
-                            TextInput::make('duration_minutes')
-                                ->label(__('activities.fields.duration_minutes'))
-                                ->integer()
-                                ->minValue(1)
-                                ->maxValue(65535)
-                                ->nullable()
-                                ->visible(fn (Get $get): bool => self::kindFor($get)?->hasDuration() ?? false),
+                        TextInput::make('duration_minutes')
+                            ->label(__('activities.fields.duration_minutes'))
+                            ->integer()
+                            ->minValue(1)
+                            ->maxValue(65535)
+                            ->nullable()
+                            ->visible(fn (Get $get): bool => self::kindFor($get)?->hasDuration() ?? false),
 
-                            TextInput::make('outcome')
-                                ->label(__('activities.fields.outcome'))
-                                ->placeholder(__('activities.placeholders.outcome'))
-                                ->maxLength(100),
-                        ]),
+                        TextInput::make('outcome')
+                            ->label(__('activities.fields.outcome'))
+                            ->placeholder(__('activities.placeholders.outcome'))
+                            ->maxLength(100),
 
                         Textarea::make('body')
                             ->label(__('activities.fields.body'))
                             ->rows(4)
-                            ->maxLength(5000),
+                            ->maxLength(5000)
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 ...$withSubjects ? [
                     Section::make(__('activities.sections.related'))
                         ->description(__('activities.helpers.related'))
                         ->schema(SubjectPickers::components())
-                        ->columns(1),
+                        ->columns(['default' => 1, 'lg' => 2]),
                 ] : [],
 
                 Section::make(__('activities.sections.ownership'))
                     ->schema(OwnerSelect::components(Activity::permissionGroup()))
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

@@ -20,7 +20,6 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -54,48 +53,46 @@ final class AccountForm
                             ->required()
                             ->minLength(2)
                             ->maxLength(150)
-                            ->live(onBlur: true),
+                            ->live(onBlur: true)
+                            ->columnSpanFull(),
 
-                        DuplicateWarning::forAccount(),
+                        DuplicateWarning::forAccount()
+                            ->columnSpanFull(),
 
-                        Grid::make(2)->schema([
-                            Select::make('type')
-                                ->label(__('accounts.fields.type'))
-                                ->helperText(__('accounts.helpers.type'))
-                                ->options(AccountType::class)
-                                ->default(AccountType::Prospect->value)
-                                ->required()
-                                ->native(false)
-                                ->live()
-                                ->disabled(fn (?Account $record): bool => ! self::maySetType($record)),
+                        Select::make('type')
+                            ->label(__('accounts.fields.type'))
+                            ->helperText(__('accounts.helpers.type'))
+                            ->options(AccountType::class)
+                            ->default(AccountType::Prospect->value)
+                            ->required()
+                            ->native(false)
+                            ->live()
+                            ->disabled(fn (?Account $record): bool => ! self::maySetType($record)),
 
-                            DatePicker::make('customer_since')
-                                ->label(__('accounts.fields.customer_since'))
-                                ->native(false)
-                                ->disabled(fn (?Account $record): bool => ! self::maySetType($record))
-                                ->visible(fn (Get $get): bool => $get('type') === AccountType::Customer->value
-                                    || $get('type') === AccountType::Customer),
-                        ]),
+                        DatePicker::make('customer_since')
+                            ->label(__('accounts.fields.customer_since'))
+                            ->native(false)
+                            ->disabled(fn (?Account $record): bool => ! self::maySetType($record))
+                            ->visible(fn (Get $get): bool => $get('type') === AccountType::Customer->value
+                                || $get('type') === AccountType::Customer),
 
-                        Grid::make(2)->schema([
-                            Select::make('industry_id')
-                                ->label(__('accounts.fields.industry'))
-                                ->relationship('industry', Industry::localisedNameColumn(), fn (Builder $query, ?Account $record): Builder => $query->where(
-                                    fn (Builder $nested): Builder => $nested->where('is_active', true)
-                                        ->when($record?->industry_id !== null, fn (Builder $current): Builder => $current->orWhereKey($record?->industry_id)),
-                                ))
-                                ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('display_name'))
-                                ->searchable()
-                                ->preload()
-                                ->nullable()
-                                ->native(false),
+                        Select::make('industry_id')
+                            ->label(__('accounts.fields.industry'))
+                            ->relationship('industry', Industry::localisedNameColumn(), fn (Builder $query, ?Account $record): Builder => $query->where(
+                                fn (Builder $nested): Builder => $nested->where('is_active', true)
+                                    ->when($record?->industry_id !== null, fn (Builder $current): Builder => $current->orWhereKey($record?->industry_id)),
+                            ))
+                            ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('display_name'))
+                            ->searchable()
+                            ->preload()
+                            ->nullable()
+                            ->native(false),
 
-                            Select::make('size')
-                                ->label(__('accounts.fields.size'))
-                                ->options(CompanySize::class)
-                                ->nullable()
-                                ->native(false),
-                        ]),
+                        Select::make('size')
+                            ->label(__('accounts.fields.size'))
+                            ->options(CompanySize::class)
+                            ->nullable()
+                            ->native(false),
 
                         Select::make('parent_account_id')
                             ->label(__('accounts.fields.parent'))
@@ -107,7 +104,7 @@ final class AccountForm
                             ->nullable()
                             ->native(false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('accounts.sections.contact'))
                     ->schema([
@@ -115,25 +112,24 @@ final class AccountForm
                             ->label(__('accounts.fields.website'))
                             ->url()
                             ->maxLength(255)
+                            ->extraInputAttributes(['dir' => 'ltr'])
+                            ->columnSpanFull(),
+
+                        TextInput::make('email')
+                            ->label(__('accounts.fields.email'))
+                            ->email()
+                            ->maxLength(190)
+                            ->live(onBlur: true)
                             ->extraInputAttributes(['dir' => 'ltr']),
 
-                        Grid::make(2)->schema([
-                            TextInput::make('email')
-                                ->label(__('accounts.fields.email'))
-                                ->email()
-                                ->maxLength(190)
-                                ->live(onBlur: true)
-                                ->extraInputAttributes(['dir' => 'ltr']),
-
-                            TextInput::make('phone')
-                                ->label(__('accounts.fields.phone'))
-                                ->tel()
-                                ->maxLength(30)
-                                ->live(onBlur: true)
-                                ->extraInputAttributes(['dir' => 'ltr']),
-                        ]),
+                        TextInput::make('phone')
+                            ->label(__('accounts.fields.phone'))
+                            ->tel()
+                            ->maxLength(30)
+                            ->live(onBlur: true)
+                            ->extraInputAttributes(['dir' => 'ltr']),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 AddressSchema::section(),
 
@@ -142,7 +138,7 @@ final class AccountForm
                         ...OwnerSelect::components(Account::permissionGroup()),
                         TagsSelect::make(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 ...CustomFieldActions::formSection(CustomFieldEntity::Account),
 

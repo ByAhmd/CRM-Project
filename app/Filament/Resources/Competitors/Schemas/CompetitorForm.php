@@ -62,14 +62,15 @@ final class CompetitorForm
                             ->helperText(__('competitors.helpers.notes'))
                             ->nullable()
                             ->rows(4)
-                            ->maxLength(5000),
+                            ->maxLength(5000)
+                            ->columnSpanFull(),
 
                         Toggle::make('is_active')
                             ->label(__('competitors.fields.is_active'))
                             ->helperText(__('competitors.helpers.is_active'))
                             ->default(true),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

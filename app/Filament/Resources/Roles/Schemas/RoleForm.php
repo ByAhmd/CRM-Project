@@ -43,7 +43,8 @@ final class RoleForm
                             ])
                             ->disabled(fn (?Role $record): bool => $record?->isSeeded() ?? false)
                             ->dehydrated(fn (?Role $record): bool => ! ($record?->isSeeded() ?? false))
-                            ->extraInputAttributes(['dir' => 'ltr']),
+                            ->extraInputAttributes(['dir' => 'ltr'])
+                            ->columnSpanFull(),
 
                         TextInput::make('name_ar')
                             ->label(__('roles.fields.name_ar'))
@@ -57,7 +58,7 @@ final class RoleForm
                             ->minLength(2)
                             ->maxLength(100),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('roles.sections.permissions'))
                     ->description(__('roles.helpers.permissions'))

@@ -109,7 +109,7 @@ final class ActivityTypeForm
                             ->default(0)
                             ->required(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('activity_types.sections.appearance'))
                     ->schema([
@@ -129,7 +129,7 @@ final class ActivityTypeForm
                             ->required()
                             ->native(false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

@@ -95,7 +95,8 @@ final class CustomFieldForm
                             ->live()
                             ->native(false)
                             ->disabled(fn (?CustomField $record): bool => self::typeLocked($record))
-                            ->dehydrated(fn (?CustomField $record): bool => ! self::typeLocked($record)),
+                            ->dehydrated(fn (?CustomField $record): bool => ! self::typeLocked($record))
+                            ->columnSpanFull(),
 
                         Toggle::make('is_required')
                             ->label(__('custom_fields.fields.is_required'))
@@ -121,7 +122,7 @@ final class CustomFieldForm
                             ->default(0)
                             ->required(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('custom_fields.sections.options'))
                     ->description(__('custom_fields.helpers.options'))
@@ -195,7 +196,7 @@ final class CustomFieldForm
                             ->maxLength(CustomFieldValidator::PATTERN_LENGTH)
                             ->visible(fn (Get $get, ?CustomField $record): bool => self::allows($get, $record, 'regex')),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

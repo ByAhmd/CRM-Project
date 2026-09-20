@@ -91,7 +91,7 @@ final class UserForm
                             ->required()
                             ->native(false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('users.sections.access'))
                     ->schema([
@@ -120,7 +120,7 @@ final class UserForm
                             ->nullable()
                             ->native(false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('users.sections.status'))
                     ->visibleOn('edit')

@@ -20,7 +20,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,19 +41,17 @@ final class ContactForm
             ->components([
                 Section::make(__('contacts.sections.details'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            TextInput::make('first_name')
-                                ->label(__('contacts.fields.first_name'))
-                                ->required()
-                                ->minLength(2)
-                                ->maxLength(80),
+                        TextInput::make('first_name')
+                            ->label(__('contacts.fields.first_name'))
+                            ->required()
+                            ->minLength(2)
+                            ->maxLength(80),
 
-                            TextInput::make('last_name')
-                                ->label(__('contacts.fields.last_name'))
-                                ->required()
-                                ->minLength(2)
-                                ->maxLength(80),
-                        ]),
+                        TextInput::make('last_name')
+                            ->label(__('contacts.fields.last_name'))
+                            ->required()
+                            ->minLength(2)
+                            ->maxLength(80),
 
                         Select::make('account_id')
                             ->label(__('contacts.fields.account'))
@@ -74,24 +71,24 @@ final class ContactForm
                             ->preload()
                             ->nullable()
                             ->native(false)
-                            ->visible($withAccount),
+                            ->visible($withAccount)
+                            ->columnSpanFull(),
 
-                        Grid::make(2)->schema([
-                            TextInput::make('job_title')
-                                ->label(__('contacts.fields.job_title'))
-                                ->maxLength(100),
+                        TextInput::make('job_title')
+                            ->label(__('contacts.fields.job_title'))
+                            ->maxLength(100),
 
-                            TextInput::make('department')
-                                ->label(__('contacts.fields.department'))
-                                ->maxLength(100),
-                        ]),
+                        TextInput::make('department')
+                            ->label(__('contacts.fields.department'))
+                            ->maxLength(100),
 
                         Toggle::make('is_primary')
                             ->label(__('contacts.fields.is_primary'))
                             ->helperText(__('contacts.helpers.is_primary'))
-                            ->default(false),
+                            ->default(false)
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('contacts.sections.contact'))
                     ->schema([
@@ -100,42 +97,40 @@ final class ContactForm
                             ->email()
                             ->maxLength(190)
                             ->live(onBlur: true)
+                            ->extraInputAttributes(['dir' => 'ltr'])
+                            ->columnSpanFull(),
+
+                        TextInput::make('mobile')
+                            ->label(__('contacts.fields.mobile'))
+                            ->tel()
+                            ->maxLength(30)
+                            ->live(onBlur: true)
                             ->extraInputAttributes(['dir' => 'ltr']),
 
-                        Grid::make(2)->schema([
-                            TextInput::make('mobile')
-                                ->label(__('contacts.fields.mobile'))
-                                ->tel()
-                                ->maxLength(30)
-                                ->live(onBlur: true)
-                                ->extraInputAttributes(['dir' => 'ltr']),
+                        TextInput::make('phone')
+                            ->label(__('contacts.fields.phone'))
+                            ->tel()
+                            ->maxLength(30)
+                            ->live(onBlur: true)
+                            ->extraInputAttributes(['dir' => 'ltr']),
 
-                            TextInput::make('phone')
-                                ->label(__('contacts.fields.phone'))
-                                ->tel()
-                                ->maxLength(30)
-                                ->live(onBlur: true)
-                                ->extraInputAttributes(['dir' => 'ltr']),
-                        ]),
+                        DuplicateWarning::forContact()
+                            ->columnSpanFull(),
 
-                        DuplicateWarning::forContact(),
+                        Select::make('preferred_locale')
+                            ->label(__('contacts.fields.preferred_locale'))
+                            ->helperText(__('contacts.helpers.preferred_locale'))
+                            ->options(fn (): array => self::localeOptions())
+                            ->default(fn (): string => (string) config('app.locale'))
+                            ->native(false),
 
-                        Grid::make(2)->schema([
-                            Select::make('preferred_locale')
-                                ->label(__('contacts.fields.preferred_locale'))
-                                ->helperText(__('contacts.helpers.preferred_locale'))
-                                ->options(fn (): array => self::localeOptions())
-                                ->default(fn (): string => (string) config('app.locale'))
-                                ->native(false),
-
-                            TextInput::make('linkedin_url')
-                                ->label(__('contacts.fields.linkedin_url'))
-                                ->url()
-                                ->maxLength(255)
-                                ->extraInputAttributes(['dir' => 'ltr']),
-                        ]),
+                        TextInput::make('linkedin_url')
+                            ->label(__('contacts.fields.linkedin_url'))
+                            ->url()
+                            ->maxLength(255)
+                            ->extraInputAttributes(['dir' => 'ltr']),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 AddressSchema::section(),
 
@@ -144,7 +139,7 @@ final class ContactForm
                         ...OwnerSelect::components(Contact::permissionGroup()),
                         TagsSelect::make(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 ...CustomFieldActions::formSection(CustomFieldEntity::Contact),
 

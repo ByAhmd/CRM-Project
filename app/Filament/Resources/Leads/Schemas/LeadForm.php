@@ -20,7 +20,6 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,54 +49,48 @@ final class LeadForm
             ->components([
                 Section::make(__('leads.sections.person'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            TextInput::make('first_name')
-                                ->label(__('leads.fields.first_name'))
-                                ->required()
-                                ->minLength(2)
-                                ->maxLength(80),
+                        TextInput::make('first_name')
+                            ->label(__('leads.fields.first_name'))
+                            ->required()
+                            ->minLength(2)
+                            ->maxLength(80),
 
-                            TextInput::make('last_name')
-                                ->label(__('leads.fields.last_name'))
-                                ->required()
-                                ->minLength(2)
-                                ->maxLength(80),
-                        ]),
+                        TextInput::make('last_name')
+                            ->label(__('leads.fields.last_name'))
+                            ->required()
+                            ->minLength(2)
+                            ->maxLength(80),
 
-                        Grid::make(2)->schema([
-                            TextInput::make('company_name')
-                                ->label(__('leads.fields.company_name'))
-                                ->maxLength(150),
+                        TextInput::make('company_name')
+                            ->label(__('leads.fields.company_name'))
+                            ->maxLength(150),
 
-                            TextInput::make('job_title')
-                                ->label(__('leads.fields.job_title'))
-                                ->maxLength(100),
-                        ]),
+                        TextInput::make('job_title')
+                            ->label(__('leads.fields.job_title'))
+                            ->maxLength(100),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('leads.sections.classification'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            Select::make('lead_source_id')
-                                ->label(__('leads.fields.source'))
-                                ->relationship('source', LeadSource::localisedNameColumn(), fn (Builder $query, ?Lead $record): Builder => $query->where(
-                                    fn (Builder $nested): Builder => $nested->where('is_active', true)
-                                        ->when($record?->lead_source_id !== null, fn (Builder $current): Builder => $current->orWhereKey($record?->lead_source_id)),
-                                ))
-                                ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('display_name'))
-                                ->searchable()
-                                ->preload()
-                                ->nullable()
-                                ->native(false),
+                        Select::make('lead_source_id')
+                            ->label(__('leads.fields.source'))
+                            ->relationship('source', LeadSource::localisedNameColumn(), fn (Builder $query, ?Lead $record): Builder => $query->where(
+                                fn (Builder $nested): Builder => $nested->where('is_active', true)
+                                    ->when($record?->lead_source_id !== null, fn (Builder $current): Builder => $current->orWhereKey($record?->lead_source_id)),
+                            ))
+                            ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('display_name'))
+                            ->searchable()
+                            ->preload()
+                            ->nullable()
+                            ->native(false),
 
-                            Select::make('priority')
-                                ->label(__('leads.fields.priority'))
-                                ->options(LeadPriority::class)
-                                ->default(LeadPriority::Medium->value)
-                                ->required()
-                                ->native(false),
-                        ]),
+                        Select::make('priority')
+                            ->label(__('leads.fields.priority'))
+                            ->options(LeadPriority::class)
+                            ->default(LeadPriority::Medium->value)
+                            ->required()
+                            ->native(false),
 
                         Select::make('lead_status_id')
                             ->label(__('leads.fields.status'))
@@ -129,27 +122,26 @@ final class LeadForm
                             ->nullable()
                             ->visible(fn (): bool => auth()->user()?->can(Permission::LeadAssign->value) ?? false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('leads.sections.contact'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            TextInput::make('email')
-                                ->label(__('leads.fields.email'))
-                                ->email()
-                                ->maxLength(190)
-                                ->live(onBlur: true)
-                                ->extraInputAttributes(['dir' => 'ltr']),
+                        TextInput::make('email')
+                            ->label(__('leads.fields.email'))
+                            ->email()
+                            ->maxLength(190)
+                            ->live(onBlur: true)
+                            ->extraInputAttributes(['dir' => 'ltr']),
 
-                            TextInput::make('phone')
-                                ->label(__('leads.fields.phone'))
-                                ->tel()
-                                ->maxLength(30)
-                                ->live(onBlur: true)
-                                ->extraInputAttributes(['dir' => 'ltr']),
-                        ]),
+                        TextInput::make('phone')
+                            ->label(__('leads.fields.phone'))
+                            ->tel()
+                            ->maxLength(30)
+                            ->live(onBlur: true)
+                            ->extraInputAttributes(['dir' => 'ltr']),
 
-                        DuplicateWarning::forLead(),
+                        DuplicateWarning::forLead()
+                            ->columnSpanFull(),
 
                         TextInput::make('website')
                             ->label(__('leads.fields.website'))
@@ -157,7 +149,7 @@ final class LeadForm
                             ->maxLength(255)
                             ->extraInputAttributes(['dir' => 'ltr']),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 AddressSchema::section(),
 
@@ -166,7 +158,7 @@ final class LeadForm
                         ...OwnerSelect::components(Lead::permissionGroup()),
                         TagsSelect::make(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 ...CustomFieldActions::formSection(CustomFieldEntity::Lead),
 

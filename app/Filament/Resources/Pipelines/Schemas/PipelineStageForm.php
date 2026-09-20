@@ -85,7 +85,7 @@ final class PipelineStageForm
                             ->helperText(__('pipelines.stages.helpers.is_default'))
                             ->default(false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

@@ -68,7 +68,7 @@ composer check              # pint --test, phpstan, phpunit — must be green be
 | [docs/ARCHITECTURE_PLAN.md](docs/ARCHITECTURE_PLAN.md) | Discovery findings, product scope, system architecture, module dependencies, implementation order, testing, security, performance, deployment, folder structure, risks, decision register |
 | [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md) | Every table, column, key, index and integrity rule, as built |
 | [docs/STOCKFLOW_COMPARISON.md](docs/STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table, reuse classification (must / should / CRM-specific / must not), conflict resolution |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-21 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-22 |
 | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) | Seeded roles and their default grants, record scope (own / team / all) and the guards above the permissions |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Hostinger runbook: prerequisites, first deployment, the cron line and what it drives, releases, rollback, PHP limits, backups, logs, monitoring, the deploy workflow and its secrets, the full `.env` reference |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2 operations: users, roles, audit retention, deleted records, imports/exports, attachments, failed jobs, scheduler troubleshooting, settings, demo data, common preflight failures |

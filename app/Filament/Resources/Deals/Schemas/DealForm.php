@@ -65,29 +65,28 @@ final class DealForm
                         TextInput::make('title')
                             ->label(__('deals.fields.title'))
                             ->required()
-                            ->maxLength(150),
+                            ->maxLength(150)
+                            ->columnSpanFull(),
 
-                        Grid::make(2)->schema([
-                            Select::make('account_id')
-                                ->label(__('deals.fields.account'))
-                                ->relationship('account', 'name', fn (Builder $query, ?Deal $record): Builder => AccountForm::constrainToPickableAccounts($query, $record?->account_id))
-                                ->searchable()
-                                ->preload()
-                                ->nullable()
-                                ->native(false)
-                                ->live()
-                                ->afterStateUpdated(fn (Set $set) => $set('contact_id', null))
-                                ->visible($withAccount),
+                        Select::make('account_id')
+                            ->label(__('deals.fields.account'))
+                            ->relationship('account', 'name', fn (Builder $query, ?Deal $record): Builder => AccountForm::constrainToPickableAccounts($query, $record?->account_id))
+                            ->searchable()
+                            ->preload()
+                            ->nullable()
+                            ->native(false)
+                            ->live()
+                            ->afterStateUpdated(fn (Set $set) => $set('contact_id', null))
+                            ->visible($withAccount),
 
-                            Select::make('contact_id')
-                                ->label(__('deals.fields.contact'))
-                                ->relationship('contact', 'last_name', fn (Builder $query, Get $get, Component $livewire, ?Deal $record): Builder => self::constrainContacts($query, self::accountIdFor($get, $livewire), $record))
-                                ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('full_name'))
-                                ->searchable(['first_name', 'last_name'])
-                                ->preload()
-                                ->nullable()
-                                ->native(false),
-                        ]),
+                        Select::make('contact_id')
+                            ->label(__('deals.fields.contact'))
+                            ->relationship('contact', 'last_name', fn (Builder $query, Get $get, Component $livewire, ?Deal $record): Builder => self::constrainContacts($query, self::accountIdFor($get, $livewire), $record))
+                            ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('full_name'))
+                            ->searchable(['first_name', 'last_name'])
+                            ->preload()
+                            ->nullable()
+                            ->native(false),
 
                         Select::make('lead_source_id')
                             ->label(__('deals.fields.source'))
@@ -104,91 +103,87 @@ final class DealForm
                         ...OwnerSelect::components(Deal::permissionGroup()),
                         TagsSelect::make(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('deals.sections.pipeline'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            Select::make('pipeline_id')
-                                ->label(__('deals.fields.pipeline'))
-                                ->options(fn (): array => Pipeline::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('sort')
-                                    ->orderBy('id')
-                                    ->get()
-                                    ->mapWithKeys(fn (Pipeline $pipeline): array => [$pipeline->getKey() => $pipeline->display_name])
-                                    ->all())
-                                ->default(fn (): ?int => self::defaultPipelineId())
-                                ->required()
-                                ->live()
-                                ->native(false)
-                                ->afterStateUpdated(fn (Set $set, mixed $state) => $set('stage_id', self::defaultStageId($state)))
-                                ->visible(fn (?Deal $record): bool => $record === null),
+                        Select::make('pipeline_id')
+                            ->label(__('deals.fields.pipeline'))
+                            ->options(fn (): array => Pipeline::query()
+                                ->where('is_active', true)
+                                ->orderBy('sort')
+                                ->orderBy('id')
+                                ->get()
+                                ->mapWithKeys(fn (Pipeline $pipeline): array => [$pipeline->getKey() => $pipeline->display_name])
+                                ->all())
+                            ->default(fn (): ?int => self::defaultPipelineId())
+                            ->required()
+                            ->live()
+                            ->native(false)
+                            ->afterStateUpdated(fn (Set $set, mixed $state) => $set('stage_id', self::defaultStageId($state)))
+                            ->visible(fn (?Deal $record): bool => $record === null),
 
-                            Select::make('stage_id')
-                                ->label(__('deals.fields.stage'))
-                                ->helperText(__('deals.helpers.initial_stage'))
-                                ->options(fn (Get $get): array => self::openStages($get('pipeline_id')))
-                                ->default(fn (): ?int => self::defaultStageId(self::defaultPipelineId()))
-                                ->required()
-                                ->native(false)
-                                ->visible(fn (?Deal $record): bool => $record === null),
+                        Select::make('stage_id')
+                            ->label(__('deals.fields.stage'))
+                            ->helperText(__('deals.helpers.initial_stage'))
+                            ->options(fn (Get $get): array => self::openStages($get('pipeline_id')))
+                            ->default(fn (): ?int => self::defaultStageId(self::defaultPipelineId()))
+                            ->required()
+                            ->native(false)
+                            ->visible(fn (?Deal $record): bool => $record === null),
 
-                            Placeholder::make('pipeline_display')
-                                ->label(__('deals.fields.pipeline'))
-                                ->content(fn (?Deal $record): string => (string) ($record?->pipeline?->getAttribute('display_name') ?? __('common.placeholders.empty')))
-                                ->visible(fn (?Deal $record): bool => $record !== null),
+                        Placeholder::make('pipeline_display')
+                            ->label(__('deals.fields.pipeline'))
+                            ->content(fn (?Deal $record): string => (string) ($record?->pipeline?->getAttribute('display_name') ?? __('common.placeholders.empty')))
+                            ->visible(fn (?Deal $record): bool => $record !== null),
 
-                            Placeholder::make('stage_display')
-                                ->label(__('deals.fields.stage'))
-                                ->content(fn (?Deal $record): string => (string) ($record?->stage?->getAttribute('display_name') ?? __('common.placeholders.empty')))
-                                ->helperText(__('deals.helpers.stage_readonly'))
-                                ->visible(fn (?Deal $record): bool => $record !== null),
-                        ]),
+                        Placeholder::make('stage_display')
+                            ->label(__('deals.fields.stage'))
+                            ->content(fn (?Deal $record): string => (string) ($record?->stage?->getAttribute('display_name') ?? __('common.placeholders.empty')))
+                            ->helperText(__('deals.helpers.stage_readonly'))
+                            ->visible(fn (?Deal $record): bool => $record !== null),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('deals.sections.value'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            TextInput::make('amount')
-                                ->label(__('deals.fields.amount'))
-                                ->helperText(__('deals.helpers.amount'))
-                                ->numeric()
-                                ->minValue(0)
-                                ->maxValue(self::MAX_AMOUNT)
-                                ->rule('decimal:0,2')
-                                ->step(0.01)
-                                ->default(0)
-                                ->required()
-                                ->suffix(fn (): string => DealResource::currency())
-                                ->disabled(fn (Get $get): bool => self::hasLines($get))
-                                ->dehydrated(fn (Get $get): bool => ! self::hasLines($get))
-                                ->extraInputAttributes(['dir' => 'ltr']),
+                        TextInput::make('amount')
+                            ->label(__('deals.fields.amount'))
+                            ->helperText(__('deals.helpers.amount'))
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(self::MAX_AMOUNT)
+                            ->rule('decimal:0,2')
+                            ->step(0.01)
+                            ->default(0)
+                            ->required()
+                            ->suffix(fn (): string => DealResource::currency())
+                            ->disabled(fn (Get $get): bool => self::hasLines($get))
+                            ->dehydrated(fn (Get $get): bool => ! self::hasLines($get))
+                            ->extraInputAttributes(['dir' => 'ltr']),
 
-                            TextInput::make('probability')
-                                ->label(__('deals.fields.probability'))
-                                ->helperText(__('deals.helpers.probability'))
-                                ->integer()
-                                ->minValue(0)
-                                ->maxValue(100)
-                                ->nullable()
-                                ->extraInputAttributes(['dir' => 'ltr']),
+                        TextInput::make('probability')
+                            ->label(__('deals.fields.probability'))
+                            ->helperText(__('deals.helpers.probability'))
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->nullable()
+                            ->extraInputAttributes(['dir' => 'ltr']),
 
-                            DatePicker::make('expected_close_date')
-                                ->label(__('deals.fields.expected_close_date'))
-                                ->native(false)
-                                ->nullable(),
+                        DatePicker::make('expected_close_date')
+                            ->label(__('deals.fields.expected_close_date'))
+                            ->native(false)
+                            ->nullable(),
 
-                            Select::make('forecast_category')
-                                ->label(__('deals.fields.forecast_category'))
-                                ->options(ForecastCategory::class)
-                                ->default(ForecastCategory::Pipeline->value)
-                                ->required()
-                                ->native(false),
-                        ]),
+                        Select::make('forecast_category')
+                            ->label(__('deals.fields.forecast_category'))
+                            ->options(ForecastCategory::class)
+                            ->default(ForecastCategory::Pipeline->value)
+                            ->required()
+                            ->native(false),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('deals.sections.line_items'))
                     ->schema([

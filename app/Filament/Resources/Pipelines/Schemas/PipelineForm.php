@@ -77,7 +77,7 @@ final class PipelineForm
                             ->default(0)
                             ->required(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }

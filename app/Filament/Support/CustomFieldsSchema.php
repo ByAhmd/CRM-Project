@@ -103,6 +103,11 @@ final class CustomFieldsSchema
     /**
      * The custom fields of a record's form, or null when the entity has none —
      * a caller filters the null out of its schema.
+     *
+     * The section pairs the short typed inputs two per row from `lg` up
+     * (single column on phones, A-22); a textarea field spans the full row.
+     * The section itself spans every column, so it stays full width even when
+     * a consumer injects it into a multi-column parent.
      */
     public static function formSection(CustomFieldEntity $entity): ?Section
     {
@@ -121,7 +126,8 @@ final class CustomFieldsSchema
         return Section::make(__('custom_fields.sections.custom'))
             ->statePath(self::STATE_PATH)
             ->schema($components)
-            ->columns(1);
+            ->columns(['default' => 1, 'lg' => 2])
+            ->columnSpanFull();
     }
 
     /**
@@ -188,7 +194,11 @@ final class CustomFieldsSchema
         app(CustomFieldValueService::class)->fill($record, $values, $actor);
     }
 
-    /** The custom fields of a record's view page, or null when the entity has none. */
+    /**
+     * The custom fields of a record's view page, or null when the entity has
+     * none. Entries pair two per row from `lg` up, exactly like the form
+     * section; a textarea value spans the full row.
+     */
     public static function infolistSection(CustomFieldEntity $entity): ?Section
     {
         $fields = self::fields($entity);
@@ -205,7 +215,8 @@ final class CustomFieldsSchema
 
         return Section::make(__('custom_fields.sections.custom'))
             ->schema($entries)
-            ->columns(1);
+            ->columns(['default' => 1, 'lg' => 2])
+            ->columnSpanFull();
     }
 
     /**
@@ -429,7 +440,7 @@ final class CustomFieldsSchema
 
         $component = match ($field->type) {
             CustomFieldType::Text => TextInput::make($key)->maxLength(CustomFieldValidator::maxLength($field)),
-            CustomFieldType::Textarea => Textarea::make($key)->rows(3),
+            CustomFieldType::Textarea => Textarea::make($key)->rows(3)->columnSpanFull(),
             CustomFieldType::Number => self::numericInput($field, $key, integer: true),
             CustomFieldType::Decimal => self::numericInput($field, $key, integer: false),
             CustomFieldType::Date => DatePicker::make($key)->native(false),
@@ -485,6 +496,10 @@ final class CustomFieldsSchema
             ->label($field->display_label)
             ->state(static fn (Model $record): string|array|null => self::display($field, self::valueOf($record, $field)))
             ->placeholder(__('common.placeholders.empty'));
+
+        if ($field->type === CustomFieldType::Textarea) {
+            return $entry->columnSpanFull();
+        }
 
         if ($field->type === CustomFieldType::MultiSelect) {
             return $entry->badge()->color('gray');

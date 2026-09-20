@@ -18,7 +18,6 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -50,85 +49,83 @@ final class TaskForm
                             ->label(__('tasks.fields.title'))
                             ->placeholder(__('tasks.placeholders.title'))
                             ->required()
-                            ->maxLength(200),
+                            ->maxLength(200)
+                            ->columnSpanFull(),
 
-                        Grid::make(2)->schema([
-                            Select::make('kind')
-                                ->label(__('tasks.fields.kind'))
-                                ->options(TaskKind::class)
-                                ->default(TaskKind::Task->value)
-                                ->required()
-                                ->live()
-                                ->native(false),
+                        Select::make('kind')
+                            ->label(__('tasks.fields.kind'))
+                            ->options(TaskKind::class)
+                            ->default(TaskKind::Task->value)
+                            ->required()
+                            ->live()
+                            ->native(false),
 
-                            Select::make('priority')
-                                ->label(__('tasks.fields.priority'))
-                                ->options(TaskPriority::class)
-                                ->default(TaskPriority::Medium->value)
-                                ->required()
-                                ->native(false),
-                        ]),
+                        Select::make('priority')
+                            ->label(__('tasks.fields.priority'))
+                            ->options(TaskPriority::class)
+                            ->default(TaskPriority::Medium->value)
+                            ->required()
+                            ->native(false),
 
                         Textarea::make('description')
                             ->label(__('tasks.fields.description'))
                             ->placeholder(__('tasks.placeholders.description'))
                             ->rows(4)
-                            ->maxLength(5000),
+                            ->maxLength(5000)
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('tasks.sections.schedule'))
                     ->schema([
-                        Grid::make(2)->schema([
-                            DateTimePicker::make('due_at')
-                                ->label(__('tasks.fields.due_at'))
-                                ->native(false)
-                                ->seconds(false)
-                                ->nullable(),
+                        DateTimePicker::make('due_at')
+                            ->label(__('tasks.fields.due_at'))
+                            ->native(false)
+                            ->seconds(false)
+                            ->nullable(),
 
-                            DateTimePicker::make('reminder_at')
-                                ->label(__('tasks.fields.reminder_at'))
-                                ->helperText(__('tasks.helpers.reminder_at'))
-                                ->native(false)
-                                ->seconds(false)
-                                ->nullable(),
+                        DateTimePicker::make('reminder_at')
+                            ->label(__('tasks.fields.reminder_at'))
+                            ->helperText(__('tasks.helpers.reminder_at'))
+                            ->native(false)
+                            ->seconds(false)
+                            ->nullable(),
 
-                            DateTimePicker::make('starts_at')
-                                ->label(__('tasks.fields.starts_at'))
-                                ->native(false)
-                                ->seconds(false)
-                                ->nullable()
-                                ->visible(fn (Get $get): bool => self::hasTimeSpan($get)),
+                        DateTimePicker::make('starts_at')
+                            ->label(__('tasks.fields.starts_at'))
+                            ->native(false)
+                            ->seconds(false)
+                            ->nullable()
+                            ->visible(fn (Get $get): bool => self::hasTimeSpan($get)),
 
-                            DateTimePicker::make('ends_at')
-                                ->label(__('tasks.fields.ends_at'))
-                                ->helperText(__('tasks.helpers.ends_at_after_starts_at'))
-                                ->native(false)
-                                ->seconds(false)
-                                ->nullable()
-                                ->visible(fn (Get $get): bool => self::hasTimeSpan($get))
-                                ->rules([
-                                    fn (Get $get): Closure => static function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                        $startsAt = $get('starts_at');
+                        DateTimePicker::make('ends_at')
+                            ->label(__('tasks.fields.ends_at'))
+                            ->helperText(__('tasks.helpers.ends_at_after_starts_at'))
+                            ->native(false)
+                            ->seconds(false)
+                            ->nullable()
+                            ->visible(fn (Get $get): bool => self::hasTimeSpan($get))
+                            ->rules([
+                                fn (Get $get): Closure => static function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                    $startsAt = $get('starts_at');
 
-                                        if (blank($value) || blank($startsAt)) {
-                                            return;
-                                        }
+                                    if (blank($value) || blank($startsAt)) {
+                                        return;
+                                    }
 
-                                        if (Carbon::parse((string) $value)->lessThan(Carbon::parse((string) $startsAt))) {
-                                            $fail(__('tasks.validation.ends_before_starts'));
-                                        }
-                                    },
-                                ]),
-                        ]),
+                                    if (Carbon::parse((string) $value)->lessThan(Carbon::parse((string) $startsAt))) {
+                                        $fail(__('tasks.validation.ends_before_starts'));
+                                    }
+                                },
+                            ]),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 ...$withSubjects ? [
                     Section::make(__('tasks.sections.related'))
                         ->description(__('tasks.helpers.related'))
                         ->schema(SubjectPickers::components(required: false))
-                        ->columns(1),
+                        ->columns(['default' => 1, 'lg' => 2]),
                 ] : [],
 
                 Section::make(__('tasks.sections.assignment'))
@@ -141,38 +138,36 @@ final class TaskForm
                             ->helperText(__('tasks.helpers.status_readonly'))
                             ->visible(fn (?Task $record): bool => $record !== null),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
 
                 Section::make(__('tasks.sections.recurrence'))
                     ->description(__('tasks.helpers.recurrence'))
                     ->schema([
-                        Grid::make(3)->schema([
-                            Select::make('recurrence_frequency')
-                                ->label(__('tasks.fields.recurrence_frequency'))
-                                ->options(RecurrenceFrequency::class)
-                                ->default(RecurrenceFrequency::None->value)
-                                ->required()
-                                ->live()
-                                ->native(false),
+                        Select::make('recurrence_frequency')
+                            ->label(__('tasks.fields.recurrence_frequency'))
+                            ->options(RecurrenceFrequency::class)
+                            ->default(RecurrenceFrequency::None->value)
+                            ->required()
+                            ->live()
+                            ->native(false),
 
-                            TextInput::make('recurrence_interval')
-                                ->label(__('tasks.fields.recurrence_interval'))
-                                ->integer()
-                                ->minValue(1)
-                                ->maxValue(255)
-                                ->default(1)
-                                ->required(fn (Get $get): bool => self::repeats($get))
-                                ->visible(fn (Get $get): bool => self::repeats($get))
-                                ->extraInputAttributes(['dir' => 'ltr']),
+                        TextInput::make('recurrence_interval')
+                            ->label(__('tasks.fields.recurrence_interval'))
+                            ->integer()
+                            ->minValue(1)
+                            ->maxValue(255)
+                            ->default(1)
+                            ->required(fn (Get $get): bool => self::repeats($get))
+                            ->visible(fn (Get $get): bool => self::repeats($get))
+                            ->extraInputAttributes(['dir' => 'ltr']),
 
-                            DatePicker::make('recurrence_ends_at')
-                                ->label(__('tasks.fields.recurrence_ends_at'))
-                                ->native(false)
-                                ->nullable()
-                                ->visible(fn (Get $get): bool => self::repeats($get)),
-                        ]),
+                        DatePicker::make('recurrence_ends_at')
+                            ->label(__('tasks.fields.recurrence_ends_at'))
+                            ->native(false)
+                            ->nullable()
+                            ->visible(fn (Get $get): bool => self::repeats($get)),
                     ])
-                    ->columns(1)
+                    ->columns(['default' => 1, 'lg' => 2])
                     ->collapsible(),
             ])
             ->columns(1);

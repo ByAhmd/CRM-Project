@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
 authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-13 owner, A-1 … A-21 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-13 owner, A-1 … A-22 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -38,7 +38,12 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
 - Filament resources: `XResource` + `Schemas/XForm`, `Schemas/XInfolist`, `Tables/XsTable`,
   `Pages/{List,Create,View,Edit}X`, `RelationManagers/*`. Labels only through `getNavigationLabel()`,
   `getModelLabel()`, `getPluralModelLabel()`; `getNavigationGroup()` returns an `App\Enums\NavigationGroup`
-  case. `->columns(1)` explicit on every Section/Schema. Tables: `->defaultSort()`, `->recordActions()`,
+  case. Every Section/Schema declares its column map **explicitly** (A-22): `->columns(['default' => 1, 'lg' => 2])`
+  where the section holds short fields that pair, `->columns(1)` for single-field/long-content sections
+  (a lone textarea, a repeater, a grid that manages its own density) — never an implicit default; a
+  full-width field inside a 2-column section says `->columnSpanFull()` (textareas, repeaters, warnings,
+  the custom-fields injection); the top-level Schema stays `->columns(1)` so sections stack.
+  Tables: `->defaultSort()`, `->recordActions()`,
   `->toolbarActions([BulkActionGroup::make([...->authorizeIndividualRecords(...)])])`, persisted
   filters/sort/search, translated empty states. `getEloquentQuery()` applies `ScopesQueriesToVisibleRecords`.
 - Authorisation: policy per model using `Policies\Concerns\ChecksPermissions` (explicit `deleteAny`,

@@ -27,7 +27,8 @@ final class DealCloseReasonForm
                             ->helperText(__('close_reasons.helpers.kind'))
                             ->options(CloseReasonKind::class)
                             ->required()
-                            ->native(false),
+                            ->native(false)
+                            ->columnSpanFull(),
 
                         TextInput::make('name_ar')
                             ->label(__('close_reasons.fields.name_ar'))
@@ -70,7 +71,7 @@ final class DealCloseReasonForm
                             ->default(0)
                             ->required(),
                     ])
-                    ->columns(1),
+                    ->columns(['default' => 1, 'lg' => 2]),
             ])
             ->columns(1);
     }
