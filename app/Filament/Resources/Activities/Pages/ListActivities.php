@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Activities\Pages;
 
 use App\Enums\ActivityKind;
-use App\Filament\Concerns\HasSavedViews;
 use App\Filament\Resources\Activities\ActivityResource;
-use App\Filament\Support\SavedViewActions;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -15,14 +13,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class ListActivities extends ListRecords
 {
-    use HasSavedViews;
-
     protected static string $resource = ActivityResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            ...SavedViewActions::for($this),
             CreateAction::make()
                 ->label(__('activities.actions.log')),
         ];

@@ -75,6 +75,13 @@ and why. Keeping two active super admins avoids the situation.
 - Started from the lists of leads, contacts, accounts and deals (import and export) and of activities and tasks
   (export). Imports need `{entity}.import` plus the policy verbs the rows use; exports see only the exporter's scope
   (D-13).
+- File formats: an import reads a CSV or an Excel workbook (`.xlsx`); an export is written as CSV or XLSX. A workbook is
+  converted to CSV as it is uploaded: the first worksheet only, its first row the header, dates as `YYYY-MM-DD`,
+  numbers without thousands separators. When the file holds more than one worksheet the modal says which one was read
+  and how many were left out. Excel 97-2003 (`.xls`) and OpenDocument (`.ods`) are neither offered by the picker nor
+  let through by the upload rules: OpenSpout cannot read `.xls` at all, and it returns every boolean cell of an `.ods`
+  as true, which would turn a "no" in the sheet into a "yes" in the record. Tell a user holding either to open the file
+  and save it as `.xlsx`.
 - Bounds: imports up to 5 000 rows (chunks of 100), exports up to 20 000 rows (chunks of 500); 5 imports and 10 exports
   per client IP address per list page per minute (Filament's action rate limit is keyed on the request's IP address,
   not on the user). Behind an untrusted proxy every user shares that limit (DEPLOYMENT.md, section 3.6,
@@ -96,7 +103,7 @@ Everything lives on the private `local` disk, `storage/app/private` (release fol
 |---|---|---|
 | `crm/<entity>/<id>/` | Attachments (UUID file names) | Never. A deleted attachment is soft-deleted and keeps its file so it can be restored. |
 | `tmp/` | Uploads of forms that were never submitted | Daily (`attachments:prune-temporary`, older than a day). |
-| `livewire-tmp/` | Livewire's temporary uploads, import CSV/XLSX files included (an import reads its file but never deletes it) | Daily (`uploads:prune-livewire-temporary`, older than a day); Livewire also clears them when the next upload starts. |
+| `livewire-tmp/` | Livewire's temporary uploads, the CSV and `.xlsx` files an import reads included (an import reads its file where it lies but never deletes it; a workbook is converted to CSV in memory, so no second file appears here) | Daily (`uploads:prune-livewire-temporary`, older than a day); Livewire also clears them when the next upload starts. |
 | `filament_exports/<export id>/` | Export files | With the export run after 30 days (`model:prune`). |
 | `reports/` | Report downloads being streamed | Hourly (`reports:prune-downloads`, older than an hour). |
 
@@ -168,7 +175,7 @@ All under *Settings* and bilingual: every name has an Arabic and an English valu
   reference rows without overwriting edits.
 - **Products** (*Sales → Products*, `product.*` permissions): the catalogue for deal line items.
 - **Custom fields** (*Settings → Custom fields*, `settings.manage`; D-9) on leads, contacts, accounts and deals. The key
-  is how imports, exports and saved views address the field and cannot be changed later; the type is locked once the
+  is how imports and exports address the field and cannot be changed later; the type is locked once the
   field holds values; a field with values cannot be deleted — deactivate it, and it disappears from forms, tables and
   filters while the values are kept.
 - **Email templates** (*Settings → Email templates*, `email_template.*` permissions; D-10): bilingual subject and plain
@@ -205,7 +212,7 @@ php artisan app:demo-data --fresh --allow-orphans # remove the demo users even w
   plus `sales_manager2@` and `sales_rep2@` for the second team, all `@demo.crm.test` — sharing one random password
   printed **once** at the end of the run (only its hash is stored). Mail stays off for every demo user. At scale 1 it
   creates 2 teams, 6 products, 19 accounts, 39 contacts, 40 leads, 26 deals and the related tasks, activities, notes,
-  attachments, saved views and audit rows; the command prints the per-table counts.
+  attachments and audit rows; the command prints the per-table counts.
 - `--fresh` deletes the recorded rows **permanently** (demo data only; soft deletes protect real work), plus the demo
   users' roles, notifications, sessions, reset tokens and export files, the demo attachment files and the registry. It
   refuses while a real contact, deal or line item still points at a demo account or product. Reference data and real
@@ -218,8 +225,8 @@ php artisan app:demo-data --fresh --allow-orphans # remove the demo users even w
   (`cascadeOnDelete`), and audit entries keep pointing at a user that no longer exists. The list is read from the
   database's own foreign keys on `users` plus the audit ledger's causer and subject. Reassign those records to a real
   user (or delete them) and run `--fresh` again. `--allow-orphans` removes the demo users anyway after printing the
-  same list — use it only when those records are disposable. The demo users' own saved views and notification
-  preferences never block the removal; they go with the users.
+  same list — use it only when those records are disposable. The demo users' own notification preferences never block
+  the removal; they go with the users.
 
 ## 13. Command reference
 

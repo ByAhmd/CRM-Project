@@ -45,7 +45,7 @@ return [
     ],
 
     'helpers' => [
-        'key' => 'Lowercase letters, numbers and underscores. The key is how imports, exports and saved views address the field, so it cannot be changed later.',
+        'key' => 'Lowercase letters, numbers and underscores. The key is how imports and exports address the field, so it cannot be changed later.',
         'type_locked' => 'The type cannot be changed once the field holds values, because values are stored in the column the type names.',
         'options' => 'The stored value is what is written to the record; the labels are what users read.',
         'regex' => 'A regular expression the value must match, with or without delimiters.',

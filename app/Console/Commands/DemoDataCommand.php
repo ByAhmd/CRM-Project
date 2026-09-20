@@ -24,8 +24,8 @@ use Throwable;
  * - Runs the production-safe reference seed first (DatabaseSeeder), then
  *   builds the data through the real services — LeadStatusWorkflow,
  *   LeadConversionWorkflow, DealStageWorkflow, DealCloseService, TaskService,
- *   ActivityRecorder, NoteService, AttachmentStorage, SavedViewService,
- *   RoleService, NotificationPreferenceService — so every invariant, status
+ *   ActivityRecorder, NoteService, AttachmentStorage, RoleService,
+ *   NotificationPreferenceService — so every invariant, status
  *   and stage log, notification and audit row is the one the panel would
  *   have written. History is spread over the last 90 days.
  * - Demo users (`<role>@demo.crm.test`, plus `sales_manager2@` and

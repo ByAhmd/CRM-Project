@@ -67,7 +67,13 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `settings` | `key` VARCHAR(100) U, `value` JSON N, `group` VARCHAR(50) I, timestamps. Typed access through `SettingsRepository`; audited. |
 | `teams` | `name_ar`, `name_en`, `manager_user_id` FK→users N SET NULL, `is_active` bool, `sort` SMALLINT, timestamps, SD. U (`name_en`), U (`name_ar`). |
 | `notification_preferences` | `user_id` FK→users CASCADE, `event` VARCHAR(64) (CHECK from `NotificationEvent`), `database` bool default 1, `mail` bool default 0, timestamps. U (`user_id`,`event`). |
-| `saved_views` | `user_id` FK→users CASCADE, `resource` VARCHAR(100) I, `name` VARCHAR(100), `filters` JSON N, `sort_column` N, `sort_direction` VARCHAR(4) N, `search` N, `columns` JSON N, `is_shared` bool, `is_default` bool, timestamps. U (`user_id`,`resource`,`name`). |
+
+**Removed table.** `saved_views` (`user_id` FK→users CASCADE, `resource`, `name`, `filters` JSON, `sort_column`,
+`sort_direction`, `search`, `columns` JSON, `is_shared`, `is_default`, timestamps; U (`user_id`,`resource`,`name`)) was
+dropped on 2026-09-17 by `2026_09_17_100001_drop_saved_views_table`: the owner found the saved-views buttons on the list
+pages of no use, so the feature was withdrawn (A-8/A-18 amended). The rows were personal preferences, never business
+records, so they were dropped rather than archived. The creating migration `2026_09_06_160001` stays in place for
+databases mid-history, and the drop migration's `down()` recreates the table exactly as it was.
 
 ## 2. Lookups (configurable, bilingual)
 
@@ -274,7 +280,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 
 ## 5. Relationship summary
 
-- User `hasMany` leads/contacts/accounts/deals/tasks (as owner/assignee), `belongsTo` team, `hasMany` savedViews, notificationPreferences.
+- User `hasMany` leads/contacts/accounts/deals/tasks (as owner/assignee), `belongsTo` team, `hasMany` notificationPreferences.
 - Team `hasMany` users, `belongsTo` manager.
 - Account `hasMany` contacts, deals, activities, tasks, notes, attachments (morph), `belongsToMany` tags; `belongsTo` industry, owner, parent.
 - Contact `belongsTo` account, owner; `belongsToMany` deals (`deal_contacts` with role), tags; `hasMany` activities, tasks, notes; morph attachments.

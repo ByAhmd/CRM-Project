@@ -20,7 +20,6 @@ use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\Note;
-use App\Models\SavedView;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Activities\ActivityRecorder;
@@ -28,8 +27,6 @@ use App\Services\Activities\ActivitySubject;
 use App\Services\Attachments\AttachmentStorage;
 use App\Services\Notes\NoteService;
 use App\Services\Tasks\TaskService;
-use App\Services\Views\SavedViewService;
-use App\Services\Views\TableState;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -37,8 +34,7 @@ use Illuminate\Support\Str;
 
 /**
  * The day-to-day work around the records (decision A-10): tasks and
- * activities per batch, and — once per run — notes, the two attachments and
- * two saved views.
+ * activities per batch, and — once per run — notes and the two attachments.
  *
  * - tasks go through TaskService: six open, five overdue, eight completed
  *   (each completion writes a system `task` activity on the record), one a
@@ -47,8 +43,8 @@ use Illuminate\Support\Str;
  * - sixty activities over the last sixty days go through ActivityRecorder,
  *   which moves each lead's and deal's last activity forward;
  * - notes go through NoteService (one pinned, one naming a colleague, who is
- *   notified), the files through AttachmentStorage exactly as an upload
- *   parked on the attachments disk, the views through SavedViewService.
+ *   notified) and the files through AttachmentStorage exactly as an upload
+ *   parked on the attachments disk.
  */
 final class DemoWorkBuilder
 {
@@ -59,7 +55,6 @@ final class DemoWorkBuilder
         private readonly ActivityRecorder $activities,
         private readonly NoteService $notes,
         private readonly AttachmentStorage $attachments,
-        private readonly SavedViewService $views,
     ) {}
 
     public function build(DemoContext $context, int $batch): void
@@ -73,7 +68,6 @@ final class DemoWorkBuilder
         if ($batch === 0) {
             $this->buildNotes($context, $leads, $deals);
             $this->buildAttachments($context, $deals);
-            $this->buildSavedViews($context);
         }
     }
 
@@ -325,33 +319,6 @@ final class DemoWorkBuilder
 
             $context->attachments[] = $attachment;
             $context->record('attachments', (int) $attachment->getKey());
-        }
-    }
-
-    private function buildSavedViews(DemoContext $context): void
-    {
-        $manager = $context->user('sales_manager');
-        $rep = $context->user('sales_rep2');
-
-        $views = [
-            $context->as($manager, $context->ago(25), fn (): SavedView => $this->views->save(
-                $manager,
-                'leads',
-                'عملاء محتملون بأولوية عالية',
-                new TableState(['priority' => ['values' => ['high']]], 'created_at', 'desc', null, null),
-                shared: true,
-            )),
-            $context->as($rep, $context->ago(22), fn (): SavedView => $this->views->save(
-                $rep,
-                'deals',
-                'My open deals',
-                new TableState(['status' => ['values' => [DealStatus::Open->value]]], 'expected_close_date', 'asc', null, null),
-                default: true,
-            )),
-        ];
-
-        foreach ($views as $view) {
-            $context->record('saved_views', (int) $view->getKey());
         }
     }
 

@@ -33,13 +33,12 @@ final class SchemaContractTest extends TestCase
 
     /**
      * Foreign keys to users that delete with the user: rows that exist only
-     * for that user (preferences, personal views, Filament import/export runs).
+     * for that user (preferences, Filament import/export runs).
      */
     private const array USER_OWNED_REFERENCES = [
         'exports.user_id',
         'imports.user_id',
         'notification_preferences.user_id',
-        'saved_views.user_id',
     ];
 
     #[Test]
@@ -240,7 +239,6 @@ final class SchemaContractTest extends TestCase
             'deal_contacts.deal_id,contact_id' => ['deal_contacts', ['deal_id', 'contact_id']],
             'deal_competitors.deal_id,competitor_id' => ['deal_competitors', ['deal_id', 'competitor_id']],
             'notification_preferences.user_id,event' => ['notification_preferences', ['user_id', 'event']],
-            'saved_views.user_id,resource,name' => ['saved_views', ['user_id', 'resource', 'name']],
             'attachments.uuid' => ['attachments', ['uuid']],
         ];
     }

@@ -39,8 +39,7 @@ use Spatie\Permission\PermissionRegistrar;
  * demo account or product through a `restrictOnDelete()` key stops the
  * removal with an explanation before anything is deleted. What belongs to the
  * demo users themselves goes with them: their roles, notifications,
- * sessions, password reset tokens, saved views, notification preferences and
- * export files.
+ * sessions, password reset tokens, notification preferences and export files.
  *
  * Rows the registry does not hold can still point at a demo user: a contact
  * someone imported while signed in as `admin@demo.crm.test` (owner and
@@ -61,7 +60,7 @@ final class DemoDataRemover
      * Tables whose rows referencing a user are that user's own settings or
      * bookkeeping; they are removed with the demo user and never listed.
      */
-    private const USER_OWNED_TABLES = ['saved_views', 'notification_preferences', 'notifications', 'sessions'];
+    private const USER_OWNED_TABLES = ['notification_preferences', 'notifications', 'sessions'];
 
     public function __construct(
         private readonly DemoRegistry $registry,
@@ -220,7 +219,6 @@ final class DemoDataRemover
             $this->delete('accounts', $accounts);
             $this->delete('products', $this->registry->ids('products'));
 
-            $this->delete('saved_views', $this->registry->ids('saved_views'));
             $this->delete('notification_preferences', $this->registry->ids('notification_preferences'));
 
             $morphKey = (string) config('permission.column_names.model_morph_key', 'model_id');

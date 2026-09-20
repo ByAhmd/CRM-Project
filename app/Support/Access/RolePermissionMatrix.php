@@ -94,7 +94,7 @@ final class RolePermissionMatrix
 
             Permission::EmailSend, Permission::EmailTemplateViewAny,
             Permission::ProductViewAny,
-            Permission::SavedViewShare, Permission::ReportsView, Permission::ImportsView, Permission::ExportsView,
+            Permission::ReportsView, Permission::ImportsView, Permission::ExportsView,
         ];
     }
 

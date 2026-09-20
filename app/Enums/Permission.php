@@ -117,7 +117,6 @@ enum Permission: string
     case ProductDelete = 'product.delete';
 
     // Cross-cutting
-    case SavedViewShare = 'saved_view.share';
     case ReportsView = 'reports.view';
     case ImportsView = 'imports.view';
     case ExportsView = 'exports.view';

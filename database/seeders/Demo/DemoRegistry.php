@@ -43,7 +43,6 @@ final class DemoRegistry
         'contacts',
         'accounts',
         'products',
-        'saved_views',
         'notification_preferences',
         'users',
         'teams',

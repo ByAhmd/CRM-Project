@@ -161,7 +161,6 @@ final class DemoDataBuilder
         $ids['activities'] = $this->pluck('activities', 'created_by', $users);
         $ids['tasks'] = $this->pluck('tasks', 'created_by', $users);
         $ids['notes'] = $this->pluck('notes', 'author_id', $users);
-        $ids['saved_views'] = $this->pluck('saved_views', 'user_id', $users);
         $ids['notification_preferences'] = $this->pluck('notification_preferences', 'user_id', $users);
 
         $audit = $this->pluck('activity_log', 'causer_id', $users, ['causer_type' => (new User)->getMorphClass()]);

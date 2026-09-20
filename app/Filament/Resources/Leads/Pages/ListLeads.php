@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Leads\Pages;
 
 use App\Enums\LeadStatusKind;
-use App\Filament\Concerns\HasSavedViews;
 use App\Filament\Imports\LeadImporter;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\ImportExportActions;
-use App\Filament\Support\SavedViewActions;
 use App\Models\Lead;
 use App\Models\LeadStatus;
 use Filament\Actions\CreateAction;
@@ -20,14 +18,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class ListLeads extends ListRecords
 {
-    use HasSavedViews;
-
     protected static string $resource = LeadResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            ...SavedViewActions::for($this),
             ImportExportActions::import(LeadImporter::class, Lead::class),
             // A panel that opens this as a modal instead of linking to the
             // create page builds it from the entity form, custom section

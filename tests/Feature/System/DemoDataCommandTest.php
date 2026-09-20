@@ -29,7 +29,6 @@ use App\Models\NotificationPreference;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\Product;
-use App\Models\SavedView;
 use App\Models\Setting;
 use App\Models\Task;
 use App\Models\Team;
@@ -184,7 +183,7 @@ final class DemoDataCommandTest extends TestCase
         $this->assertTrue(Task::query()->where('status', TaskStatus::Completed->value)->whereNotNull('completed_at')->exists());
         $this->assertTrue(Task::query()->whereNotNull('series_id')->where('status', TaskStatus::Pending->value)->exists());
 
-        // Activities over the last sixty days, notes, files, views and preferences.
+        // Activities over the last sixty days, notes, files and preferences.
         $this->assertGreaterThanOrEqual(60, Activity::query()->where('occurred_at', '>=', now()->subDays(61))->count());
         $this->assertTrue(Note::query()->where('is_pinned', true)->exists());
         $this->assertSame(2, Attachment::query()->count());
@@ -194,7 +193,6 @@ final class DemoDataCommandTest extends TestCase
         }
 
         $this->assertEqualsCanonicalizing(['application/pdf', 'image/png'], Attachment::query()->pluck('mime_type')->all());
-        $this->assertSame(2, SavedView::query()->count());
         $this->assertTrue(NotificationPreference::query()->exists());
         $this->assertTrue(DB::table('notifications')->exists());
 
@@ -232,7 +230,7 @@ final class DemoDataCommandTest extends TestCase
         $this->assertSame([(int) $real->getKey()], User::withTrashed()->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all());
         $this->assertTrue($real->fresh()?->hasRole(CrmRole::SalesRep->value));
 
-        foreach (['accounts', 'contacts', 'leads', 'deals', 'deal_products', 'deal_stage_logs', 'lead_status_logs', 'activities', 'tasks', 'notes', 'attachments', 'saved_views', 'notification_preferences', 'notifications', 'products', 'teams'] as $table) {
+        foreach (['accounts', 'contacts', 'leads', 'deals', 'deal_products', 'deal_stage_logs', 'lead_status_logs', 'activities', 'tasks', 'notes', 'attachments', 'notification_preferences', 'notifications', 'products', 'teams'] as $table) {
             $this->assertSame(0, DB::table($table)->count(), "{$table} still has demo rows");
         }
 

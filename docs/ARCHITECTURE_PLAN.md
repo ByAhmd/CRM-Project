@@ -1,6 +1,6 @@
 # CRM — Architecture and Implementation Plan
 
-Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13, A-1 … A-21). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) and step 8 (notifications, scheduler, templated email) complete 2026-09-06; step 9 (search, query-builder filters, saved views, import/export), step 10 (dashboard and reports) and step 11 (custom fields) complete 2026-09-07; step 12 (quality pass) complete 2026-09-15 — open go-live items are carried in [GoLive_Checklist.md](GoLive_Checklist.md). Step 13 (production readiness) engineering complete 2026-09-15; go-live rows that need the host or the owner are tracked in [GoLive_Checklist.md](GoLive_Checklist.md).**
+Status: **Plan approved 2026-09-05. All 13 owner questions answered — see [DECISIONS.md](DECISIONS.md) (D-1 … D-13, A-1 … A-21). Steps 0–6 (scaffold, foundation, lookups, accounts & contacts, leads, deals & pipelines, lead conversion) complete 2026-09-06; step 7 (activities, notes, attachments, tasks, timeline, calendar) and step 8 (notifications, scheduler, templated email) complete 2026-09-06; step 9 (search, query-builder filters, saved views — since removed as unused, see the A-8 amendment — and import/export), step 10 (dashboard and reports) and step 11 (custom fields) complete 2026-09-07; step 12 (quality pass) complete 2026-09-15 — open go-live items are carried in [GoLive_Checklist.md](GoLive_Checklist.md). Step 13 (production readiness) engineering complete 2026-09-15; go-live rows that need the host or the owner are tracked in [GoLive_Checklist.md](GoLive_Checklist.md).**
 
 Companion documents:
 
@@ -94,8 +94,8 @@ A single-organisation (D-2) sales CRM operated from one Filament admin panel.
 | 14 | Tags | Reusable bilingual tags across leads, contacts, accounts, deals; filtering by tag |
 | 15 | Custom fields | Typed engine on Leads, Contacts, Accounts and Deals (D-9): field definitions per entity, typed values, forms, tables, filters, import/export |
 | 16 | Search | Filament global search (⌘K) across leads, contacts, accounts, deals, tasks, scoped by visibility; per-table search and filters |
-| 17 | Filtering & saved views | Advanced filters (incl. query builder), per-user saved views with optional sharing, persisted table state |
-| 18 | Import / Export | CSV import with column mapping, validation, duplicate handling, failed-rows report, history; CSV/XLSX export of tables and reports; permission-gated |
+| 17 | Filtering | Advanced filters (incl. query builder) and table state (filters, sort, search) persisted per user in the session. Per-user saved views were built in step 9 and **removed on 2026-09-17**: the owner found the three list-page buttons of no use (A-8 amendment in [DECISIONS.md](DECISIONS.md)) |
+| 18 | Import / Export | Import of CSV and of Excel workbooks (`.xlsx`, converted to CSV on upload; `.xls` is not readable and `.ods` is not read faithfully — OpenSpout returns every ODS boolean cell as true — so neither is offered) with column mapping, validation, duplicate handling, failed-rows report, history; CSV/XLSX export of tables and reports; permission-gated |
 | 19 | Notifications | In-app bell (database notifications): assignment, task reminders, overdue, deal stage changes, mentions, import/export completion; mail channel only when a mailer is configured and the user opted in |
 | 20 | Roles & permissions | spatie roles/permissions, six default roles, permission keys per verb (view/create/update/delete/export/import/assign/convert/change stage/manage settings/reports/audit/admin), policies enforced server-side |
 | 21 | Teams & ownership | Teams, record owner, assignment with history, visibility own/team/all driven by permissions (D-4); reps cannot reassign |
@@ -173,7 +173,8 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   `App\Enums\Permission` (`lead.view_any`, `lead.view_team`, `lead.view_all`, `lead.create`,
   `lead.update`, `lead.delete`, `lead.restore`, `lead.assign`, `lead.convert`, `lead.export`,
   `lead.import`, … `deal.change_stage`, `settings.manage`, `reports.view`, `audit.view`,
-  `users.manage`, `roles.manage`, `saved_view.share`).
+  `users.manage`, `roles.manage`). `saved_view.share` was dropped with the saved-views feature on
+  2026-09-17 (A-8 amendment in [DECISIONS.md](DECISIONS.md)).
 - Default role→permission sets live in `App\Support\Access\RolePermissionMatrix` and are seeded by
   `RolesAndPermissionsSeeder` (idempotent, `syncPermissions`, cache flushed). A drift test asserts
   the seeded tables equal the matrix; runtime edits through the Roles resource are audited (D-3).
@@ -340,7 +341,7 @@ Foundation (auth, users, roles/permissions, teams, settings infra, lang, theme, 
    │        └─► Calendar (tasks + meetings)
    │        └─► Reminders & notifications (tasks + queue/scheduler)
    │
-   ├─► Search, saved views, import/export (need the entities and visibility resolver)
+   ├─► Search, filters, import/export (need the entities and visibility resolver)
    ├─► Dashboard & reports (need deals, leads, activities, tasks, statistics services)
    ├─► Audit UI (needs ledger instrumentation from every module)
    └─► Custom fields (needs entities; wired into forms, tables, filters, import/export)
@@ -364,7 +365,7 @@ Each step is designed → implemented → validated → authorised → tested (P
 | 6 | **Lead conversion**: `LeadConversionWorkflow` (account/contact/deal creation or linking, transactional), conversion UI, audit + timeline entries, notifications | Conversion tests incl. rollback |
 | 7 | **Activities, notes, tasks, attachments, timeline**: models, relation managers on every subject, `ActivityRecorder`, `TimelineReader` + timeline component, tasks with recurrence + reminders + overdue, `AttachmentStorage` + download route, calendar page | Tests incl. reminders with `travelTo`, download authorisation, recurrence |
 | 8 | **Notifications & scheduler**: notification classes, preferences, mail gating, bell actions, `routes/console.php` schedule, production-wiring tests | Notification tests (`Notification::fake`) |
-| 9 | **Search, saved views, import/export**: global search config, saved views, Filament importers/exporters, import/export history resources, prune schedule | Scope tests, importer tests with fixture CSVs |
+| 9 | **Search, filters, import/export**: global search config, query-builder filters, Filament importers/exporters, import/export history resources, prune schedule (saved views were built here and removed on 2026-09-17 as unused — A-8 amendment) | Scope tests, importer tests with fixture CSVs |
 | 10 | **Dashboard & reports**: statistics services, widgets, charts, nine report pages with export | Report query tests against seeded data, permission tests |
 | 11 | **Custom fields** (D-9, all four entities): definitions, typed values, dynamic form/table/filter components, import/export columns | Tests per field type |
 | 12 | **Quality pass**: security, performance (N+1 with `preventLazyLoading` in tests, indexes, query counts), RTL/LTR walk, dark/light walk, translation audit, DB review, authorisation matrix walk, test review | Checklist in `docs/GoLive_Checklist.md` complete |
@@ -510,7 +511,7 @@ CRM_Project/
 │   │   │   └── Concerns/          HasReportFilters
 │   │   ├── Resources/             Leads/, Contacts/, Accounts/, Deals/, Activities/, Tasks/, Notes/ (relation-only), Attachments/ (relation-only),
 │   │   │                          Pipelines/ (+StagesRelationManager), LeadStatuses/, LeadSources/, Industries/, ActivityTypes/, CloseReasons/,
-│   │   │                          Competitors/, Tags/, Teams/, CustomFields/, Users/, Roles/, SavedViews/, ActivityLogs/, Imports/, Exports/
+│   │   │                          Competitors/, Tags/, Teams/, CustomFields/, Users/, Roles/, ActivityLogs/, Imports/, Exports/
 │   │   │                          (each: XResource, Schemas/, Tables/, Pages/, RelationManagers/)
 │   │   ├── Support/               LeadActions, DealActions, TaskActions, ContactActions, SharedSchemas (address, owner, tags, custom fields)
 │   │   └── Widgets/               SalesKpisWidget, LeadFunnelWidget, PipelineByStageChart, WonRevenueTrendChart, MyTasksTodayWidget,
@@ -522,7 +523,7 @@ CRM_Project/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
 │   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
-│   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, SavedView, NotificationPreference, ActivityLog
+│   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
 │   │                              UserInvitationNotification
@@ -543,8 +544,7 @@ CRM_Project/
 │   │   ├── Settings/              SettingsRepository, LookupOrderingService, PipelineService
 │   │   ├── Statistics/            DashboardMetrics, LeadFunnelMetrics, DealAnalytics, ActivityAnalytics, TaskAnalytics, SourceAnalytics, ForecastAnalytics
 │   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome
-│   │   ├── Users/                 UserInvitationService
-│   │   └── Views/                 SavedViewStore
+│   │   └── Users/                 UserInvitationService
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
 │       ├── Database/              EnumCheck, DatabaseEngine, TimestampRange
