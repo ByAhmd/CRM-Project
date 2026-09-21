@@ -45,6 +45,23 @@ final class MotionLayerTest extends TestCase
             $html,
             'the count-up lost its reduced-motion bail-out',
         );
+
+        // Entrances play on ARRIVAL only: the settle switch turns every
+        // entrance rule off after the first choreography, so Livewire
+        // updates render instantly. Losing either half silently brings back
+        // the regression the owner reported — the entrance replaying on
+        // every keystroke, delaying fast data by ~0.7 s of theatrics.
+        $this->assertStringContainsString(
+            "classList.add('crm-settled')",
+            $html,
+            'the settle switch left the motion partial - entrances would replay on every Livewire update',
+        );
+
+        $this->assertStringContainsString(
+            'html:not(.crm-settled)',
+            (string) file_get_contents(resource_path('css/filament/admin/theme.css')),
+            'the entrance rules lost their settle scope - they would replay on every Livewire update',
+        );
     }
 
     #[Test]

@@ -472,10 +472,19 @@ html.dark {
  * ------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: no-preference) {
-    /* Page choreography: sections, widgets and rows rise into place. */
-    .fi-section,
-    .fi-wi-widget,
-    .fi-ta-ctn {
+    /*
+     | Page choreography: sections, widgets and rows rise into place — ON
+     | ARRIVAL ONLY. The `crm-settled` class lands on <html> (motion.blade)
+     | once the first choreography has played; from then on every Livewire
+     | update renders instantly. Without this scope the entrance replayed on
+     | every search keystroke, sort and page change — the server answered in
+     | milliseconds while the UI theatrically delayed the rows by up to
+     | ~0.7 s, which the owner correctly reported as the system "getting
+     | slow". Entrances greet; they must never make data wait twice.
+     */
+    html:not(.crm-settled) .fi-section,
+    html:not(.crm-settled) .fi-wi-widget,
+    html:not(.crm-settled) .fi-ta-ctn {
         animation: crm-rise 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
     }
 
@@ -488,31 +497,31 @@ html.dark {
      | which is how the first version of this entrance played to completion
      | while being genuinely imperceptible.
      */
-    .fi-simple-header {
+    html:not(.crm-settled) .fi-simple-header {
         animation: crm-rise 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) 0.05s backwards;
     }
 
-    .fi-simple-main {
+    html:not(.crm-settled) .fi-simple-main {
         animation: crm-enter 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) 0.18s backwards;
     }
 
-    .fi-wi-widget:nth-child(2) { animation-delay: 0.05s; }
-    .fi-wi-widget:nth-child(3) { animation-delay: 0.1s; }
-    .fi-wi-widget:nth-child(4) { animation-delay: 0.15s; }
-    .fi-wi-widget:nth-child(5) { animation-delay: 0.2s; }
-    .fi-wi-widget:nth-child(6) { animation-delay: 0.25s; }
+    html:not(.crm-settled) .fi-wi-widget:nth-child(2) { animation-delay: 0.05s; }
+    html:not(.crm-settled) .fi-wi-widget:nth-child(3) { animation-delay: 0.1s; }
+    html:not(.crm-settled) .fi-wi-widget:nth-child(4) { animation-delay: 0.15s; }
+    html:not(.crm-settled) .fi-wi-widget:nth-child(5) { animation-delay: 0.2s; }
+    html:not(.crm-settled) .fi-wi-widget:nth-child(6) { animation-delay: 0.25s; }
 
-    .fi-ta-row { animation: crm-rise 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
-    .fi-ta-row:nth-child(2) { animation-delay: 0.03s; }
-    .fi-ta-row:nth-child(3) { animation-delay: 0.06s; }
-    .fi-ta-row:nth-child(4) { animation-delay: 0.09s; }
-    .fi-ta-row:nth-child(5) { animation-delay: 0.12s; }
-    .fi-ta-row:nth-child(6) { animation-delay: 0.15s; }
-    .fi-ta-row:nth-child(7) { animation-delay: 0.18s; }
-    .fi-ta-row:nth-child(8) { animation-delay: 0.21s; }
-    .fi-ta-row:nth-child(9) { animation-delay: 0.24s; }
-    .fi-ta-row:nth-child(10) { animation-delay: 0.27s; }
-    .fi-ta-row:nth-child(n + 11) { animation-delay: 0.3s; }
+    html:not(.crm-settled) .fi-ta-row { animation: crm-rise 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(2) { animation-delay: 0.03s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(3) { animation-delay: 0.06s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(4) { animation-delay: 0.09s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(5) { animation-delay: 0.12s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(6) { animation-delay: 0.15s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(7) { animation-delay: 0.18s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(8) { animation-delay: 0.21s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(9) { animation-delay: 0.24s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(10) { animation-delay: 0.27s; }
+    html:not(.crm-settled) .fi-ta-row:nth-child(n + 11) { animation-delay: 0.3s; }
 
     /* Rows lift under the cursor. */
     .fi-ta-row {

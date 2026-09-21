@@ -71,10 +71,27 @@
 
         countUp();
 
+        // The observer exists for content that arrives during the entrance
+        // window (lazy widgets); it retires with the choreography.
         let debounce;
-        new MutationObserver(() => {
+        const observer = new MutationObserver(() => {
             clearTimeout(debounce);
             debounce = setTimeout(countUp, 150);
-        }).observe(document.body, { childList: true, subtree: true });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // Entrances play on ARRIVAL only. Once the first choreography has
+        // finished (longest chain: the auth card at 0.18s + 0.6s; rows at
+        // 0.3s + 0.4s), the page is settled: the crm-settled class switches
+        // every entrance rule off (theme.css scopes them to
+        // html:not(.crm-settled)) and the count-up observer disconnects, so
+        // a Livewire search, sort or refresh renders its data INSTANTLY —
+        // replaying the entrance on updates is how motion briefly made a
+        // fast system feel slow.
+        window.setTimeout(() => {
+            document.documentElement.classList.add('crm-settled');
+            observer.disconnect();
+            clearTimeout(debounce);
+        }, 900);
     })();
 </script>
