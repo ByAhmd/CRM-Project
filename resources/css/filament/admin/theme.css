@@ -452,3 +452,117 @@ html.dark {
         transition-delay: 0s;
     }
 }
+
+/* ---------------------------------------------------------------------------
+ | Motion — «روح» (A-9, amended 2026-09-21)
+ |
+ | The owner chose the motion layer from the three creativity directions
+ | previewed live (mission-control dark and data-as-hero were explored and
+ | declined; the identity and layout stay as they are). Everything here is
+ | choreography, not decoration: content rises into place on load, rows lift
+ | under the cursor, buttons compress when pressed, overlays pop from their
+ | trigger, and the KPI count-up rides in resources/views/filament/motion.blade.php.
+ |
+ | Every rule sits behind `prefers-reduced-motion: no-preference`, so a
+ | reduced-motion reader gets a perfectly still panel — the block above this
+ | one additionally zeroes transition durations for them. Durations stay in
+ | the 140-450 ms band, eased with cubic-bezier(0.2, 0.8, 0.3, 1); transforms
+ | are translateY/scale only, so RTL and LTR are identical. A hovered row
+ | takes z-index 2, below the sticky header's 5.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+    /* Page choreography: sections, widgets and rows rise into place. */
+    .fi-section,
+    .fi-wi-widget,
+    .fi-ta-ctn {
+        animation: crm-rise 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+    }
+
+    .fi-wi-widget:nth-child(2) { animation-delay: 0.05s; }
+    .fi-wi-widget:nth-child(3) { animation-delay: 0.1s; }
+    .fi-wi-widget:nth-child(4) { animation-delay: 0.15s; }
+    .fi-wi-widget:nth-child(5) { animation-delay: 0.2s; }
+    .fi-wi-widget:nth-child(6) { animation-delay: 0.25s; }
+
+    .fi-ta-row { animation: crm-rise 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
+    .fi-ta-row:nth-child(2) { animation-delay: 0.03s; }
+    .fi-ta-row:nth-child(3) { animation-delay: 0.06s; }
+    .fi-ta-row:nth-child(4) { animation-delay: 0.09s; }
+    .fi-ta-row:nth-child(5) { animation-delay: 0.12s; }
+    .fi-ta-row:nth-child(6) { animation-delay: 0.15s; }
+    .fi-ta-row:nth-child(7) { animation-delay: 0.18s; }
+    .fi-ta-row:nth-child(8) { animation-delay: 0.21s; }
+    .fi-ta-row:nth-child(9) { animation-delay: 0.24s; }
+    .fi-ta-row:nth-child(10) { animation-delay: 0.27s; }
+    .fi-ta-row:nth-child(n + 11) { animation-delay: 0.3s; }
+
+    /* Rows lift under the cursor. */
+    .fi-ta-row {
+        transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+    }
+
+    .fi-ta-row:hover {
+        position: relative;
+        z-index: 2;
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px -14px rgba(13, 60, 72, 0.45);
+    }
+
+    /* Buttons feel physical. */
+    .fi-btn { transition: transform 0.14s ease, box-shadow 0.2s ease; }
+    .fi-btn:hover { transform: translateY(-1px); }
+    .fi-btn:active { transform: translateY(0) scale(0.96); }
+
+    .fi-btn.fi-color-primary[class*='fi-bg-color-']:hover {
+        box-shadow: 0 8px 20px -6px color-mix(in srgb, var(--primary-600) 55%, transparent);
+    }
+
+    /* The chrome answers the hand. */
+    .fi-sidebar-item-btn { transition: background-color 0.15s ease; }
+    .fi-sidebar-item-icon { transition: transform 0.16s ease; }
+    .fi-sidebar-item-btn:hover .fi-sidebar-item-icon { transform: scale(1.12); }
+    .fi-icon-btn { transition: transform 0.15s ease; }
+    .fi-icon-btn:hover { transform: scale(1.1); }
+    .fi-icon-btn:active { transform: scale(0.94); }
+    .fi-tabs-item { transition: color 0.15s ease, box-shadow 0.2s ease, background-color 0.15s ease; }
+    .fi-input-wrp { transition: box-shadow 0.18s ease; }
+    .fi-badge { transition: transform 0.15s ease; }
+    .fi-ta-row:hover .fi-badge { transform: scale(1.06); }
+
+    .fi-wi-stats-overview-stat { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+
+    .fi-wi-stats-overview-stat:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 34px -14px rgba(13, 60, 72, 0.35);
+    }
+
+    /* Overlays pop from their trigger instead of appearing. */
+    .fi-dropdown-panel {
+        transform-origin: top;
+        animation: crm-pop 0.16s ease-out;
+    }
+
+    .fi-modal-window { animation: crm-modal 0.24s cubic-bezier(0.2, 0.8, 0.3, 1); }
+
+    @keyframes crm-rise {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+    }
+
+    @keyframes crm-pop {
+        from {
+            opacity: 0;
+            transform: scale(0.96) translateY(-4px);
+        }
+    }
+
+    @keyframes crm-modal {
+        from {
+            opacity: 0;
+            transform: scale(0.96) translateY(14px);
+        }
+    }
+}

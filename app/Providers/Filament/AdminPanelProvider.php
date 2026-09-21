@@ -22,6 +22,8 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Facades\FilamentTimezone;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -70,6 +72,12 @@ final class AdminPanelProvider extends PanelProvider
             ->font('Tajawal')
             ->favicon(asset('favicon.svg'))
             ->viteTheme('resources/css/filament/admin/theme.css')
+            // «روح» (A-9 as amended 2026-09-21): the KPI count-up, the one
+            // scripted piece of the motion layer; the rest is theme.css.
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                static fn (): View => view('filament.motion'),
+            )
             ->darkMode()
             ->defaultThemeMode(ThemeMode::System)
             ->brandName(fn (): string => (string) __('app.name'))

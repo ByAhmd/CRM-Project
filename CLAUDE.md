@@ -61,7 +61,10 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   `activity.subject_attributes.<Model>.<key>`.
 - Theme: `resources/css/filament/admin/theme.css` only; tokens `--crm-*` in `:root` and `.dark`; Filament `--gray-*`
   overrides must be full colour values (e.g. `var(--crm-*)`), never bare RGB triplets; logical CSS
-  properties; no `[dir='ltr']` exceptions; Latin-only values wrapped `dir="ltr"`.
+  properties; no `[dir='ltr']` exceptions; Latin-only values wrapped `dir="ltr"`. Motion («روح», A-9): every
+  animation/transition sits behind `@media (prefers-reduced-motion: no-preference)`, 140–450 ms, translateY/scale
+  transforms only; the KPI count-up is `resources/views/filament/motion.blade.php` (BODY_END render hook), animates
+  whole numbers only and always ends on the server-rendered text.
 - Audit: models with business meaning use `LogsActivity` with an explicit `logOnly` whitelist; service events go
   through `Services\Audit\<Domain>ActivityLogger` with an `ActivityLogEvent` case. Secrets never logged.
 - Notifications: Laravel notification classes wrapping Filament's database envelope; `via()` adds `mail` only
