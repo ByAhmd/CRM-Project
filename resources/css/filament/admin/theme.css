@@ -479,6 +479,23 @@ html.dark {
         animation: crm-rise 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
     }
 
+    /*
+     | The auth pages (login, password reset, MFA — the simple layout, which
+     | carries none of the panel content classes) get a real two-beat
+     | greeting: the heading first, then the card. The start delays are the
+     | mechanism, not a flourish — with `backwards` fill and no delay the
+     | first painted frame can already be mid-animation on a fast machine,
+     | which is how the first version of this entrance played to completion
+     | while being genuinely imperceptible.
+     */
+    .fi-simple-header {
+        animation: crm-rise 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) 0.05s backwards;
+    }
+
+    .fi-simple-main {
+        animation: crm-enter 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) 0.18s backwards;
+    }
+
     .fi-wi-widget:nth-child(2) { animation-delay: 0.05s; }
     .fi-wi-widget:nth-child(3) { animation-delay: 0.1s; }
     .fi-wi-widget:nth-child(4) { animation-delay: 0.15s; }
@@ -549,6 +566,13 @@ html.dark {
         from {
             opacity: 0;
             transform: translateY(10px);
+        }
+    }
+
+    @keyframes crm-enter {
+        from {
+            opacity: 0;
+            transform: translateY(24px) scale(0.98);
         }
     }
 
