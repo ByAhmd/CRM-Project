@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Accounts\Schemas;
 use App\Enums\CustomFieldEntity;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\LtrText;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use Filament\Infolists\Components\TextEntry;
@@ -44,9 +45,9 @@ final class AccountInfolist
                 Section::make(__('accounts.sections.contact'))
                     ->schema([
                         Grid::make(3)->schema([
-                            TextEntry::make('website')->label(__('accounts.fields.website'))->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('email')->label(__('accounts.fields.email'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('phone')->label(__('accounts.fields.phone'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
+                            LtrText::entry(TextEntry::make('website')->label(__('accounts.fields.website'))->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('email')->label(__('accounts.fields.email'))->copyable()->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('phone')->label(__('accounts.fields.phone'))->copyable()->placeholder(__('common.placeholders.empty'))),
                         ]),
                     ])
                     ->columns(1),

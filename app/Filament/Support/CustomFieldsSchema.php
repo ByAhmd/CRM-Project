@@ -506,14 +506,13 @@ final class CustomFieldsSchema
         }
 
         if ($field->type === CustomFieldType::Url) {
-            return $entry
-                ->extraAttributes(['dir' => 'ltr'])
+            return LtrText::entry($entry)
                 ->url(static fn (Model $record): ?string => self::stringValue($record, $field))
                 ->openUrlInNewTab();
         }
 
         if ($field->type === CustomFieldType::Email) {
-            $entry->extraAttributes(['dir' => 'ltr']);
+            LtrText::entry($entry);
 
             return $entry->url(static function (Model $record) use ($field): ?string {
                 $value = self::stringValue($record, $field);

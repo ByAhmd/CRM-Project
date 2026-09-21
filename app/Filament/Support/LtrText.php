@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Support;
 
+use Filament\Infolists\Components\TextEntry;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Support\HtmlString;
 use LogicException;
@@ -62,6 +63,37 @@ final class LtrText
         }
 
         return $column
+            ->prefix(new HtmlString('<span dir="ltr">'))
+            ->suffix(new HtmlString('</span>'));
+    }
+
+    /**
+     * The infolist twin of column(): the inline isolate keeps Latin values
+     * (e-mails, phones, URLs, money) in reading order while the entry keeps
+     * the layout's own START alignment, so label and value share the same
+     * edge in ar/RTL and en/LTR alike.
+     *
+     * Geometry history, so nobody relitigates it blind (2026-09-21): the
+     * original defect was `dir` on the entry element dragging the value away
+     * from its start-aligned label. A centred variant was then built and
+     * rendered — value-only centring first, whole-pair centring second — and
+     * the owner, seeing centred pairs beside start-aligned neighbours, chose
+     * UNIFORM CLASSIC: everything start-aligned, centring removed entirely.
+     * The isolate below is the whole fix; do not reintroduce alignment here.
+     *
+     * @throws LogicException when the entry already uses its prefix or suffix
+     */
+    public static function entry(TextEntry $entry): TextEntry
+    {
+        if (filled($entry->getPrefix()) || filled($entry->getSuffix())) {
+            throw new LogicException(sprintf(
+                'The entry [%s] already uses its prefix or suffix, which LtrText::entry() needs for the '
+                .'direction wrapper and would overwrite. Fold the unit into the value instead.',
+                $entry->getName(),
+            ));
+        }
+
+        return $entry
             ->prefix(new HtmlString('<span dir="ltr">'))
             ->suffix(new HtmlString('</span>'));
     }

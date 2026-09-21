@@ -8,6 +8,7 @@ use App\Enums\CustomFieldEntity;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\LtrText;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -54,10 +55,10 @@ final class ContactInfolist
                 Section::make(__('contacts.sections.contact'))
                     ->schema([
                         Grid::make(3)->schema([
-                            TextEntry::make('email')->label(__('contacts.fields.email'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('mobile')->label(__('contacts.fields.mobile'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('phone')->label(__('contacts.fields.phone'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('linkedin_url')->label(__('contacts.fields.linkedin_url'))->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
+                            LtrText::entry(TextEntry::make('email')->label(__('contacts.fields.email'))->copyable()->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('mobile')->label(__('contacts.fields.mobile'))->copyable()->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('phone')->label(__('contacts.fields.phone'))->copyable()->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('linkedin_url')->label(__('contacts.fields.linkedin_url'))->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)->placeholder(__('common.placeholders.empty'))),
                         ]),
                     ])
                     ->columns(1),

@@ -397,6 +397,44 @@ final class ReportPagesTest extends TestCase
             ->assertSee('data-crm-chart-color="primary"', false);
     }
 
+    /**
+     * The owner reported every report table misaligned in Arabic: numeric
+     * HEADERS carried the logical `text-end` (left in RTL) while numeric
+     * VALUES sat in cells pinned `dir="ltr"`, whose own `text-end` resolves
+     * right — header and figure on opposite edges of every numeric column.
+     * The direction now lives on an inline `.crm-ltr` isolate around the
+     * value, so the cell inherits the table's direction and lines up with
+     * its header, exactly as the resource tables were fixed (LtrText).
+     */
+    #[Test]
+    public function numeric_cells_align_with_their_headers_because_no_cell_declares_its_own_direction(): void
+    {
+        $manager = $this->salesManager();
+
+        Lead::factory()->create(['owner_id' => $manager->getKey()]);
+
+        foreach (self::PAGES as $page) {
+            $html = Livewire::actingAs($manager)->test($page)->html();
+
+            $this->assertDoesNotMatchRegularExpression(
+                '/<t[dh][^>]*\bdir=/i',
+                $html,
+                $page.': a table cell declares its own direction, so its alignment detaches from its header in RTL',
+            );
+        }
+
+        // The positive half: a filled report really wraps its figures in the
+        // inline isolate — deleting the wrapper outright would also pass the
+        // negative check above.
+        $html = Livewire::actingAs($manager)->test(LeadReportPage::class)->html();
+
+        $this->assertStringContainsString(
+            'crm-ltr',
+            $html,
+            'the numeric values lost their inline LTR isolate, so Latin digits would reorder inside Arabic text',
+        );
+    }
+
     #[Test]
     public function figures_are_formatted_for_the_locale_and_the_organisation_currency(): void
     {

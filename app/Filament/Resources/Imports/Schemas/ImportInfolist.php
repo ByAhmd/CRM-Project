@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Imports\Schemas;
 
 use App\Filament\Resources\Imports\ImportResource;
+use App\Filament\Support\LtrText;
 use App\Models\Import;
 use Filament\Actions\Imports\Models\FailedImportRow;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -30,9 +31,8 @@ final class ImportInfolist
                 Section::make(__('imports.sections.summary'))
                     ->schema([
                         Grid::make(3)->schema([
-                            TextEntry::make('file_name')
-                                ->label(__('imports.fields.file_name'))
-                                ->extraAttributes(['dir' => 'ltr']),
+                            LtrText::entry(TextEntry::make('file_name')
+                                ->label(__('imports.fields.file_name'))),
                             TextEntry::make('importer')
                                 ->label(__('imports.fields.entity'))
                                 ->formatStateUsing(fn (string $state): string => ImportResource::entityLabel($state))

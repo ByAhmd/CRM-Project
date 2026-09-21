@@ -142,6 +142,133 @@ final class SchemaColumnsTest extends TestCase
     }
 
     /**
+     * The owner reported view-page values drifting away from their labels in
+     * Arabic — email, phone, website sitting far left of right-aligned
+     * labels. Cause: `extraAttributes(['dir' => 'ltr'])` on the ENTRY, the
+     * same cell-level direction disease the tables and reports had. Entries
+     * go through LtrText::entry() instead (inline isolate; uniform classic
+     * geometry per the owner, 2026-09-21), and this pins it: no infolist
+     * component may declare its own direction.
+     * Form INPUTS keep their `extraInputAttributes` dir — typing direction
+     * on a full-width field is intentional and breaks no label geometry.
+     */
+    #[Test]
+    public function no_infolist_component_declares_its_own_direction(): void
+    {
+        $this->seedAccess();
+        $this->seedLookups();
+        $this->usePanel();
+        $this->actingAs($this->superAdmin());
+
+        foreach (CustomFieldEntity::cases() as $entity) {
+            CustomField::factory()->forEntity($entity)->create();
+        }
+
+        CustomField::factory()->forEntity(CustomFieldEntity::Lead)->ofType(CustomFieldType::Url)->create();
+        CustomField::factory()->forEntity(CustomFieldEntity::Lead)->ofType(CustomFieldType::Email)->create();
+
+        $offenders = [];
+        $components = 0;
+
+        foreach ($this->schemas() as $label => $schema) {
+            if (! str_ends_with($label, '::infolist')) {
+                continue;
+            }
+
+            foreach ($this->componentsOf($schema->getComponents(withActions: false, withHidden: true)) as $component) {
+                $components++;
+
+                if (! method_exists($component, 'getExtraAttributes')) {
+                    continue;
+                }
+
+                if (array_key_exists('dir', $component->getExtraAttributes())) {
+                    $name = method_exists($component, 'getName') ? $component->getName() : $component::class;
+                    $offenders[] = "{$label} [{$name}]: the component declares dir on itself, so its value detaches from its label in RTL; wrap it with LtrText::entry() instead";
+                }
+            }
+        }
+
+        $this->assertGreaterThan(150, $components, 'sanity: the walk covers the infolist components');
+        $this->assertSame([], $offenders, "infolist components declaring their own direction:\n".implode("\n", $offenders));
+    }
+
+    /**
+     * The positive half: the LTR entries really carry the inline isolate —
+     * a wholesale deletion of the LtrText wrapping would leave the negative
+     * test above green while Latin digits reorder inside Arabic text. The
+     * geometry itself is UNIFORM CLASSIC by the owner's decision
+     * (2026-09-21, after seeing two centred variants rendered): entries keep
+     * the layout's start alignment and only the character order is managed.
+     */
+    #[Test]
+    public function the_latin_entries_keep_their_inline_isolate(): void
+    {
+        $this->seedAccess();
+        $this->seedLookups();
+        $this->usePanel();
+        $this->actingAs($this->superAdmin());
+
+        foreach (CustomFieldEntity::cases() as $entity) {
+            CustomField::factory()->forEntity($entity)->create();
+        }
+
+        CustomField::factory()->forEntity(CustomFieldEntity::Lead)->ofType(CustomFieldType::Url)->create();
+        CustomField::factory()->forEntity(CustomFieldEntity::Lead)->ofType(CustomFieldType::Email)->create();
+
+        $isolated = 0;
+
+        foreach ($this->schemas() as $label => $schema) {
+            if (! str_ends_with($label, '::infolist')) {
+                continue;
+            }
+
+            foreach ($this->componentsOf($schema->getComponents(withActions: false, withHidden: true)) as $component) {
+                if (! method_exists($component, 'getPrefix')) {
+                    continue;
+                }
+
+                $prefix = $component->getPrefix();
+
+                if ($prefix instanceof Htmlable && str_contains($prefix->toHtml(), 'dir="ltr"')) {
+                    $isolated++;
+                }
+            }
+        }
+
+        $this->assertGreaterThanOrEqual(
+            15,
+            $isolated,
+            "only {$isolated} entries carry the inline LTR isolate - the LtrText wrapping has been unwound",
+        );
+    }
+
+    /**
+     * Every component in the tree, however deeply nested.
+     *
+     * @param  array<mixed>  $components
+     * @return list<object>
+     */
+    private function componentsOf(array $components): array
+    {
+        $found = [];
+
+        foreach ($components as $component) {
+            if (! is_object($component)) {
+                continue;
+            }
+
+            $found[] = $component;
+
+            if (method_exists($component, 'getDefaultChildComponents')) {
+                $found = [...$found, ...$this->componentsOf($component->getDefaultChildComponents())];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * Whether this section actually spreads fields across the row on a large
      * screen — either through the A-22 section map (default 1, lg 2) or
      * through an inner responsive Grid (TaskInfolist packs four short entries

@@ -36,6 +36,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\HtmlString;
 use Livewire\Component;
 
 /**
@@ -249,8 +250,15 @@ final class DealForm
 
                                     Placeholder::make('line_total')
                                         ->label(__('deals.fields.line_total'))
-                                        ->content(fn (Get $get): string => self::lineTotal($get('quantity'), $get('unit_price'), $get('discount_percent')))
-                                        ->extraAttributes(['dir' => 'ltr']),
+                                        // A displayed value, not an input: the direction lives on
+                                        // an inline isolate so the digits keep their order while
+                                        // the placeholder keeps the layout's start alignment,
+                                        // like every LtrText entry (uniform classic, 2026-09-21;
+                                        // the amount is our own formatter's output, escaped all
+                                        // the same).
+                                        ->content(fn (Get $get): HtmlString => new HtmlString(
+                                            '<span class="crm-ltr">'.e(self::lineTotal($get('quantity'), $get('unit_price'), $get('discount_percent'))).'</span>',
+                                        )),
                                 ]),
                             ])
                             ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {

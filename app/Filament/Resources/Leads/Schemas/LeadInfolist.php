@@ -10,6 +10,7 @@ use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\LtrText;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -86,9 +87,9 @@ final class LeadInfolist
                         Grid::make(3)->schema([
                             TextEntry::make('company_name')->label(__('leads.fields.company_name'))->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('job_title')->label(__('leads.fields.job_title'))->placeholder(__('common.placeholders.empty')),
-                            TextEntry::make('email')->label(__('leads.fields.email'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('phone')->label(__('leads.fields.phone'))->copyable()->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
-                            TextEntry::make('website')->label(__('leads.fields.website'))->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)->placeholder(__('common.placeholders.empty'))->extraAttributes(['dir' => 'ltr']),
+                            LtrText::entry(TextEntry::make('email')->label(__('leads.fields.email'))->copyable()->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('phone')->label(__('leads.fields.phone'))->copyable()->placeholder(__('common.placeholders.empty'))),
+                            LtrText::entry(TextEntry::make('website')->label(__('leads.fields.website'))->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)->placeholder(__('common.placeholders.empty'))),
                         ]),
                     ])
                     ->columns(1),

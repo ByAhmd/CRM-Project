@@ -120,7 +120,11 @@
                                 </th>
 
                                 @foreach ($columns as $key => $heading)
-                                    <th scope="col" @class(['px-3 py-2 font-medium', 'text-end' => $numeric($formats[$key] ?? ReportRow::FORMAT_TEXT), 'text-start' => ! $numeric($formats[$key] ?? ReportRow::FORMAT_TEXT)])>
+                                    {{-- Uniform classic (owner, 2026-09-21): every column —
+                                         numeric included — aligns to the start, header and
+                                         values on the same edge; the crm-ltr isolate below
+                                         keeps the digits in reading order. --}}
+                                    <th scope="col" class="px-3 py-2 text-start font-medium">
                                         {{ $heading }}
                                     </th>
                                 @endforeach
@@ -140,8 +144,8 @@
                                         @endphp
 
                                         @if ($numeric($format))
-                                            <td class="px-3 py-2 text-end" dir="ltr">
-                                                {{ BaseReportPage::format($format, $row->value($key)) }}
+                                            <td class="px-3 py-2 text-start">
+                                                <span class="crm-ltr">{{ BaseReportPage::format($format, $row->value($key)) }}</span>
                                             </td>
                                         @else
                                             <td class="px-3 py-2 text-start">
@@ -166,8 +170,8 @@
                                         @endphp
 
                                         @if ($numeric($format))
-                                            <td class="px-3 py-2 text-end" dir="ltr">
-                                                {{ BaseReportPage::format($format, $totals->value($key)) }}
+                                            <td class="px-3 py-2 text-start">
+                                                <span class="crm-ltr">{{ BaseReportPage::format($format, $totals->value($key)) }}</span>
                                             </td>
                                         @else
                                             <td class="px-3 py-2 text-start">

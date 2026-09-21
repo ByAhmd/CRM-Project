@@ -10,6 +10,7 @@ use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\LtrText;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -45,19 +46,17 @@ final class DealInfolist
                             TextEntry::make('status')
                                 ->label(__('deals.fields.status'))
                                 ->badge(),
-                            TextEntry::make('amount')
+                            LtrText::entry(TextEntry::make('amount')
                                 ->label(__('deals.fields.amount'))
-                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())
-                                ->extraAttributes(['dir' => 'ltr']),
+                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())),
                             TextEntry::make('effective_probability')
                                 ->label(__('deals.fields.effective_probability'))
                                 ->state(fn (Deal $record): int => $record->effective_probability)
                                 ->formatStateUsing(fn (int $state): string => Number::percentage($state, locale: app()->getLocale())),
-                            TextEntry::make('weighted_amount')
+                            LtrText::entry(TextEntry::make('weighted_amount')
                                 ->label(__('deals.fields.weighted_amount'))
                                 ->state(fn (Deal $record): string => $record->weighted_amount)
-                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())
-                                ->extraAttributes(['dir' => 'ltr']),
+                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())),
                             TextEntry::make('forecast_category')
                                 ->label(__('deals.fields.forecast_category'))
                                 ->badge(),
@@ -135,20 +134,19 @@ final class DealInfolist
                                 Grid::make(6)->schema([
                                     TextEntry::make('product.display_name')->label(__('deals.fields.product'))->placeholder(__('common.placeholders.empty')),
                                     TextEntry::make('description')->label(__('deals.fields.line_description'))->placeholder(__('common.placeholders.empty')),
-                                    TextEntry::make('quantity')->label(__('deals.fields.quantity'))->numeric(decimalPlaces: 2, locale: fn (): string => app()->getLocale())->extraAttributes(['dir' => 'ltr']),
-                                    TextEntry::make('unit_price')->label(__('deals.fields.unit_price'))->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())->extraAttributes(['dir' => 'ltr']),
-                                    TextEntry::make('discount_percent')->label(__('deals.fields.discount_percent'))->formatStateUsing(fn (mixed $state): string => Number::percentage((float) $state, 2, locale: app()->getLocale()))->extraAttributes(['dir' => 'ltr']),
-                                    TextEntry::make('line_total')->label(__('deals.fields.line_total'))->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())->weight('semibold')->extraAttributes(['dir' => 'ltr']),
+                                    LtrText::entry(TextEntry::make('quantity')->label(__('deals.fields.quantity'))->numeric(decimalPlaces: 2, locale: fn (): string => app()->getLocale())),
+                                    LtrText::entry(TextEntry::make('unit_price')->label(__('deals.fields.unit_price'))->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())),
+                                    LtrText::entry(TextEntry::make('discount_percent')->label(__('deals.fields.discount_percent'))->formatStateUsing(fn (mixed $state): string => Number::percentage((float) $state, 2, locale: app()->getLocale()))),
+                                    LtrText::entry(TextEntry::make('line_total')->label(__('deals.fields.line_total'))->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())->weight('semibold')),
                                 ]),
                             ])
                             ->placeholder(__('deals.empty.line_items'))
                             ->columns(1),
-                        TextEntry::make('total')
+                        LtrText::entry(TextEntry::make('total')
                             ->label(__('deals.fields.total'))
                             ->state(fn (Deal $record): string => $record->amount)
                             ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())
-                            ->weight('semibold')
-                            ->extraAttributes(['dir' => 'ltr']),
+                            ->weight('semibold')),
                     ])
                     ->columns(1)
                     ->collapsible(),
