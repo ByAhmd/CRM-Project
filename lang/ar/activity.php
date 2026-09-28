@@ -119,6 +119,8 @@ return [
         'task.completed' => 'إكمال مهمة',
         'task.cancelled' => 'إلغاء مهمة',
         'task.reopened' => 'إعادة فتح مهمة',
+        'task.started' => 'بدء مهمة',
+        'task.progress_posted' => 'نشر تحديث على مهمة',
         'note.created' => 'إضافة ملاحظة',
         'note.updated' => 'تعديل ملاحظة',
         'note.deleted' => 'حذف ملاحظة',

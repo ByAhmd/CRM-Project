@@ -34,6 +34,7 @@ final class DemoRegistry
         'attachments',
         'activities',
         'notes',
+        'task_updates',
         'tasks',
         'deal_products',
         'deal_stage_logs',

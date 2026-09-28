@@ -1,4 +1,5 @@
 @php
+    use App\Enums\TaskStatus;
     use App\Filament\Resources\Tasks\TaskResource;
     use App\Services\Tasks\TaskBoardFeed;
 @endphp
@@ -91,6 +92,12 @@
                                     @endcan
 
                                     <div class="flex flex-wrap items-center gap-1">
+                                        @if ($task->status === TaskStatus::InProgress)
+                                            <x-filament::badge :color="$task->status->getColor()" size="sm">
+                                                {{ $task->status->getLabel() }}
+                                            </x-filament::badge>
+                                        @endif
+
                                         <x-filament::badge color="gray" size="sm" :icon="$task->kind->getIcon()">
                                             {{ $task->kind->getLabel() }}
                                         </x-filament::badge>

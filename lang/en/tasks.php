@@ -27,6 +27,7 @@ return [
         'assignment' => 'Assignment and status',
         'recurrence' => 'Recurrence',
         'notes' => 'Notes',
+        'progress' => 'Progress',
         'audit' => 'History',
     ],
 
@@ -54,6 +55,12 @@ return [
         'occurrences_count' => 'Occurrences scheduled',
         'activities_count' => 'Timeline entries',
         'completion_note' => 'Completion note',
+        'start_note' => 'Note (optional)',
+        'update_body' => 'What happened',
+        'update_author' => 'By',
+        'update_status' => 'Moved to',
+        'update_created_at' => 'When',
+        'assigned_by' => 'Assigned by',
         'created_by' => 'Created by',
         'created_at' => 'Created',
         'updated_at' => 'Last updated',
@@ -62,13 +69,17 @@ return [
     'placeholders' => [
         'title' => 'What needs to be done, in one line',
         'description' => 'Anything the assignee should know',
+        'start_note' => 'How you plan to go about it, if worth saying',
+        'update_body' => 'Where the work stands, what was done, what is blocking it',
     ],
 
     'helpers' => [
         'reminder_at' => 'The assignee is notified once, in the app and by email when a mailer is configured.',
         'recurrence' => 'When a repeating task is completed, the next occurrence is scheduled automatically.',
         'ends_at_after_starts_at' => 'The end must not come before the start.',
-        'status_readonly' => 'Use the "Complete", "Cancel" and "Reopen" actions to change the status.',
+        'status_readonly' => 'Use the "Start", "Complete", "Cancel" and "Reopen" actions to change the status.',
+        'handed_out' => 'This task was assigned to you: report on it with "Start", "Post update" and "Complete"; its details stay with whoever assigned it.',
+        'update_notifies' => 'Whoever assigned the task is notified.',
         'related' => 'Optional: link the task to a lead, a contact, an account or a deal.',
     ],
 
@@ -83,6 +94,12 @@ return [
     ],
 
     'actions' => [
+        'start' => 'Start',
+        'start_heading' => 'Start task',
+        'start_submit' => 'Start',
+        'post_update' => 'Post update',
+        'post_update_heading' => 'Post a progress update',
+        'post_update_submit' => 'Post update',
         'complete' => 'Complete',
         'complete_heading' => 'Complete task',
         'complete_submit' => 'Complete',
@@ -114,10 +131,21 @@ return [
         'greeting' => 'Hello :name,',
         'completed_title' => 'Task ":task" completed',
         'completed_body' => ':by completed the task ":task".',
+        'started' => 'Task started',
+        'update_posted' => 'Update posted',
+        'started_title' => 'Task ":task" started',
+        'started_body' => ':by started the task ":task".',
+        'started_body_with_note' => ':by started the task ":task": :note',
+        'progress_title' => 'Progress on ":task"',
+        'progress_body' => ':by posted an update on ":task": :note',
     ],
 
     'validation' => [
         'not_open' => 'Only a pending or in-progress task can be completed or cancelled.',
+        'not_pending' => 'Only a pending task can be started.',
+        'update_not_open' => 'Updates can be posted only on a pending or in-progress task.',
+        'update_body_required' => 'Write what happened with the task.',
+        'update_body_too_long' => 'An update may be at most :max characters.',
         'not_closed' => 'Only a completed or cancelled task can be reopened.',
         'ends_before_starts' => 'The end must not come before the start.',
         'trashed' => 'A deleted task cannot change status; restore it first.',
@@ -126,6 +154,9 @@ return [
     'empty' => [
         'heading' => 'No tasks yet',
         'description' => 'Add the first task or follow-up to keep the next step in sight.',
+        'progress' => 'No progress reported yet.',
+        'deleted_author' => 'Deleted account',
+        'deleted_author_named' => ':name (deleted account)',
     ],
 
     'recurrence' => [

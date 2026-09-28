@@ -315,7 +315,10 @@ final class CalendarFeedTest extends TestCase
             array_keys($array),
         );
         $this->assertSame('var(--crm-color-on-event)', $array['textColor']);
-        $this->assertSame(['type', 'status', 'priority', 'kind', 'subject'], array_keys($array['extendedProps']));
+        // D-14 amendment (2026-09-28): `canEdit` tells the browser whether a click opens
+        // the edit modal or the task page (a handed-out assignee may not edit).
+        $this->assertSame(['type', 'canEdit', 'status', 'priority', 'kind', 'subject'], array_keys($array['extendedProps']));
+        $this->assertTrue($array['extendedProps']['canEdit'], 'the rep edits their own task');
     }
 
     #[Test]

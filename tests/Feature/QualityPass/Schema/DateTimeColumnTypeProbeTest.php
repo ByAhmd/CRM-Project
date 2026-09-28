@@ -31,6 +31,8 @@ final class DateTimeColumnTypeProbeTest extends TestCase
         'notes' => ['edited_at'],
         'tasks' => ['due_at', 'starts_at', 'ends_at', 'completed_at', 'reminder_at', 'reminder_sent_at', 'overdue_notified_at'],
         'activities' => ['occurred_at'],
+        // D-14 amendment (2026-09-28): the moment of a progress-log entry.
+        'task_updates' => ['created_at'],
     ];
 
     #[Test]

@@ -230,7 +230,7 @@ final class DemoDataCommandTest extends TestCase
         $this->assertSame([(int) $real->getKey()], User::withTrashed()->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all());
         $this->assertTrue($real->fresh()?->hasRole(CrmRole::SalesRep->value));
 
-        foreach (['accounts', 'contacts', 'leads', 'deals', 'deal_products', 'deal_stage_logs', 'lead_status_logs', 'activities', 'tasks', 'notes', 'attachments', 'notification_preferences', 'notifications', 'products', 'teams'] as $table) {
+        foreach (['accounts', 'contacts', 'leads', 'deals', 'deal_products', 'deal_stage_logs', 'lead_status_logs', 'activities', 'task_updates', 'tasks', 'notes', 'attachments', 'notification_preferences', 'notifications', 'products', 'teams'] as $table) {
             $this->assertSame(0, DB::table($table)->count(), "{$table} still has demo rows");
         }
 

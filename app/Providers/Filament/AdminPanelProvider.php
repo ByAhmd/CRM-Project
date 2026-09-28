@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 use App\Enums\NavigationGroup;
 use App\Filament\Auth\Pages\RequestPasswordReset;
 use App\Filament\Auth\Pages\ResetPassword;
+use App\Filament\Pages\Calendar;
 use App\Http\Middleware\SecurityHeaders;
 use App\Services\Settings\SettingsRepository;
 use App\Support\Filament\FilamentLanguageMenuItems;
@@ -87,6 +88,16 @@ final class AdminPanelProvider extends PanelProvider
             ->navigationGroups(self::navigationGroups())
             ->userMenuItems(FilamentLanguageMenuItems::userMenuActions())
             ->sidebarCollapsibleOnDesktop()
+            // SPA mode (owner, 2026-09-28): a navigation click swaps the page
+            // content instead of reloading the whole panel, and resting the
+            // pointer on a link prefetches its page — the host is ~100 ms away
+            // from its users (A-24), so skipping full reloads is the main lever
+            // on how fast the panel feels. The calendar keeps a full load: its
+            // FullCalendar module (a page-level @vite entry) must run before
+            // the page's Alpine component starts. The language switch always
+            // redirects with a full load, so the direction flips as before.
+            ->spa(hasPrefetching: true)
+            ->spaUrlExceptions(static fn (): array => [Calendar::getUrl()])
             ->unsavedChangesAlerts()
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')

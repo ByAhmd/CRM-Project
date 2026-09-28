@@ -125,7 +125,9 @@ const crmCalendar = (config) => ({
             eventClick: (info) => {
                 info.jsEvent.preventDefault()
 
-                if (info.event.extendedProps.type === 'task') {
+                // A task the viewer may edit opens the edit modal; any other
+                // task (one handed out to them, D-14) opens its own page.
+                if (info.event.extendedProps.type === 'task' && info.event.extendedProps.canEdit) {
                     wire.mountAction(methods.editTask, { task: Number(info.event.id.replace('task-', '')) })
 
                     return

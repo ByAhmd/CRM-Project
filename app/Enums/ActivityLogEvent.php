@@ -96,6 +96,8 @@ enum ActivityLogEvent: string implements HasLabel
     case TaskCompleted = 'task.completed';
     case TaskCancelled = 'task.cancelled';
     case TaskReopened = 'task.reopened';
+    case TaskStarted = 'task.started';
+    case TaskProgressPosted = 'task.progress_posted';
 
     // Notes
     case NoteCreated = 'note.created';

@@ -474,6 +474,21 @@ html.dark {
     box-shadow: inset 0 -1px 0 var(--crm-border);
 }
 
+/* A row whose three-dot menu is open rises above the sticky header. The menu
+   panel lives inside its row, and while the pointer is on the menu the row is
+   hovered, so the motion layer's lift gives the row its own stacking context
+   at z-index 2 — below the header's 5 — and a menu that flipped upward slid
+   under the header (the owner's screenshot, 2026-09-28). Fixed positioning
+   (ActionGroup dropdownTeleport, AppServiceProvider) only escapes the scroll
+   container's clipping; the stacking is settled here. The open state is the
+   trigger's aria-expanded, which the dropdown keeps in sync. The selector is
+   one class stronger than the motion layer's `.fi-ta-row:hover` (declared
+   later in this file) so it wins while the pointer is on the menu. */
+.fi-ta-table .fi-ta-row:has([aria-expanded='true']) {
+    position: relative;
+    z-index: 6;
+}
+
 /* The bound exists only on screens, for the sticky header; paper gets every row. */
 @media print {
     .fi-ta-content-ctn {

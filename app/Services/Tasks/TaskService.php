@@ -15,8 +15,10 @@ use App\Exceptions\Access\UnassignableUserException;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Task;
+use App\Models\TaskUpdate;
 use App\Models\User;
 use App\Notifications\TaskCompletedNotification;
+use App\Notifications\TaskProgressNotification;
 use App\Services\Access\RecordAssignmentService;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Activities\ActivityRecorder;
@@ -31,8 +33,8 @@ use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\CauserResolver;
 
 /**
- * Every write to a task (decisions A-10, D-4): create, edit, complete,
- * cancel, reopen and reschedule.
+ * Every write to a task (decisions A-10, D-4, D-14): create, edit, start,
+ * post a progress update, complete, cancel, reopen and reschedule.
  *
  * - the assignee defaults to the actor and the creator is always the actor;
  *   a task created for someone else (or for no one) needs `task.assign` and
@@ -58,6 +60,11 @@ use Spatie\Activitylog\CauserResolver;
  *   task created for someone else tells that assignee exactly as a
  *   reassignment would (D-14); later changes of the column belong to
  *   RecordAssignmentService;
+ * - the assignee reports on the work (D-14 amendment, 2026-09-28): starting
+ *   moves a pending task to In progress, a progress update is a note on an
+ *   open task, and both — with completions and reopenings — are kept in the
+ *   task's append-only progress log (TaskUpdate); a start or an update tells
+ *   the assigner under the same recipient rule as a completion;
  * - every notification leaves only after the write it reports has committed,
  *   and its mail through the queue, so a mail server can never fail or undo
  *   a task write;
@@ -71,6 +78,9 @@ use Spatie\Activitylog\CauserResolver;
  */
 final class TaskService
 {
+    /** The longest start note or progress update, in characters. */
+    public const int PROGRESS_TEXT_MAX = 2000;
+
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly ActivityRecorder $activities,
@@ -146,6 +156,77 @@ final class TaskService
         }));
     }
 
+    /**
+     * The assignee takes the task up (D-14 amendment, 2026-09-28): Pending →
+     * In progress, with an optional note. The progress log records it and
+     * the assigner is told once the start has committed.
+     */
+    public function start(Task $task, User $actor, ?string $note = null): Task
+    {
+        $note = $this->progressText($note, required: false);
+
+        $this->asCauser($actor, function () use ($task, $actor, $note): void {
+            DB::transaction(function () use ($task, $actor, $note): void {
+                $current = $this->lock($task);
+
+                if ($current->status !== TaskStatus::Pending) {
+                    throw InvalidTaskTransitionException::notPending();
+                }
+
+                Task::withoutWorkflowGuard(static function () use ($current): void {
+                    $current->status = TaskStatus::InProgress;
+                    $current->save();
+                });
+
+                $update = $this->log($current, $actor, TaskStatus::InProgress, $note);
+
+                $this->audit->record(ActivityLogEvent::TaskStarted, $current, $actor, array_filter([
+                    'subject_label' => $current->title,
+                    'note' => $note,
+                ], static fn (mixed $value): bool => $value !== null));
+
+                $this->notifyAssignerOfProgress($current, $actor, $update);
+            });
+        });
+
+        return $task->refresh();
+    }
+
+    /**
+     * A progress note on an open task (D-14 amendment, 2026-09-28): what
+     * happened so far, in the assignee's words. The status does not move;
+     * the log keeps the note and the assigner is told once it has committed.
+     */
+    public function postUpdate(Task $task, User $actor, string $body): TaskUpdate
+    {
+        $body = $this->progressText($body, required: true);
+
+        $update = $this->asCauser($actor, fn (): TaskUpdate => DB::transaction(function () use ($task, $actor, $body): TaskUpdate {
+            $current = $this->lock($task);
+
+            if (! $current->isOpen()) {
+                throw InvalidTaskTransitionException::notOpenForUpdate();
+            }
+
+            $update = $this->log($current, $actor, null, $body);
+
+            $this->audit->record(ActivityLogEvent::TaskProgressPosted, $current, $actor, [
+                'subject_label' => $current->title,
+                'note' => $body,
+            ]);
+
+            $this->notifyAssignerOfProgress($current, $actor, $update);
+
+            return $update;
+        }));
+
+        // The caller's instance shows the new entry at once, like the
+        // transitions' refresh does for the status.
+        $task->refresh();
+
+        return $update;
+    }
+
     public function complete(Task $task, User $actor, ?string $note = null): Task
     {
         $note = trim((string) $note);
@@ -173,6 +254,10 @@ final class TaskService
                     'assignee_id' => $current->assignee_id,
                     'assignee_name' => $current->assignee?->name,
                 ], static fn (mixed $value): bool => $value !== null));
+
+                // The progress log keeps the completion too; completion has
+                // its own notice below, so no progress notice goes with it.
+                $this->log($current, $actor, TaskStatus::Completed, $note === '' ? null : $note);
 
                 $subject = $current->subjectRecord();
 
@@ -246,6 +331,8 @@ final class TaskService
                     'subject_label' => $current->title,
                     'previous_status' => $previous->value,
                 ]);
+
+                $this->log($current, $actor, TaskStatus::Pending, null);
             });
         });
 
@@ -309,28 +396,105 @@ final class TaskService
     }
 
     /**
-     * Tells the person who handed the task out that it is done (D-14): the
-     * assigner, or the creator when no assigner was ever recorded (tasks
-     * created before D-14, unassigned tasks). A recorded assigner who has
-     * since been deleted or disabled is not replaced by the creator —
-     * nobody is told, whichever way the assigner left. The completer never
-     * notifies themselves, an account that may no longer sign in receives
-     * nothing (D-11), and — as on every other event path (A-20) — neither
-     * does a recipient who may not open the task: the message carries the
-     * task's title and a view link. The message leaves once the completion
-     * has committed.
+     * Tells the person who handed the task out that it is done (D-14). The
+     * recipient rule is reportRecipient()'s; the message leaves once the
+     * completion has committed.
      */
     private function notifyAssignerOfCompletion(Task $task, User $actor): void
     {
-        $recipient = $task->assigned_by !== null ? $task->assigner : $task->creator;
+        $recipient = $this->reportRecipient($task, $actor);
 
-        if ($recipient === null || $recipient->is($actor) || ! $recipient->status->canAuthenticate() || ! $recipient->can('view', $task)) {
+        if ($recipient === null) {
             return;
         }
 
         DB::afterCommit(static function () use ($recipient, $task, $actor): void {
             $recipient->notify((new TaskCompletedNotification($task, $actor))->locale($recipient->preferredLocale()));
         });
+    }
+
+    /**
+     * Tells the person who handed the task out that it was started or that
+     * progress was posted (D-14 amendment, 2026-09-28) — the same recipient
+     * as a completion, once the entry has committed.
+     */
+    private function notifyAssignerOfProgress(Task $task, User $actor, TaskUpdate $update): void
+    {
+        $recipient = $this->reportRecipient($task, $actor);
+
+        if ($recipient === null) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($recipient, $task, $actor, $update): void {
+            $recipient->notify((new TaskProgressNotification($task, $actor, $update))->locale($recipient->preferredLocale()));
+        });
+    }
+
+    /**
+     * Whether a start or an update the actor posts on the task tells anyone
+     * (D-14 amendment, 2026-09-28) — the report modals promise a notice only
+     * when this holds, under the very rule that sends it.
+     */
+    public function reportsReachSomeone(Task $task, User $actor): bool
+    {
+        return $this->reportRecipient($task, $actor) !== null;
+    }
+
+    /**
+     * Who hears about the work on a task (D-14): the assigner, or the creator
+     * when no assigner was ever recorded (tasks created before D-14,
+     * unassigned tasks). A recorded assigner who has since been deleted or
+     * disabled is not replaced by the creator — nobody is told, whichever way
+     * the assigner left. The actor never notifies themselves, an account that
+     * may no longer sign in receives nothing (D-11), and — as on every other
+     * event path (A-20) — neither does a recipient who may not open the task:
+     * the message carries the task's title and a view link.
+     */
+    private function reportRecipient(Task $task, User $actor): ?User
+    {
+        $recipient = $task->assigned_by !== null ? $task->assigner : $task->creator;
+
+        if ($recipient === null || $recipient->is($actor) || ! $recipient->status->canAuthenticate() || ! $recipient->can('view', $task)) {
+            return null;
+        }
+
+        return $recipient;
+    }
+
+    /** One entry of the task's progress log, written inside the caller's transaction. */
+    private function log(Task $task, User $actor, ?TaskStatus $status, ?string $body): TaskUpdate
+    {
+        return TaskUpdate::query()->create([
+            'task_id' => $task->getKey(),
+            'user_id' => $actor->getKey(),
+            'status' => $status,
+            'body' => $body,
+        ]);
+    }
+
+    /**
+     * The text of a start note or a progress update: trimmed, at most
+     * PROGRESS_TEXT_MAX characters, and — for an update — required. An
+     * empty optional note is null.
+     */
+    private function progressText(?string $text, bool $required): ?string
+    {
+        $text = trim((string) $text);
+
+        if ($text === '') {
+            if ($required) {
+                throw ValidationException::withMessages(['body' => __('tasks.validation.update_body_required')]);
+            }
+
+            return null;
+        }
+
+        if (mb_strlen($text) > self::PROGRESS_TEXT_MAX) {
+            throw ValidationException::withMessages(['body' => __('tasks.validation.update_body_too_long', ['max' => self::PROGRESS_TEXT_MAX])]);
+        }
+
+        return $text;
     }
 
     /**

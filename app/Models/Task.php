@@ -42,7 +42,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * (TaskRecurrence) and every occurrence points at the first task of the
  * series. `assigned_by` remembers who handed the task to its assignee
  * (D-14): written via forceFill by TaskService and RecordAssignmentService
- * only, never fillable, and cleared when the task is unassigned.
+ * only, never fillable, and cleared when the task is unassigned. A task
+ * handed out to its assignee (isHandedOutTo) belongs to its assigner: the
+ * assignee reports progress through the `updates` log instead of editing it
+ * (D-14 amendment, 2026-09-28).
  *
  * @property ?int $assigned_by
  * @property TaskKind $kind
@@ -232,6 +235,32 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
     public function activities(): HasMany
     {
         return $this->hasMany(Activity::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    /**
+     * The progress log (D-14 amendment, 2026-09-28): starts, progress notes,
+     * completions and reopenings, newest first.
+     *
+     * @return HasMany<TaskUpdate, $this>
+     */
+    public function updates(): HasMany
+    {
+        return $this->hasMany(TaskUpdate::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    /**
+     * Whether the task was handed out to the given user (D-14 amendment,
+     * 2026-09-28): they are its assignee and someone else is recorded as the
+     * assigner. A task a user created for themselves, and a task from before
+     * `assigned_by` existed (null), are not handed out. TaskPolicy adds the
+     * permission side: a holder of `task.assign` is never limited by it.
+     */
+    public function isHandedOutTo(User $user): bool
+    {
+        return $this->assignee_id !== null
+            && $this->assigned_by !== null
+            && (int) $this->assignee_id === (int) $user->getKey()
+            && (int) $this->assigned_by !== (int) $user->getKey();
     }
 
     public function isOpen(): bool

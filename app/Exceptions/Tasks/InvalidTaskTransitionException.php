@@ -16,6 +16,16 @@ final class InvalidTaskTransitionException extends RuntimeException
         return new self(__('tasks.validation.not_open'));
     }
 
+    public static function notPending(): self
+    {
+        return new self(__('tasks.validation.not_pending'));
+    }
+
+    public static function notOpenForUpdate(): self
+    {
+        return new self(__('tasks.validation.update_not_open'));
+    }
+
     public static function notClosed(): self
     {
         return new self(__('tasks.validation.not_closed'));

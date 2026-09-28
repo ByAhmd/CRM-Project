@@ -161,6 +161,7 @@ final class SchemaContractTest extends TestCase
             'deal_contacts.contact_id' => ['deal_contacts.contact_id', 'contacts', 'CASCADE'],
             'deal_competitors.deal_id' => ['deal_competitors.deal_id', 'deals', 'CASCADE'],
             'deal_products.deal_id' => ['deal_products.deal_id', 'deals', 'CASCADE'],
+            'task_updates.task_id' => ['task_updates.task_id', 'tasks', 'CASCADE'],
             'taggables.tag_id' => ['taggables.tag_id', 'tags', 'CASCADE'],
             'custom_field_values.custom_field_id' => ['custom_field_values.custom_field_id', 'custom_fields', 'CASCADE'],
             // Optional links survive the removal of what they point at.
@@ -297,6 +298,7 @@ final class SchemaContractTest extends TestCase
             'tasks' => ['due_at', 'starts_at', 'ends_at', 'completed_at', 'reminder_at', 'reminder_sent_at', 'overdue_notified_at'],
             'activities' => ['occurred_at'],
             'custom_field_values' => ['value_datetime'],
+            'task_updates' => ['created_at'],
         ];
 
         $wrong = [];

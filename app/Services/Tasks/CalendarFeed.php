@@ -234,8 +234,10 @@ final class CalendarFeed
 
     /**
      * TaskPolicy::update for every task of the range, resolved once: a
-     * trashed task is frozen, the viewer needs `task.update`, and the
-     * assignee must be inside the viewer's write reach.
+     * trashed task is frozen, the viewer needs `task.update`, the assignee
+     * must be inside the viewer's write reach, and a task handed out to the
+     * viewer by someone else stays its assigner's unless the viewer holds
+     * `task.assign` (D-14 amendment, 2026-09-28).
      *
      * @return Closure(Task): bool
      */
@@ -246,9 +248,11 @@ final class CalendarFeed
         }
 
         $writableOwner = $this->visibility->writableOwner($viewer, Task::class);
+        $mayEditHandedOut = $viewer->can(Permission::TaskAssign->value);
 
         return static fn (Task $task): bool => ! $task->trashed()
-            && $writableOwner($task->assignee_id === null ? null : (int) $task->assignee_id);
+            && $writableOwner($task->assignee_id === null ? null : (int) $task->assignee_id)
+            && ($mayEditHandedOut || ! $task->isHandedOutTo($viewer));
     }
 
     /**
@@ -258,6 +262,7 @@ final class CalendarFeed
     {
         $timed = $task->starts_at !== null;
         $open = $task->isOpen();
+        $canEdit = $editable($task);
         $color = self::color($open ? $task->priority->getColor() : $task->status->getColor());
 
         if ($timed) {
@@ -279,10 +284,13 @@ final class CalendarFeed
             borderColor: $color,
             textColor: self::TEXT_COLOR,
             url: TaskResource::getUrl('view', ['record' => $task]),
-            editable: $open && $editable($task),
+            editable: $open && $canEdit,
             classNames: $open ? [] : [self::MUTED_CLASS],
             extendedProps: [
                 'type' => 'task',
+                // Whether a click opens the edit modal; otherwise it opens
+                // the task page, where a handed-out assignee reports progress.
+                'canEdit' => $canEdit,
                 'status' => $task->status->value,
                 'priority' => $task->priority->value,
                 'kind' => $task->kind->value,

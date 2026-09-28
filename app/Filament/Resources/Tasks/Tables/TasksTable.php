@@ -164,6 +164,8 @@ final class TasksTable
                 ActionGroup::make([
                     ViewAction::make(),
                     EditAction::make(),
+                    TaskActions::start(),
+                    TaskActions::postUpdate(),
                     TaskActions::complete(),
                     TaskActions::cancel(),
                     TaskActions::reopen(),

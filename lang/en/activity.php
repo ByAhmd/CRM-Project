@@ -119,6 +119,8 @@ return [
         'task.completed' => 'Task completed',
         'task.cancelled' => 'Task cancelled',
         'task.reopened' => 'Task reopened',
+        'task.started' => 'Task started',
+        'task.progress_posted' => 'Task progress update posted',
         'note.created' => 'Note added',
         'note.updated' => 'Note edited',
         'note.deleted' => 'Note deleted',

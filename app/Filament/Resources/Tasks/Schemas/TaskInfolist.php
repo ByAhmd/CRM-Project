@@ -6,15 +6,21 @@ namespace App\Filament\Resources\Tasks\Schemas;
 
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
+use App\Models\TaskUpdate;
+use App\Models\User;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * One task (decision A-10): what it is, when it is due, the records it is
- * linked to, who it is assigned to, how it repeats and who created it.
- * Links to a linked record appear only when the reader may open it.
+ * One task (decisions A-10, D-14): what it is, how the work is going (the
+ * progress log), when it is due, the records it is linked to, who it is
+ * assigned to and by whom, how it repeats and who created it. Links to a
+ * linked record appear only when the reader may open it.
  */
 final class TaskInfolist
 {
@@ -50,6 +56,8 @@ final class TaskInfolist
                             ->columnSpanFull(),
                     ])
                     ->columns(1),
+
+                self::progressSection(),
 
                 Section::make(__('tasks.sections.schedule'))
                     ->schema([
@@ -135,6 +143,9 @@ final class TaskInfolist
                             TextEntry::make('creator.name')
                                 ->label(__('tasks.fields.created_by'))
                                 ->placeholder(__('common.placeholders.empty')),
+                            TextEntry::make('assigner.name')
+                                ->label(__('tasks.fields.assigned_by'))
+                                ->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('created_at')
                                 ->label(__('tasks.fields.created_at'))
                                 ->dateTime('Y-m-d H:i'),
@@ -147,6 +158,65 @@ final class TaskInfolist
                     ->collapsible(),
             ])
             ->columns(1);
+    }
+
+    /**
+     * The progress log (D-14 amendment, 2026-09-28): who reported what and
+     * when, newest first — the status the entry moved the task to as a
+     * badge, the author's text as plain text. The log and its authors are
+     * loaded in two queries whatever its length; the reader who may report
+     * on the task but not edit it is told where their actions are.
+     */
+    private static function progressSection(): Section
+    {
+        return Section::make(__('tasks.sections.progress'))
+            ->description(static function (?Model $record): ?string {
+                $user = auth()->user();
+
+                return $record instanceof Task && $user instanceof User && $user->can('progress', $record) && ! $user->can('update', $record)
+                    ? __('tasks.helpers.handed_out')
+                    : null;
+            })
+            ->schema([
+                RepeatableEntry::make('updates')
+                    ->hiddenLabel()
+                    ->state(static fn (?Model $record): ?Collection => $record instanceof Task ? $record->loadMissing('updates.author')->updates : null)
+                    ->placeholder(__('tasks.empty.progress'))
+                    ->schema([
+                        Grid::make(3)->schema([
+                            TextEntry::make('author_name')
+                                ->label(__('tasks.fields.update_author'))
+                                ->state(static fn (?Model $record): ?string => $record instanceof TaskUpdate ? self::authorName($record) : null),
+                            TextEntry::make('created_at')
+                                ->label(__('tasks.fields.update_created_at'))
+                                ->dateTime('Y-m-d H:i'),
+                            TextEntry::make('status')
+                                ->label(__('tasks.fields.update_status'))
+                                ->badge()
+                                ->visible(static fn (?Model $record): bool => $record instanceof TaskUpdate && $record->status !== null),
+                        ]),
+                        TextEntry::make('body')
+                            ->label(__('tasks.fields.update_body'))
+                            ->extraAttributes(['class' => 'whitespace-pre-line'])
+                            ->visible(static fn (?Model $record): bool => $record instanceof TaskUpdate && filled($record->body))
+                            ->columnSpanFull(),
+                    ]),
+            ])
+            ->columns(1);
+    }
+
+    /** The author's name, marked when their account was deleted, or a fallback when it is gone. */
+    private static function authorName(TaskUpdate $update): string
+    {
+        $author = $update->author;
+
+        if ($author === null) {
+            return __('tasks.empty.deleted_author');
+        }
+
+        return $author->trashed()
+            ? __('tasks.empty.deleted_author_named', ['name' => $author->name])
+            : $author->name;
     }
 
     /** "Every 2 weeks", "Every day" — or "does not repeat", in the reader's language. */

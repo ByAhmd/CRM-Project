@@ -118,6 +118,8 @@ abstract class BaseTasksRelationManager extends RelationManager
                         ->using(fn (Task $record, array $data): Task => app(TaskService::class)->update($record, $data, $this->actor()))
                         ->successNotificationTitle(__('tasks.notifications.updated')),
 
+                    TaskActions::start(),
+                    TaskActions::postUpdate(),
                     TaskActions::complete(),
                     TaskActions::cancel(),
                     TaskActions::reopen(),

@@ -19,6 +19,7 @@ enum NotificationEvent: string implements HasLabel
     case TaskReminder = 'task_reminder';
     case TaskOverdue = 'task_overdue';
     case TaskCompleted = 'task_completed';
+    case TaskProgress = 'task_progress';
     case DealStageChanged = 'deal_stage_changed';
     case DealClosed = 'deal_closed';
     case LeadConverted = 'lead_converted';

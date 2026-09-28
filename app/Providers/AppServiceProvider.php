@@ -16,6 +16,7 @@ use App\Services\CustomFields\CustomFieldRegistry;
 use App\Services\Leads\LeadScoringService;
 use BezhanSalleh\LanguageSwitch\Events\LocaleChanged;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\Exports\Models\Export as FilamentExport;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import as FilamentImport;
@@ -165,6 +166,15 @@ final class AppServiceProvider extends ServiceProvider
 
         FileUpload::configureUsing(function (FileUpload $upload): void {
             $upload->preventFilePathTampering();
+        });
+
+        // A three-dot menu is positioned against the viewport (Filament's
+        // "teleport" is the fixed positioning strategy — the panel stays in its
+        // row), so the bounded table container (theme.css, sticky header) can
+        // no longer clip it. Its stacking over the sticky header is theme.css's
+        // job: a row with an open menu rises above the header.
+        ActionGroup::configureUsing(function (ActionGroup $group): void {
+            $group->dropdownTeleport();
         });
     }
 }

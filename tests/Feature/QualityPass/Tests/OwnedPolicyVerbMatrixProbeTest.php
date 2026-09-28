@@ -164,6 +164,10 @@ final class OwnedPolicyVerbMatrixProbeTest extends TestCase
             'cancel' => [$this->rep],
             'delete' => [$this->rep],
             'restore' => [$this->rep],
+            // D-14 amendment (2026-09-28): the assignee's progress verbs.
+            'progress' => [$this->rep],
+            'start' => [$this->rep],
+            'postUpdate' => [$this->rep],
         ]);
 
         // D-14 (2026-09-21): task assignment is admin-only — the positive answer is the

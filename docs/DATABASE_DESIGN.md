@@ -259,6 +259,15 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `created_by` | FK→users N SET NULL | |
 | timestamps, SD | | |
 
+### `task_updates` (append-only progress log — D-14 amendment, 2026-09-28)
+
+`task_id` FK→tasks CASCADE (owned child; tasks are only soft-deleted, so the log survives a delete and a restore),
+`user_id` FK→users N SET NULL (I; the author), `status` enum(`pending`,`in_progress`,`completed`,`cancelled`) CHECK N (I;
+the status the entry moved the task to — `in_progress` for a start, `completed` for a completion, `pending` for a reopening,
+NULL for a plain progress note), `body` TEXT N (plain text; start notes and updates capped at 2000 characters by
+`TaskService`), `created_at` DATETIME. I (`task_id`,`created_at`). No `updated_at`; written by `TaskService` only,
+`TaskUpdateAppendOnlyObserver` refuses every update and delete.
+
 ### `notes`
 
 `body` TEXT (rich JSON if RichEditor), `author_id` FK→users N SET NULL (I), `lead_id`/`contact_id`/`account_id`/`deal_id` FK N SET NULL (I each; ≥1 required),
@@ -289,6 +298,7 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 - Deal `belongsTo` account, contact, pipeline, stage, owner, closeReason, lead; `hasMany` stageLogs, activities, tasks, notes, products; `belongsToMany` contacts, competitors, tags; morph attachments.
 - Pipeline `hasMany` stages, deals.
 - Activity/Task/Note `belongsTo` lead/contact/account/deal (nullable), owner/assignee/author; morph attachments.
+- Task `hasMany` updates (`task_updates`, newest first), `belongsTo` assigner (`assigned_by`); TaskUpdate `belongsTo` task, author.
 - Custom field values `morphTo` entity, `belongsTo` field.
 
 ## 6. Data integrity rules enforced outside the schema (services + observers + tests)
@@ -305,7 +315,7 @@ Step-13 amendments (migrations dated 2026-09-15, from the EXPLAIN evidence on vo
 - Lead conversion is one transaction: create/link account, create/link contact, optionally create deal, set `converted_*`, move status to the `converted` kind, write status log, audit and timeline entries.
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
 - Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`) checked on the server-sniffed type, max size from `config('crm.attachments.max_kb')`, files parked under `tmp/{user id}/` until the form is submitted (pruned daily), soft delete keeps the file, force delete removes it, downloads go through the panel's authentication middleware and the subject's `view` policy; uploads are refused on soft-deleted subjects.
-- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`.
+- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`. Starting (Pending → In progress), posting a progress update, completing and reopening each append a `task_updates` row inside the same transaction (D-14 amendment, 2026-09-28).
 - Notes: body trimmed and capped at 5000 characters in the service; a note on a contact or deal is listed on the account only when the reader may read that contact or deal.
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).

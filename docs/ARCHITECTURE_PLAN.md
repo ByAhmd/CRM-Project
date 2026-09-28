@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-14 and architect decisions A-1 … A-25 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-14 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -201,13 +201,17 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 - Standard pages per resource; record 360 views (`ViewLead`, `ViewAccount`, `ViewDeal`) with tabs:
   overview, timeline, activities, tasks, notes, attachments, related records.
 - Custom pages: `Dashboard` (Filament dashboard with filters form), `DealBoard` (kanban),
-  `Calendar`, `TasksBoard` (the shared, organisation-wide tasks board, D-14), `Reports/*`, `Settings/General`.
+  `Calendar`, `TasksBoard` (the shared, organisation-wide tasks board, D-14; in-progress cards carry a status
+  badge), `Reports/*`, `Settings/General`. `ViewTask` shows the task's progress log (D-14 amendment,
+  2026-09-28) and offers the assignee start / post update / complete; a handed-out task's edit, cancel and
+  delete stay with those who may edit it, and the calendar sends the assignee's click to the task page.
 - Tables: `defaultSort` on every table (guard test), persisted filters/sort/search in session,
   column manager, list tabs, query-builder filter on the main lists, empty states translated.
 - Light/dark/system: `->darkMode()->themeSwitcher()->defaultThemeMode(ThemeMode::System)`; one Tailwind 4
   theme file with `:root` tokens redefined under `.dark`; every custom page/widget uses Filament
   components so dark mode is inherited; charts read colours from CSS variables.
 - Responsive: Filament layouts; custom kanban and calendar tested at mobile widths.
+- Navigation: SPA mode with hover prefetching (A-26) — pages swap in place; the calendar keeps a full load.
 
 ### 3.5 Localization architecture
 
@@ -238,6 +242,7 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   |---|---|---|---|
   | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record; `announce()` also for a task created for someone else, D-14), after the change commits | the new owner / assignee | mail yes, bell at once (D-14) |
   | `TaskCompletedNotification` | `TaskService::complete()`, after the completion commits (D-14) | the assigner, or the creator when no assigner was ever recorded; never the completer, only a recipient who may open the task | mail yes, bell at once |
+  | `TaskProgressNotification` | `TaskService::start()` and `::postUpdate()`, after the entry commits (D-14 amendment, 2026-09-28; `NotificationEvent::TaskProgress`, bell by default, mail opt-in) | the completion notice's recipient: the assigner, or the creator when no assigner was ever recorded; never the actor, only a recipient who may open the task; the author's text quoted as plain text, cut to 280 characters | mail yes, bell at once |
   | `DealStageChangedNotification` | `DealStageWorkflow` (open-stage move or reopen by someone else) | the deal owner | yes |
   | `DealClosedNotification` | `DealStageWorkflow` (won / lost) | the owner and the owner's team manager, never the actor | yes |
   | `LeadConvertedNotification` | `LeadConversionWorkflow` (after commit, conversion by someone else) | the lead owner | yes |
@@ -528,12 +533,13 @@ CRM_Project/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
 │   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
-│   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
+│   │                              Activity, Task, TaskUpdate, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
-│   │                              TaskCompletedNotification, UserInvitationNotification
+│   │                              TaskCompletedNotification, TaskProgressNotification, UserInvitationNotification
 │   ├── Observers/                 LeadObserver, DealObserver, TaskObserver, AttachmentObserver, PipelineStageObserver,
-│   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver
+│   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver,
+│   │                              TaskUpdateAppendOnlyObserver
 │   ├── Policies/                  <Model>Policy per model + Concerns/ChecksPermissions
 │   ├── Providers/                 AppServiceProvider, Filament/AdminPanelProvider
 │   ├── Services/
@@ -597,5 +603,5 @@ CRM_Project/
 ## 12. Decision register
 
 The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-14 and architect
-decisions A-1 … A-25, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
+decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

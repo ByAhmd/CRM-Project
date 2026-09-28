@@ -197,6 +197,10 @@ final class DemoDataRemover
             $this->delete('activities', $this->registry->ids('activities'));
             $this->delete('notes', $this->registry->ids('notes'));
 
+            // The progress log of the demo tasks; the query builder bypasses its
+            // append-only observer, as it does for the activities above.
+            $this->delete('task_updates', $this->registry->ids('task_updates'));
+
             $tasks = $this->registry->ids('tasks');
             $this->update('tasks', 'series_id', $tasks, ['series_id' => null]);
             $this->delete('tasks', $tasks);
