@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
 authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-14 owner, A-1 … A-24 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-14 owner, A-1 … A-25 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -89,6 +89,9 @@ php artisan app:preflight
 ```
 
 Always run through **Herd's PHP/Composer** (PowerShell resolves them; Git Bash resolves XAMPP 8.2 — do not use it).
+
+**A push to `master` is a production release (A-25):** once CI passes, the Deploy workflow ships that exact commit to
+the live site automatically. Push to `master` only work whose `composer check` is green.
 
 ## 5. Decisions in force (summary — full text in docs/DECISIONS.md)
 

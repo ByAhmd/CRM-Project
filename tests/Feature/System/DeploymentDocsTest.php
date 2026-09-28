@@ -46,10 +46,17 @@ final class DeploymentDocsTest extends TestCase
         )));
 
         $this->assertSame([], $missing, 'docs/DEPLOYMENT.md does not name these scheduled entries: '.implode(', ', $missing));
+        // Starts with the PHP binary and names artisan by its absolute path: Hostinger's hPanel
+        // cron never starts a line that begins with a shell builtin such as `cd` (A-24).
         $this->assertMatchesRegularExpression(
-            '/\* \* \* \* \* cd \S+ && (php|<php>) artisan schedule:run >> \/dev\/null 2>&1/',
+            '/\* \* \* \* \* <php> \/\S+\/artisan schedule:run >> \/dev\/null 2>&1/',
             $deployment,
             'docs/DEPLOYMENT.md does not show the cron line that drives the scheduler',
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '/^\* \* \* \* \* cd /m',
+            $deployment,
+            'docs/DEPLOYMENT.md still offers a cron line starting with `cd`, which hPanel never runs',
         );
     }
 

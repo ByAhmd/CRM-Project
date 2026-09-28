@@ -318,8 +318,9 @@ final class PreflightCommandTest extends TestCase
         Cache::forget(PreflightCommand::HEARTBEAT_KEY);
 
         $this->artisan('app:preflight')
-            // One output line: the warning and the cron line of DEPLOYMENT.md section 3.10 (an absolute PHP binary, never a bare `php`).
-            ->expectsOutputToContain('No scheduler heartbeat — `schedule:run` has not run in the last ten minutes: reminders, the queue drain and the retention prunes are not happening; add the cron entry `* * * * * cd /path/to/app && <php> artisan schedule:run >> /dev/null 2>&1` on the host, with <php> the absolute path of the PHP 8.3 CLI binary (docs/DEPLOYMENT.md section 3.10, D-1).')
+            // One output line: the warning and the cron line of DEPLOYMENT.md section 3.10 (an absolute PHP binary, never a bare
+            // `php`, and an absolute artisan path with no `cd` in front — hPanel's cron never starts a line beginning with a builtin, A-24).
+            ->expectsOutputToContain('No scheduler heartbeat — `schedule:run` has not run in the last ten minutes: reminders, the queue drain and the retention prunes are not happening; add the cron entry `* * * * * <php> /path/to/app/artisan schedule:run >> /dev/null 2>&1` on the host, with <php> the absolute path of the PHP 8.3 CLI binary and no `cd` in front (docs/DEPLOYMENT.md section 3.10, D-1).')
             ->assertSuccessful();
 
         Cache::put(PreflightCommand::HEARTBEAT_KEY, now()->subMinutes(7)->toIso8601String(), now()->addMinutes(10));

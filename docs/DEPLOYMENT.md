@@ -41,8 +41,9 @@ Contents: 1 Prerequisites · 2 Build a release · 3 First deployment · 4 Subseq
 
 The host never runs `npm`. Assets are compiled in CI or locally and shipped in `public/build` (D-1).
 
-**Option A — the deploy workflow (recommended).** In GitHub: *Actions → Deploy → Run workflow*, choose the branch
-(`master` for production, A-14) and type a release note. The `build` job runs on PHP 8.3 and Node 22:
+**Option A — the deploy workflow (recommended).** It starts **automatically** once the CI workflow has passed for a push
+to `master` (A-25), building exactly the commit CI tested; by hand it starts from *Actions → Deploy → Run workflow*
+(choose `master` for production, A-14, and type a release note). The `build` job runs on PHP 8.3 and Node 22:
 
 1. `composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist`
 2. `npm ci` and `npm run build`
@@ -52,7 +53,8 @@ The host never runs `npm`. Assets are compiled in CI or locally and shipped in `
    days). `<release>` is `YYYYMMDDHHMMSS-<first 12 characters of the commit>`.
 
 Download the artifact from the run page (GitHub wraps it in a zip; the tarball is inside). The `deploy` job does
-nothing unless its secrets exist and the run was dispatched from `master` (section 11).
+nothing unless its secrets exist and the run is on `master` — dispatched there, or started by `master`'s green CI
+(section 11).
 
 **Option B — build locally** (same result):
 
@@ -300,21 +302,28 @@ D-11) and invites the team once SMTP works.
 Everything scheduled — the queue drain, reminders, retention — depends on **one** cron entry:
 
 ```cron
-* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
+* * * * * <php> /path/to/app/artisan schedule:run >> /dev/null 2>&1
 ```
+
+**No `cd` in front — the line starts with the PHP binary and names `artisan` by its absolute path.** Hostinger's
+hPanel cron never starts a command that begins with a shell builtin: a job saved as `cd /path/to/app && … artisan
+schedule:run` is accepted by the form, listed, and then silently never runs — no output, no error, no heartbeat. This
+was found at the first production deployment (A-24): a `date` probe job ran every minute while the `cd …` job never
+started once, and the same command without `cd` ran at once. Nothing is lost by dropping the `cd`: the scheduler runs
+every entry from the application directory (`base_path()`) whatever the working directory of the cron job.
 
 **The PHP binary.** Cron runs with a minimal `PATH`, and the `php` it finds is not necessarily the version selected for
 the website in hPanel. `schedule:run` starts every scheduled artisan command with **the same PHP binary** that runs
-`schedule:run` itself, so a wrong binary breaks every entry at once. Use the absolute path of the PHP 8.3 CLI:
-
-```cron
-* * * * * cd /path/to/app && <php> artisan schedule:run >> /dev/null 2>&1
-```
+`schedule:run` itself, so a wrong binary breaks every entry at once. `<php>` is therefore the absolute path of the
+PHP 8.3 CLI.
 
 Find `<php>` over SSH (`command -v php`, then `<candidate> -v` must print 8.3 or newer), or ask the host. Hosts that
 offer several PHP versions install each under its own path (for example `/opt/alt/php83/usr/bin/php` on CloudLinux
-based hosts) — confirm the exact path exists before using it. In hPanel's cron form use the custom-command type so the
-whole line above is yours. Release folders: `cd DEPLOY_PATH/current`. If the plan's minimum interval is longer than one
+based hosts) — confirm the exact path exists before using it. In hPanel's cron form choose the **Custom** type (the
+PHP type builds its own command line) and paste the line without the five time fields, which the form sets
+separately (all `*`). hPanel appends its own output capture to every job, so the trailing `>> /dev/null 2>&1` may be
+left out there: the job's *View Output* button then shows the scheduler's last run, from a file under `~/.logs/`.
+Release folders: `DEPLOY_PATH/current/artisan`. If the plan's minimum interval is longer than one
 minute, everything below runs late by that much. With an interval above five minutes the heartbeat stamp is older than
 five minutes (or already expired after its ten minutes) for much of every interval, so `app:preflight` warns about the
 heartbeat on most runs.
@@ -409,14 +418,18 @@ Warnings (exit 0) — operable, but read them:
 
 ### 3.13 Running artisan without SSH
 
-Without SSH, each one-off command runs through a **temporary** cron entry that writes its output to a file, which you
-read in the File Manager and then delete together with the entry:
+Without SSH, each one-off command runs through a **temporary** cron entry whose output you read, and which you then
+delete. Like the permanent line (section 3.10) it starts with the PHP binary and names `artisan` by its absolute path —
+never `cd … &&`, which hPanel never runs:
 
 ```cron
-* * * * * cd /path/to/app && <php> artisan migrate --force > storage/logs/deploy-migrate.txt 2>&1
+* * * * * <php> /path/to/app/artisan migrate --force > /path/to/app/storage/logs/deploy-migrate.txt 2>&1
 ```
 
-Remove the entry as soon as the file appears (it would run again every minute; `migrate` and `db:seed` are harmless
+On a plain crontab the output lands in that file (read it in the File Manager). **On hPanel the file stays empty**:
+hPanel appends its own capture after the command, which takes stdout and stderr over — read the result with the
+job's *View Output* button instead (it keeps the last run, under `~/.logs/`). Remove the entry as soon as the output
+appears (it would run again every minute; `migrate` and `db:seed` are harmless
 when repeated, `key:generate` is **not** — for the key, generate one locally with `php artisan key:generate --show`
 and paste it into `.env`). Run the steps in order, one entry at a time: `migrate --force`, `db:seed --force`,
 `app:onboard` (with `ADMIN_*` in `.env`, section 3.9), then **blank `ADMIN_NAME`, `ADMIN_EMAIL` and `ADMIN_PASSWORD`
@@ -468,7 +481,8 @@ php artisan up
 
 ### 4.2 Through the deploy workflow (release folders)
 
-Run *Actions → Deploy* (section 11). The `deploy` job uploads the release into `DEPLOY_PATH/releases/<release>` and
+Push to `master`: once CI passes, *Deploy* runs on its own (section 11). To redeploy without a new commit, run
+*Actions → Deploy → Run workflow* by hand. The `deploy` job uploads the release into `DEPLOY_PATH/releases/<release>` and
 runs, on the host: link `shared/.env` and `shared/storage` → `php artisan down --retry=60` in the live release →
 `migrate --force` → `db:seed --force` → `optimize:clear` → `optimize` → `filament:optimize` → `app:preflight` in the
 new release → switch `current` atomically → `php artisan up` → keep the five newest releases. If any step fails,
@@ -567,8 +581,13 @@ Nothing in the tree backs anything up; the owner decides the retention (checklis
   web-reachable) and printing it **only** when something is wrong:
 
   ```cron
-  0 * * * * cd /path/to/app && <php> artisan app:preflight --json > storage/logs/preflight-last.json 2>&1; rc=$?; if [ "$rc" -ne 0 ] || grep -qi 'scheduler heartbeat' storage/logs/preflight-last.json; then cat storage/logs/preflight-last.json; fi
+  0 * * * * <php> /path/to/app/artisan app:preflight --json > /path/to/app/storage/logs/preflight-last.json 2>&1; rc=$?; if [ "$rc" -ne 0 ] || grep -qi 'scheduler heartbeat' /path/to/app/storage/logs/preflight-last.json; then cat /path/to/app/storage/logs/preflight-last.json; fi
   ```
+
+  It starts with the PHP binary and uses absolute paths only, for the reason of section 3.10 (hPanel never runs a line
+  that begins with `cd`). On hPanel the printed JSON is what the job's *View Output* shows: hPanel's own capture takes
+  over the output of the last command of the line, while the first command's redirect into
+  `storage/logs/preflight-last.json` still happens.
 
   The line is silent when preflight exits 0 without a heartbeat warning. It prints the JSON document when preflight
   fails (exit 1) **or** when the scheduler has stopped — a stopped scheduler is only a warning (exit 0), which is why
@@ -604,10 +623,27 @@ Nothing in the tree backs anything up; the owner decides the retention (checklis
 
 ## 11. The deploy workflow and its secrets
 
-`.github/workflows/deploy.yml` runs only by hand (*Actions → Deploy → Run workflow*, input: a release note). It is safe
-to leave unused: without the secrets the `build` job produces the archive and the `deploy` job skips every step with a
-notice. **Only a run dispatched from `master` deploys** (production, A-14): from `develop` or any other branch the
-`build` job still produces the archive, and the `deploy` job skips every step with a warning naming the ref.
+`.github/workflows/deploy.yml` starts two ways (A-25):
+
+- **Automatically after a green CI on `master`.** The trigger is the completion of the *CI* workflow
+  (`workflow_run`), not the push itself, so nothing ships before its tests have passed. The `build` job runs only when
+  that CI run **succeeded**, was started by a **push** (not a pull request), on **`master`**, in **this repository**
+  (not a fork), **and only while that commit is still `master`'s tip** (`workflow_run.head_sha == github.sha`) —
+  otherwise the whole run is skipped and nothing is deployed. It checks out `workflow_run.head_sha` by SHA, exactly
+  the commit CI tested; the release note is the first line of that commit's message. The tip rule is what makes a
+  re-run safe: re-running an older commit's CI (a cancelled or flaky run, or any old run) produces a new "CI
+  succeeded" event, and without the rule it would deploy that older commit over a newer release whose migrations have
+  already run. So production follows `master`'s tip whenever the tip is green; when two pushes land close together,
+  the older one's run is skipped and the newer one deploys through its own CI. Releases never overlap: the
+  `concurrency: deploy` group sits on the `deploy` job (not the workflow), so skipped runs never enter the queue and
+  cannot cancel a waiting deploy. A release keeps the site in
+  maintenance mode for the few seconds of `migrate` … `app:preflight` (8 s for the first workflow release, 2026-09-28);
+  `tests/Feature/System/DeployWorkflowTest.php` pins every one of these conditions.
+- **By hand**: *Actions → Deploy → Run workflow*, input a release note — to redeploy without a new commit.
+
+It is safe to leave the secrets unset: the `build` job then produces the archive and the `deploy` job skips every step
+with a notice. **Only a run on `master` deploys** (production, A-14): a run dispatched from `develop` or any other
+branch still produces the archive, and the `deploy` job skips every step with a warning naming the ref.
 
 | Secret | Required for the deploy job | Value |
 |---|---|---|
@@ -643,7 +679,7 @@ copy becomes a mandatory step after every workflow run, done by hand over SSH be
 rsync -a --exclude=index.php DEPLOY_PATH/current/public/ <web root>/
 ```
 
-and those runs are then not unattended. Point the cron line at `cd DEPLOY_PATH/current`. The job creates
+and those runs are then not unattended. Point the cron line at `DEPLOY_PATH/current/artisan` (section 3.10: no `cd` in front). The job creates
 `shared/storage` on its first run.
 
 **First run through the workflow.** The database has no super admin yet, so the first run stops at `app:preflight`

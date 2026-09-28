@@ -1,7 +1,16 @@
 name: Deploy
 
-# Manual release pipeline for Hostinger shared hosting (decision D-1).
+# Release pipeline for Hostinger shared hosting (decision D-1).
 # Runbook: docs/DEPLOYMENT.md (section 11 describes this file).
+#
+# Triggers (A-25):
+# - automatically, once the CI workflow has SUCCEEDED for a push to master:
+#   the run deploys exactly the commit CI tested (workflow_run.head_sha), and
+#   only while that commit is still master's tip — a re-run of an older
+#   commit's CI never rolls production back. A failed or cancelled CI, a pull
+#   request, another branch or a fork deploys nothing;
+# - by hand (Actions > Deploy > Run workflow, with a release note), e.g. to
+#   redeploy master.
 #
 # - build:  PHP 8.3 + Node 22; composer install without dev packages, npm ci and
 #           npm run build; packs a release tarball (vendor/ and public/build
@@ -9,8 +18,8 @@ name: Deploy
 #           and uploads it as a workflow artifact. Nothing leaves GitHub.
 # - deploy: optional. Runs its steps only when the secrets DEPLOY_SSH_HOST,
 #           DEPLOY_SSH_USER, DEPLOY_SSH_KEY and DEPLOY_PATH are all set (checked
-#           in a step, never printed) and the run was dispatched from master
-#           (production, A-14). It then requires DEPLOY_SSH_KNOWN_HOSTS and
+#           in a step, never printed) and the run is on master (production,
+#           A-14): dispatched from master, or started by master's green CI. It then requires DEPLOY_SSH_KNOWN_HOSTS and
 #           refuses an unverified host key. Uploads the release with rsync over SSH
 #           into DEPLOY_PATH/releases/<release>, links the shared .env and
 #           storage, and runs the release commands on the host: maintenance
@@ -30,17 +39,31 @@ on:
         description: 'Release note: what this release contains'
         required: true
         type: string
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
 
 permissions:
   contents: read
 
-concurrency:
-  group: deploy
-  cancel-in-progress: false
-
 jobs:
   build:
     name: Build release archive
+    # An automatic run builds only after a successful CI run of a push to master in this
+    # repository, and only while the tested commit is still master's tip (A-25). On a
+    # workflow_run event github.sha is the default branch's tip when this run starts, so a
+    # re-run of an OLDER commit's CI (cancelled, flaky or simply re-run after a newer release)
+    # can never roll production back over a newer release and its already-migrated schema;
+    # a newer tip deploys through its own CI. The deploy job needs this one, so a skipped
+    # build deploys nothing.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_sha == github.sha)
     # Pinned, not `ubuntu-latest`: a release archive must be reproducible, and the `-latest`
     # label is migrated to a new Ubuntu release without notice. Raise it deliberately.
     runs-on: ubuntu-24.04
@@ -50,10 +73,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # The commit CI tested — pinned by SHA, never by branch name, so a push landing
+          # while this run starts cannot slip in untested. A manual run builds the dispatched ref.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Name the release
         id: name
-        run: echo "release=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+        run: |
+          commit="$(git rev-parse HEAD)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "release=$(date -u +%Y%m%d%H%M%S)-${commit::12}" >> "$GITHUB_OUTPUT"
 
       # PHP 8.3 is the production floor (D-1); the extensions are composer.json's ext-* requirements.
       - name: Setup PHP
@@ -89,17 +119,23 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      # The note is the dispatch input, or the first line of the tested commit's message on an
+      # automatic run. It reaches the shell through env only, never interpolated into the script.
       - name: Write release metadata
         env:
           RELEASE: ${{ steps.name.outputs.release }}
-          RELEASE_NOTE: ${{ inputs.release_note }}
+          COMMIT: ${{ steps.name.outputs.commit }}
+          TRIGGER: ${{ github.event_name }}
+          RELEASE_NOTE: ${{ inputs.release_note || github.event.workflow_run.head_commit.message }}
         run: |
+          note="$(printf '%s\n' "$RELEASE_NOTE" | head -n 1)"
           {
             echo "release: $RELEASE"
-            echo "commit: $GITHUB_SHA"
+            echo "commit: $COMMIT"
             echo "ref: $GITHUB_REF_NAME"
+            echo "trigger: $TRIGGER"
             echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "note: $RELEASE_NOTE"
+            echo "note: $note"
           } > RELEASE.txt
 
       - name: Pack the release
@@ -129,22 +165,32 @@ jobs:
       - name: Summary
         env:
           RELEASE: ${{ steps.name.outputs.release }}
-          RELEASE_NOTE: ${{ inputs.release_note }}
+          COMMIT: ${{ steps.name.outputs.commit }}
+          TRIGGER: ${{ github.event_name }}
+          RELEASE_NOTE: ${{ inputs.release_note || github.event.workflow_run.head_commit.message }}
         run: |
+          note="$(printf '%s\n' "$RELEASE_NOTE" | head -n 1)"
           {
             echo "### Release $RELEASE"
             echo ""
-            echo "Commit \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\`."
+            echo "Commit \`$COMMIT\` on \`$GITHUB_REF_NAME\` ($TRIGGER)."
             echo ""
             echo "Artifact: \`crm-release-$RELEASE\` (contains \`crm-$RELEASE.tar.gz\`)."
             echo ""
-            echo "Note: $RELEASE_NOTE"
+            echo "Note: $note"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: Deploy over SSH (only when the DEPLOY_* secrets exist)
     needs: build
     runs-on: ubuntu-24.04
+    # Releases never overlap on the host. The group sits on this job, not on the workflow:
+    # every CI completion on master creates a Deploy run, and a run whose build is skipped
+    # (red CI, stale commit, pull request) must not join the queue — under GitHub's
+    # one-pending-run rule it would cancel a waiting deploy of a green commit.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
 
     steps:
       - name: Check the deployment secrets

@@ -398,10 +398,15 @@ final class PreflightCommand extends Command
      * The scheduler entry `scheduler:heartbeat` (routes/console.php) stamps the
      * cache every minute; a missing or stale stamp means the host's cron is
      * not running the scheduler, so nothing scheduled happens.
+     *
+     * The suggested line starts with the PHP binary and names artisan by its
+     * absolute path, with no `cd … &&`: Hostinger's hPanel cron never starts
+     * a command that begins with a shell builtin (A-24), and the scheduler
+     * runs its entries from the application directory anyway.
      */
     private function heartbeatWarning(): ?string
     {
-        $cron = 'add the cron entry `* * * * * cd /path/to/app && <php> artisan schedule:run >> /dev/null 2>&1` on the host, with <php> the absolute path of the PHP 8.3 CLI binary (docs/DEPLOYMENT.md section 3.10, D-1)';
+        $cron = 'add the cron entry `* * * * * <php> /path/to/app/artisan schedule:run >> /dev/null 2>&1` on the host, with <php> the absolute path of the PHP 8.3 CLI binary and no `cd` in front (docs/DEPLOYMENT.md section 3.10, D-1)';
 
         try {
             $stamp = Cache::get(self::HEARTBEAT_KEY);

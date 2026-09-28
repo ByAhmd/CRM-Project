@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-14 and architect decisions A-1 … A-24 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-14 and architect decisions A-1 … A-25 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -458,8 +458,9 @@ Step 13 status (2026-09-15). The runbook is [DEPLOYMENT.md](DEPLOYMENT.md), day-
 [OPERATIONS.md](OPERATIONS.md); open go-live items (host, owner and evidence runs) are tracked in
 [GoLive_Checklist.md](GoLive_Checklist.md).
 
-- Target host is Hostinger shared hosting (D-1). Built: `.github/workflows/deploy.yml`, run by hand
-  (`workflow_dispatch` with a release note): a PHP 8.3 + Node 22 job builds `vendor/` without dev packages and
+- Target host is Hostinger shared hosting (D-1). Built: `.github/workflows/deploy.yml`, started automatically once
+  CI succeeds for a push to `master`, on exactly the tested commit (A-25), or by hand (`workflow_dispatch` with a
+  release note): a PHP 8.3 + Node 22 job builds `vendor/` without dev packages and
   `public/build` into a release tarball artifact; an optional job, active only when the `DEPLOY_SSH_HOST`,
   `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` and `DEPLOY_PATH` secrets exist, uploads it with rsync into a release folder and
   runs maintenance mode, `migrate --force`, `db:seed --force`, `optimize:clear`, `optimize`, `filament:optimize`,
@@ -572,7 +573,7 @@ CRM_Project/
 ├── tests/                         Concerns/, Support/, Feature/{Access,Audit,Leads,Contacts,Accounts,Deals,Activities,Tasks,Attachments,Imports,
 │                                  Views,Search,Filament,Isolation,Qa,Seeders,System,Domain,Statistics,Localization}, Unit/{Services,Deployment}
 ├── tools/                         ramp.mjs (colour ramps)
-├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); deploy.yml (manual release archive, optional SSH deploy)
+├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); deploy.yml (release archive + SSH deploy after green CI on master, or by hand)
 ├── CLAUDE.md  README.md  CONTRIBUTING.md
 └── composer.json  package.json  vite.config.js  phpstan.neon.dist  phpunit.xml  .editorconfig  .gitattributes  .env.example  .gitignore
 ```
@@ -596,5 +597,5 @@ CRM_Project/
 ## 12. Decision register
 
 The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-14 and architect
-decisions A-1 … A-24, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
+decisions A-1 … A-25, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).
