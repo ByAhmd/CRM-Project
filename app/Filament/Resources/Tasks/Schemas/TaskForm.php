@@ -33,7 +33,8 @@ use Illuminate\Support\Carbon;
  *
  * With $withSubjects the form carries the related-record pickers (all
  * optional: a task may be a personal to-do); on a relation manager the
- * owner record is the subject and the pickers are left out. The assignee
+ * owner record is the subject and the pickers are left out, as they are for
+ * an actor who may list none of the subjects (the employee, D-15). The assignee
  * field is OwnerSelect's `owner_id`, which TaskService maps to
  * `assignee_id`.
  */
@@ -125,6 +126,7 @@ final class TaskForm
                     Section::make(__('tasks.sections.related'))
                         ->description(__('tasks.helpers.related'))
                         ->schema(SubjectPickers::components(required: false))
+                        ->visible(fn (): bool => SubjectPickers::anyAvailable())
                         ->columns(['default' => 1, 'lg' => 2]),
                 ] : [],
 

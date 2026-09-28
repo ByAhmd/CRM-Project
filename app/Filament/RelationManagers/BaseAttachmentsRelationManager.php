@@ -28,8 +28,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
 
 /**
- * The attachments panel shared by leads, contacts, accounts and deals
- * (module row 13, D-13).
+ * The attachments panel shared by leads, contacts, accounts, deals and
+ * tasks (module row 13, D-13, D-15).
  *
  * Deliberately abstract — the one exception to the "final on every class"
  * rule: the table, the upload action and the record actions are written

@@ -47,6 +47,16 @@ final class DecisionRulesWithoutTestsProbeTest extends TestCase
             $user = $this->makeUser($role);
 
             foreach (['lead', 'contact', 'account', 'deal'] as $entity) {
+                // D-15 (2026-09-28): the employee role reads no commercial entity, so it exports none —
+                // asserted the other way round, never skipped.
+                if ($role === CrmRole::Employee) {
+                    if ($user->can("{$entity}.export")) {
+                        $missing[] = "employee must not hold {$entity}.export (D-15)";
+                    }
+
+                    continue;
+                }
+
                 if (! $user->can("{$entity}.export")) {
                     $missing[] = "{$role->value} lacks {$entity}.export";
                 }

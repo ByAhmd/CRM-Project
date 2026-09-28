@@ -47,6 +47,13 @@ final class OwnedPolicyMatrixTest extends TestCase
     /** Roles whose visibility is "all" and so reach the out-of-reach record too (D-4). */
     private const ALL_VISIBILITY = [CrmRole::SuperAdmin, CrmRole::Admin, CrmRole::Support, CrmRole::ReadOnly];
 
+    /**
+     * D-15 (2026-09-28): roles whose own scope holds neither record — the
+     * employee sees only what is assigned to them, so even the "in reach"
+     * record (the rep's) is outside it. Its own task is asserted separately.
+     */
+    private const OWN_ONLY_OUTSIDERS = [CrmRole::Employee];
+
     /** @var array<string, User> keyed by CrmRole value */
     private array $actors = [];
 
@@ -73,6 +80,7 @@ final class OwnedPolicyMatrixTest extends TestCase
             CrmRole::SalesRep->value => $this->rep,
             CrmRole::Support->value => $this->support(),
             CrmRole::ReadOnly->value => $this->readOnly(),
+            CrmRole::Employee->value => $this->employee($team),
         ];
     }
 
@@ -94,6 +102,8 @@ final class OwnedPolicyMatrixTest extends TestCase
                 // D-13: every role exports the commercial entities within its scope.
                 CrmRole::Support->value => ['view', 'export'],
                 CrmRole::ReadOnly->value => ['view', 'export'],
+                // D-15 (2026-09-28): the employee holds no lead key at all.
+                CrmRole::Employee->value => [],
             ],
         );
     }
@@ -114,6 +124,7 @@ final class OwnedPolicyMatrixTest extends TestCase
                 CrmRole::SalesRep->value => ['view', 'update', 'sendEmail', 'create', 'export'],
                 CrmRole::Support->value => ['view', 'export'],
                 CrmRole::ReadOnly->value => ['view', 'export'],
+                CrmRole::Employee->value => [],
             ],
         );
     }
@@ -134,6 +145,7 @@ final class OwnedPolicyMatrixTest extends TestCase
                 CrmRole::SalesRep->value => ['view', 'update', 'create', 'export'],
                 CrmRole::Support->value => ['view', 'export'],
                 CrmRole::ReadOnly->value => ['view', 'export'],
+                CrmRole::Employee->value => [],
             ],
         );
     }
@@ -154,6 +166,7 @@ final class OwnedPolicyMatrixTest extends TestCase
                 CrmRole::SalesRep->value => ['view', 'update', 'changeStage', 'close', 'create', 'export'],
                 CrmRole::Support->value => ['view', 'export'],
                 CrmRole::ReadOnly->value => ['view', 'export'],
+                CrmRole::Employee->value => [],
             ],
         );
     }
@@ -182,6 +195,7 @@ final class OwnedPolicyMatrixTest extends TestCase
                 CrmRole::SalesRep->value => $reopeners,
                 CrmRole::Support->value => ['view'],
                 CrmRole::ReadOnly->value => ['view'],
+                CrmRole::Employee->value => [],
             ],
             classAbilities: [],
         );
@@ -206,6 +220,9 @@ final class OwnedPolicyMatrixTest extends TestCase
                 // Support logs and works tasks everywhere but never deletes, reassigns or exports them.
                 CrmRole::Support->value => ['view', 'update', 'complete', 'cancel', 'reopen', 'create'],
                 CrmRole::ReadOnly->value => ['view'],
+                // D-15 (2026-09-28): the employee works its own tasks only (never the rep's,
+                // though they share a team) and neither assigns nor exports.
+                CrmRole::Employee->value => ['view', 'update', 'complete', 'cancel', 'reopen', 'delete', 'restore', 'create'],
             ],
             classAbilities: ['viewAny', 'create', 'export', 'deleteAny', 'restoreAny'],
         );
@@ -213,6 +230,16 @@ final class OwnedPolicyMatrixTest extends TestCase
         foreach ($this->actors as $role => $actor) {
             $this->assertFalse($actor->can('import', Task::class), "{$role} must not import tasks: there is no task importer");
         }
+
+        // D-15 (2026-09-28): on a to-do of their own the employee holds every granted verb.
+        $employee = $this->actors[CrmRole::Employee->value];
+        $own = Task::factory()->create(['assignee_id' => $employee->getKey(), 'created_by' => $employee->getKey()]);
+
+        foreach (['view', 'update', 'complete', 'cancel', 'reopen', 'delete', 'restore', 'progress', 'start', 'postUpdate'] as $verb) {
+            $this->assertTrue($employee->can($verb, $own), "employee should hold Task::{$verb} on their own task");
+        }
+
+        $this->assertFalse($employee->can('assign', $own), 'D-15: the employee never assigns');
     }
 
     #[Test]
@@ -236,6 +263,7 @@ final class OwnedPolicyMatrixTest extends TestCase
                 CrmRole::SalesRep->value => ['view', 'create', 'export'],
                 CrmRole::Support->value => ['view', 'create'],
                 CrmRole::ReadOnly->value => ['view'],
+                CrmRole::Employee->value => [],
             ],
             classAbilities: ['viewAny', 'create', 'export', 'deleteAny', 'restoreAny'],
         );
@@ -271,11 +299,13 @@ final class OwnedPolicyMatrixTest extends TestCase
 
         foreach ($this->actors as $role => $actor) {
             $reachesEverything = in_array(CrmRole::from($role), self::ALL_VISIBILITY, true);
+            $reachesInReach = ! in_array(CrmRole::from($role), self::OWN_ONLY_OUTSIDERS, true);
 
             foreach ($recordVerbs as $verb) {
                 $granted = in_array($verb, $grants[$role], true);
+                $holdsInReach = $granted && $reachesInReach;
 
-                $this->assertSame($granted, $actor->can($verb, $inReach), sprintf('%s %s %s in reach', $role, $granted ? 'should hold' : 'must not hold', "{$entity}::{$verb}"));
+                $this->assertSame($holdsInReach, $actor->can($verb, $inReach), sprintf('%s %s %s in reach', $role, $holdsInReach ? 'should hold' : 'must not hold', "{$entity}::{$verb}"));
                 $this->assertSame($granted && $reachesEverything, $actor->can($verb, $outOfReach), sprintf('%s %s %s out of reach', $role, $granted && $reachesEverything ? 'should hold' : 'must not hold', "{$entity}::{$verb}"));
             }
 

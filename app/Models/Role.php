@@ -16,7 +16,7 @@ use Spatie\Permission\Models\Role as SpatieRole;
  * A role with bilingual display names (decisions D-3, D-5).
  *
  * `name` is the machine key used by spatie and by code (CrmRole for the seeded
- * six); name_ar / name_en are what the interface shows. Permission changes are
+ * seven); name_ar / name_en are what the interface shows. Permission changes are
  * audited by RoleService, not here — the pivot is not a model attribute.
  *
  * The roles table is created by spatie's migration under a configurable name,
@@ -54,7 +54,7 @@ final class Role extends SpatieRole
         };
     }
 
-    /** One of the six seeded roles (renaming the key is refused; permissions stay editable). */
+    /** One of the seeded roles (renaming the key is refused; permissions stay editable). */
     public function isSeeded(): bool
     {
         return CrmRole::tryFrom((string) $this->name) !== null;

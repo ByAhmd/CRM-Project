@@ -20,7 +20,9 @@ use Illuminate\Database\Eloquent\Model;
  * One task (decisions A-10, D-14): what it is, how the work is going (the
  * progress log), when it is due, the records it is linked to, who it is
  * assigned to and by whom, how it repeats and who created it. Links to a
- * linked record appear only when the reader may open it.
+ * linked record, and to the first task of its series, appear only when the
+ * reader may open it — an employee (D-15) reads a handed-out task linked to
+ * a lead as plain text, never as a link they would be refused.
  */
 final class TaskInfolist
 {
@@ -125,7 +127,7 @@ final class TaskInfolist
                                 ->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('series.title')
                                 ->label(__('tasks.fields.series'))
-                                ->url(fn (Task $record): ?string => $record->series === null ? null : TaskResource::getUrl('view', ['record' => $record->series]))
+                                ->url(fn (Task $record): ?string => $record->series === null || auth()->user()?->can('view', $record->series) !== true ? null : TaskResource::getUrl('view', ['record' => $record->series]))
                                 ->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('occurrences_count')
                                 ->label(__('tasks.fields.occurrences_count'))

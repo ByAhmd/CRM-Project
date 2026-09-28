@@ -12,6 +12,7 @@ use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\Lead;
+use App\Models\User;
 use App\Support\RecordLabel;
 use Closure;
 use Filament\Forms\Components\Hidden;
@@ -58,6 +59,7 @@ final class SubjectPickers
                 ))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => self::label(LeadResource::getEloquentQuery(), $value))
                 ->rules([self::readableRule(fn (): Builder => LeadResource::getEloquentQuery())])
+                ->visible(fn (): bool => self::canList(Lead::class))
                 ->nullable()
                 ->native(false),
 
@@ -73,6 +75,7 @@ final class SubjectPickers
                 ))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => self::label(ContactResource::getEloquentQuery(), $value))
                 ->rules([self::readableRule(fn (): Builder => ContactResource::getEloquentQuery())])
+                ->visible(fn (): bool => self::canList(Contact::class))
                 ->nullable()
                 ->native(false),
 
@@ -84,6 +87,7 @@ final class SubjectPickers
                 ))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => self::label(AccountResource::getEloquentQuery(), $value))
                 ->rules([self::readableRule(fn (): Builder => AccountResource::getEloquentQuery())])
+                ->visible(fn (): bool => self::canList(Account::class))
                 ->nullable()
                 ->native(false),
 
@@ -95,6 +99,7 @@ final class SubjectPickers
                 ))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => self::label(DealResource::getEloquentQuery(), $value))
                 ->rules([self::readableRule(fn (): Builder => DealResource::getEloquentQuery())])
+                ->visible(fn (): bool => self::canList(Deal::class))
                 ->nullable()
                 ->native(false),
 
@@ -116,6 +121,37 @@ final class SubjectPickers
                     },
                 ]),
         ];
+    }
+
+    /**
+     * Whether the actor may list at least one of the four subject entities —
+     * false for a role outside the sales records (the employee, D-15), whose
+     * form then carries no related-records section at all.
+     */
+    public static function anyAvailable(): bool
+    {
+        foreach ([Lead::class, Contact::class, Account::class, Deal::class] as $model) {
+            if (self::canList($model)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A picker is offered only to an actor who may list its entity: its
+     * options would always be empty otherwise. A hidden picker is not
+     * submitted, so an edit keeps the stored link (TaskService reads the
+     * keys a form leaves out from the stored row).
+     *
+     * @param  class-string<Model>  $model
+     */
+    private static function canList(string $model): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->can('viewAny', $model);
     }
 
     /**

@@ -19,7 +19,8 @@ use Tests\TestCase;
 
 /**
  * The shared tasks board (decision D-14): a deliberately organisation-wide,
- * read-only page. Every holder of `task.view_any` — all six seeded roles —
+ * read-only page. Every holder of `task.view_any` — every seeded role, the
+ * employee (D-15) included —
  * reaches it and sees every user's open tasks and assignees, own/team
  * visibility notwithstanding; a card links to its task page only where the
  * viewer's ordinary `view` policy allows.

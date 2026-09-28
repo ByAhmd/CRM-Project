@@ -13,16 +13,20 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Seeds the permission catalogue and the six default roles (decisions D-3, A-12).
+ * Seeds the permission catalogue and the seven default roles (decisions D-3,
+ * A-12, D-15).
  *
  * Idempotent and safe on every deploy:
  * - every Permission enum case gets a row; rows for keys the code no longer
  *   declares are removed so the Roles screen cannot offer dead permissions;
- * - the six seeded roles are created if missing and their bilingual names
+ * - the seeded roles are created if missing and their bilingual names
  *   refreshed; super_admin always receives every permission;
- * - the other five roles are reset to the matrix ONLY when created. Once a
+ * - the other roles are reset to the matrix ONLY when created. Once a
  *   super admin has edited them in the panel (D-3), their permissions are
- *   theirs — the seeder must not silently undo a runtime decision.
+ *   theirs — the seeder must not silently undo a runtime decision. A role
+ *   added to the matrix later (the employee, D-15) is therefore created
+ *   with its defaults by the next deploy's `db:seed` on an existing
+ *   install, with no data migration.
  */
 final class RolesAndPermissionsSeeder extends Seeder
 {

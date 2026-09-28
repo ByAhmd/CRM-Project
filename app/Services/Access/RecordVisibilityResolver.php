@@ -151,13 +151,25 @@ final class RecordVisibilityResolver
      * pending and deleted users are never offered or accepted as a new
      * owner, a mention or an owner filter value (D-4, D-11).
      *
+     * Only users who may open the entity at all (`{group}.view_any`, through
+     * a role or a direct grant) are offered: a record handed to someone who
+     * cannot read it — an `employee` owning a lead (D-15) — would vanish from
+     * every list, and its assignment notice would never reach them.
+     *
      * @return Builder<User>
      */
     public function assignableUsers(User $user, string $permissionGroup): Builder
     {
+        $viewAny = $permissionGroup.'.view_any';
+
         $query = User::query()
             ->whereNull('deleted_at')
             ->where('status', UserStatus::Active->value)
+            ->where(static function (Builder $holders) use ($viewAny): void {
+                $holders
+                    ->whereHas('permissions', static fn (Builder $permission): Builder => $permission->where($permission->qualifyColumn('name'), $viewAny))
+                    ->orWhereHas('roles.permissions', static fn (Builder $permission): Builder => $permission->where($permission->qualifyColumn('name'), $viewAny));
+            })
             ->orderBy('name');
 
         if ($user->can($permissionGroup.'.view_all')) {

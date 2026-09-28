@@ -157,8 +157,26 @@ final class Dashboard extends BaseDashboard
                             ->native(false),
                     ])
                     ->columns(['md' => 2, 'xl' => 5])
-                    ->columnSpanFull(),
+                    ->columnSpanFull()
+                    ->visible(static fn (): bool => self::filtersApply()),
             ]);
+    }
+
+    /**
+     * Whether any widget the viewer sees reads the filters. The task lists
+     * run on fixed windows, so a viewer who sees only those — the employee
+     * (D-15) — gets neither the filters nor their reset: controls that would
+     * change nothing on the page are not shown.
+     */
+    private static function filtersApply(): bool
+    {
+        foreach ([SalesKpisWidget::class, LeadsByStatusChart::class, PipelineByStageChart::class, RevenueWonByMonthChart::class, StaleDealsWidget::class, ActivityCountsWidget::class] as $widget) {
+            if ($widget::canView()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -212,6 +230,7 @@ final class Dashboard extends BaseDashboard
                 ->label(__('dashboard.filters.reset'))
                 ->icon(Heroicon::OutlinedArrowPath)
                 ->color('gray')
+                ->visible(static fn (): bool => self::filtersApply())
                 ->action(fn () => $this->resetFilters()),
         ];
     }

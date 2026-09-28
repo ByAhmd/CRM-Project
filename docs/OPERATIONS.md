@@ -208,8 +208,8 @@ php artisan app:demo-data --fresh --allow-orphans # remove the demo users even w
 - **Refused in production**: with `APP_ENV=production` it exits 1 before reading or writing anything.
 - Refused while an earlier run is recorded (settings key `demo.registry`) — run `--fresh` first — and when a demo
   e-mail, team name or product code or name is already taken.
-- Creates 8 active demo users — `super_admin@`, `admin@`, `sales_manager@`, `sales_rep@`, `support@`, `read_only@`,
-  plus `sales_manager2@` and `sales_rep2@` for the second team, all `@demo.crm.test` — sharing one random password
+- Creates 9 active demo users — `super_admin@`, `admin@`, `sales_manager@`, `sales_rep@`, `support@`, `read_only@`,
+  `employee@` (D-15), plus `sales_manager2@` and `sales_rep2@` for the second team, all `@demo.crm.test` — sharing one random password
   printed **once** at the end of the run (only its hash is stored). Mail stays off for every demo user. At scale 1 it
   creates 2 teams, 6 products, 19 accounts, 39 contacts, 40 leads, 26 deals and the related tasks, activities, notes,
   attachments and audit rows; the command prints the per-table counts.

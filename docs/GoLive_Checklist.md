@@ -35,7 +35,7 @@ only when that evidence exists in the tree or in the step-12 package reports; ev
 | Item | Evidence | Date | Result | Owner |
 |---|---|---|---|---|
 | Seeded roles equal `RolePermissionMatrix`; the catalogue has no drift | `tests/Feature/Access/RoleSeedingTest.php`, `tests/Feature/Access/PermissionMatrixTest.php` | 2026-09-15 | done | engineer |
-| Every panel page answers each of the six seeded roles as the matrix says | `tests/Feature/QualityPass/Authorisation/RoleMatrixWalkProbeTest.php` | 2026-09-14 | done | engineer |
+| Every panel page answers each of the six seeded roles as the matrix says (seven since D-15, 2026-09-28: the walk now covers `employee`) | `tests/Feature/QualityPass/Authorisation/RoleMatrixWalkProbeTest.php` | 2026-09-14 | done | engineer |
 | Every verb of every owned entity has a positive and a negative answer per role | `tests/Feature/Access/OwnedPolicyMatrixTest.php`, `tests/Feature/QualityPass/Tests/OwnedPolicyVerbMatrixProbeTest.php` | 2026-09-14 | done | engineer |
 | Own / team / all scope on list, edit, bulk and reassignment paths; out-of-scope edit pages answer 404 | `tests/Feature/Access/RecordVisibilityResolverTest.php`, `tests/Feature/QualityPass/Tests/OwnedEntityPanelScopeProbeTest.php`, `tests/Feature/QualityPass/Authorisation/RecordScopeLeakProbeTest.php` | 2026-09-14 | done | engineer |
 | Pickers, relation panels and duplicate warnings never disclose records outside the actor's reach | `tests/Feature/QualityPass/Security/RelationPickerScopeProbeTest.php`, `DuplicateWarningScopeProbeTest.php`, `tests/Feature/QualityPass/Authorisation/DisclosureProbeTest.php` | 2026-09-14 | done | engineer |

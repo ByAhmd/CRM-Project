@@ -14,7 +14,8 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * The shared tasks board (decision D-14): every user's open tasks, grouped by
- * assignee, visible to anyone holding `task.view_any` — all six seeded roles.
+ * assignee, visible to anyone holding `task.view_any` — every seeded role,
+ * the employee (D-15) included.
  *
  * The board is the one page-scoped exception to D-4's own/team visibility:
  * the whole team sees who carries what, deliberately and read-only. All the

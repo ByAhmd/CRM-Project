@@ -24,6 +24,8 @@ use App\Enums\Permission;
  * through RecordVisibilityResolver, so the grant never widens what a role reads.
  * Setting an account's lifecycle type by hand (`account.set_type`) is kept
  * to super admins and admins (D-6); everyone else sees it follow the deals.
+ * The employee (D-15) is the one seeded role outside the sales pipeline: it
+ * works its own tasks and holds no commercial key, so no export either.
  */
 final class RolePermissionMatrix
 {
@@ -39,6 +41,7 @@ final class RolePermissionMatrix
             CrmRole::SalesRep->value => self::salesRep(),
             CrmRole::Support->value => self::support(),
             CrmRole::ReadOnly->value => self::readOnly(),
+            CrmRole::Employee->value => self::employee(),
         ];
     }
 
@@ -178,6 +181,25 @@ final class RolePermissionMatrix
             Permission::EmailTemplateViewAny,
             Permission::ProductViewAny,
             Permission::ReportsView,
+        ];
+    }
+
+    /**
+     * Staff who receive tasks and report on them (D-15): their own tasks at
+     * own scope — personal to-dos, the shared tasks board and the calendar —
+     * and files on the tasks they may open (AttachmentPolicy follows the
+     * subject's `view`, so the grant never reaches a lead or a deal). A task
+     * handed to them stays read-only apart from start / post update /
+     * complete / reopen (D-14 amendment). No sales record, note, report,
+     * export, import, assignment or administration.
+     *
+     * @return list<Permission>
+     */
+    private static function employee(): array
+    {
+        return [
+            Permission::TaskViewAny, Permission::TaskCreate, Permission::TaskUpdate, Permission::TaskDelete,
+            Permission::AttachmentCreate, Permission::AttachmentDownload,
         ];
     }
 }

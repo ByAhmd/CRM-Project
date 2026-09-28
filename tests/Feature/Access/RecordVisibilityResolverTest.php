@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Access;
 
+use App\Enums\Permission;
 use App\Enums\VisibilityLevel;
 use App\Services\Access\RecordVisibilityResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -108,5 +109,28 @@ final class RecordVisibilityResolverTest extends TestCase
 
         $this->assertSame([$member->getKey()], $this->resolver->assignableUsers($member, 'lead')->pluck('id')->all());
         $this->assertContains($outsider->getKey(), $this->resolver->assignableUsers($admin, 'lead')->pluck('id')->all());
+    }
+
+    #[Test]
+    public function assignable_users_are_only_those_who_may_open_the_entity(): void
+    {
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $employee = $this->employee($team);
+        $directViewer = $this->userWithPermissions($team, [Permission::LeadViewAny]);
+        $admin = $this->admin();
+
+        // D-15: an employee holds no lead key, so nobody may hand them a lead.
+        $forAdmin = $this->resolver->assignableUsers($admin, 'lead')->pluck('id')->all();
+        $this->assertNotContains($employee->getKey(), $forAdmin);
+        $this->assertContains($directViewer->getKey(), $forAdmin, 'a direct grant counts like a role grant');
+        $this->assertContains($manager->getKey(), $forAdmin);
+
+        $this->assertNotContains($employee->getKey(), $this->resolver->assignableUsers($manager, 'lead')->pluck('id')->all());
+        $this->assertNotContains($employee->getKey(), $this->resolver->assignableUsers($admin, 'deal')->pluck('id')->all());
+
+        // Tasks are theirs to hold.
+        $this->assertContains($employee->getKey(), $this->resolver->assignableUsers($admin, 'task')->pluck('id')->all());
+        $this->assertSame([$employee->getKey()], $this->resolver->assignableUsers($employee, 'task')->pluck('id')->all());
     }
 }

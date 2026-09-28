@@ -110,12 +110,28 @@ final class PermissionMatrixTest extends TestCase
     {
         // D-13: {entity}.export is granted to every role incl. sales_rep; the
         // exporters apply RecordVisibilityResolver, so the grant never widens reach.
+        // D-15 (2026-09-28): the employee reads no commercial entity, so it exports none.
         foreach (CrmRole::cases() as $role) {
             $user = $this->makeUser($role);
 
             foreach ([Permission::LeadExport, Permission::ContactExport, Permission::AccountExport, Permission::DealExport] as $permission) {
-                $this->assertTrue($user->can($permission->value), "{$role->value} lacks {$permission->value}");
+                $this->assertSame($role !== CrmRole::Employee, $user->can($permission->value), "{$role->value} {$permission->value} contradicts D-13 / D-15");
             }
+        }
+    }
+
+    #[Test]
+    public function the_employee_holds_exactly_its_task_and_attachment_keys(): void
+    {
+        // D-15 (2026-09-28): own tasks, the board and the calendar, files on the tasks it may open — nothing else.
+        $employee = $this->employee();
+        $granted = [
+            Permission::TaskViewAny, Permission::TaskCreate, Permission::TaskUpdate, Permission::TaskDelete,
+            Permission::AttachmentCreate, Permission::AttachmentDownload,
+        ];
+
+        foreach (Permission::cases() as $permission) {
+            $this->assertSame(in_array($permission, $granted, true), $employee->can($permission->value), "employee and {$permission->value}");
         }
     }
 

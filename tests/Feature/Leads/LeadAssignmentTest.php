@@ -125,6 +125,29 @@ final class LeadAssignmentTest extends TestCase
     }
 
     #[Test]
+    public function a_lead_is_never_handed_to_an_employee_who_cannot_open_it(): void
+    {
+        $admin = $this->admin();
+        $rep = $this->salesRep();
+        $employee = $this->employee();
+        $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
+
+        // D-15: the employee holds no lead key, so the panel refuses them as an owner…
+        Livewire::actingAs($admin)
+            ->test(ListLeads::class)
+            ->set('activeTab', 'all')
+            ->callTableAction('assign', $lead, data: ['owner_id' => $employee->getKey()])
+            ->assertHasTableActionErrors(['owner_id']);
+
+        $this->assertSame($rep->getKey(), $lead->refresh()->owner_id);
+        $this->assertSame(0, ActivityLog::query()->where('description', ActivityLogEvent::LeadAssigned->value)->count());
+
+        // …and so does the service.
+        $this->expectException(UnassignableUserException::class);
+        app(RecordAssignmentService::class)->assign($lead, $employee, $admin);
+    }
+
+    #[Test]
     public function a_manager_reassigns_from_the_lead_page(): void
     {
         $team = $this->makeTeam();

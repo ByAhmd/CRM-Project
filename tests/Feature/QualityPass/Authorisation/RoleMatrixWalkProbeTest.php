@@ -52,23 +52,33 @@ use App\Models\Lead;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
 /**
- * Authorisation audit: the page matrix for the six seeded roles, over records
+ * Authorisation audit: the page matrix for the seeded roles, over records
  * the viewer owns, records of their team and records outside their reach,
  * derived from docs/PERMISSIONS.md and RolePermissionMatrix. Every mismatch is
  * collected so one run reports the whole matrix.
+ *
+ * D-15 (2026-09-28): the seventh role, `employee`, joins the walk. It reaches
+ * the dashboard, its tasks (list, view, create, edit of its own), the tasks
+ * board, the calendar and its notification preferences, and is refused every
+ * sales, report, settings, administration, import and export page.
  */
 final class RoleMatrixWalkProbeTest extends TestCase
 {
     use CreatesCrmFixtures;
     use RefreshDatabase;
 
+    /** The six roles that read the sales records (D-15 keeps the employee out of them). */
     private const ALL = ['super_admin', 'admin', 'sales_manager', 'sales_rep', 'support', 'read_only'];
+
+    /** D-15 (2026-09-28): the pages every seeded role reaches, the employee included. */
+    private const EVERYONE = [...self::ALL, 'employee'];
 
     private const COMMERCIAL_WRITERS = ['super_admin', 'admin', 'sales_manager', 'sales_rep'];
 
@@ -103,8 +113,9 @@ final class RoleMatrixWalkProbeTest extends TestCase
                 [DealResource::getUrl('create'), self::COMMERCIAL_WRITERS],
                 [ActivityResource::getUrl('index'), self::ALL],
                 [ActivityResource::getUrl('create'), [...self::COMMERCIAL_WRITERS, 'support']],
-                [TaskResource::getUrl('index'), self::ALL],
-                [TaskResource::getUrl('create'), [...self::COMMERCIAL_WRITERS, 'support']],
+                // D-15 (2026-09-28): the employee lists its tasks and creates its own to-dos.
+                [TaskResource::getUrl('index'), self::EVERYONE],
+                [TaskResource::getUrl('create'), [...self::COMMERCIAL_WRITERS, 'support', 'employee']],
                 [ProductResource::getUrl('index'), self::ALL],
                 [ProductResource::getUrl('create'), self::SETTINGS],
                 [EmailTemplateResource::getUrl('index'), self::ALL],
@@ -126,12 +137,14 @@ final class RoleMatrixWalkProbeTest extends TestCase
                 [ImportResource::getUrl('index'), ['super_admin', 'admin', 'sales_manager']],
                 // D-13: every role may export within its scope, and anyone who may export sees their own runs.
                 [ExportResource::getUrl('index'), self::ALL],
-                [Dashboard::getUrl(), self::ALL],
+                // D-15 (2026-09-28): the employee's pages — dashboard, tasks board, calendar, preferences.
+                [Dashboard::getUrl(), self::EVERYONE],
                 [DealBoard::getUrl(), self::ALL],
-                // D-14 (2026-09-21): the shared tasks board is open to every role holding task.view_any — all six.
-                [TasksBoard::getUrl(), self::ALL],
-                [Calendar::getUrl(), self::ALL],
-                [NotificationPreferences::getUrl(), self::ALL],
+                // D-14 (2026-09-21): the shared tasks board is open to every role holding task.view_any — all seven since D-15.
+                [TasksBoard::getUrl(), self::EVERYONE],
+                [Calendar::getUrl(), self::EVERYONE],
+                [NotificationPreferences::getUrl(), self::EVERYONE],
+                [(string) Filament::getProfileUrl(), self::EVERYONE],
                 [GeneralSettings::getUrl(), self::SETTINGS],
                 [ActivityReportPage::getUrl(), self::ALL],
                 [ConversionFunnelReportPage::getUrl(), self::ALL],
@@ -166,21 +179,25 @@ final class RoleMatrixWalkProbeTest extends TestCase
             CrmRole::SuperAdmin, CrmRole::Admin, CrmRole::Support, CrmRole::ReadOnly => ['own' => true, 'team' => true, 'foreign' => true],
             CrmRole::SalesManager => ['own' => true, 'team' => true, 'foreign' => false],
             CrmRole::SalesRep => ['own' => true, 'team' => false, 'foreign' => false],
+            // D-15 (2026-09-28): own tasks only, whatever the team.
+            CrmRole::Employee => ['own' => true, 'team' => false, 'foreign' => false],
         };
         $writes = in_array($role->value, self::COMMERCIAL_WRITERS, true);
+        // D-15 (2026-09-28): the employee reads no lead, contact, account, deal or activity — not even one it owns.
+        $readsSales = $role !== CrmRole::Employee;
 
         foreach (['own' => $viewer, 'team' => $teammate, 'foreign' => $outsider] as $kind => $owner) {
             $records = [
-                [LeadResource::class, Lead::factory()->create(['owner_id' => $owner->getKey()]), $writes],
-                [ContactResource::class, Contact::factory()->create(['owner_id' => $owner->getKey()]), $writes],
-                [AccountResource::class, Account::factory()->create(['owner_id' => $owner->getKey()]), $writes],
-                [DealResource::class, Deal::factory()->create(['owner_id' => $owner->getKey()]), $writes],
-                [TaskResource::class, Task::factory()->create(['assignee_id' => $owner->getKey(), 'created_by' => $owner->getKey()]), ($role === CrmRole::Support || $writes)],
-                [ActivityResource::class, Activity::factory()->create(['owner_id' => $owner->getKey(), 'lead_id' => Lead::factory()->create(['owner_id' => $owner->getKey()])->getKey()]), null],
+                [LeadResource::class, Lead::factory()->create(['owner_id' => $owner->getKey()]), $writes, $readsSales],
+                [ContactResource::class, Contact::factory()->create(['owner_id' => $owner->getKey()]), $writes, $readsSales],
+                [AccountResource::class, Account::factory()->create(['owner_id' => $owner->getKey()]), $writes, $readsSales],
+                [DealResource::class, Deal::factory()->create(['owner_id' => $owner->getKey()]), $writes, $readsSales],
+                [TaskResource::class, Task::factory()->create(['assignee_id' => $owner->getKey(), 'created_by' => $owner->getKey()]), ($role === CrmRole::Support || $role === CrmRole::Employee || $writes), true],
+                [ActivityResource::class, Activity::factory()->create(['owner_id' => $owner->getKey(), 'lead_id' => Lead::factory()->create(['owner_id' => $owner->getKey()])->getKey()]), null, $readsSales],
             ];
 
-            foreach ($records as [$resource, $record, $mayEdit]) {
-                $visible = $reach[$kind];
+            foreach ($records as [$resource, $record, $mayEdit, $reads]) {
+                $visible = $reach[$kind] && $reads;
                 $this->check($mismatches, $viewer, $role, $resource::getUrl('view', ['record' => $record]), $visible ? 200 : 404, "{$kind} view");
 
                 // Activities are immutable (A-10): they have no edit page.

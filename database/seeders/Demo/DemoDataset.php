@@ -36,6 +36,7 @@ final class DemoDataset
             ['key' => 'sales_rep', 'role' => CrmRole::SalesRep, 'name' => 'نوف الدوسري', 'locale' => 'ar', 'team' => 'riyadh', 'manages' => false],
             ['key' => 'support', 'role' => CrmRole::Support, 'name' => 'Omar Haddad', 'locale' => 'en', 'team' => null, 'manages' => false],
             ['key' => 'read_only', 'role' => CrmRole::ReadOnly, 'name' => 'ريم العتيبي', 'locale' => 'ar', 'team' => null, 'manages' => false],
+            ['key' => 'employee', 'role' => CrmRole::Employee, 'name' => 'سلمان الحربي', 'locale' => 'ar', 'team' => null, 'manages' => false],
             ['key' => 'sales_manager2', 'role' => CrmRole::SalesManager, 'name' => 'Khalid Bakr', 'locale' => 'en', 'team' => 'jeddah', 'manages' => true],
             ['key' => 'sales_rep2', 'role' => CrmRole::SalesRep, 'name' => 'Lina Farouk', 'locale' => 'en', 'team' => 'jeddah', 'manages' => false],
         ];

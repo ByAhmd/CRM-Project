@@ -18,6 +18,7 @@ return [
         'sales_rep' => 'Sales representative',
         'support' => 'Support',
         'read_only' => 'Read only',
+        'employee' => 'Employee',
     ],
 
     'visibility_level' => [

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 /**
  * The subject side of attachments (module row 13).
  *
- * Any entity that can carry files (lead, contact, account, deal) uses this
+ * Any entity that can carry files (lead, contact, account, deal, task) uses this
  * trait and gains the `attachments` relation, newest first. Reading an
  * attachment follows the visibility of the subject; the relation itself
  * carries no scope because the subject was already resolved by its policy.

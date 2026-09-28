@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Enums;
 
 /**
- * The six roles seeded by default (decision A-12).
+ * The seven roles seeded by default (decisions A-12, D-15): the original six
+ * and, since D-15 (2026-09-28), `employee` — staff who receive tasks and
+ * report on them, with no access to the sales records.
  *
  * Roles live in spatie's `roles` table and super admins may add more at runtime
  * (D-3); this enum names only the seeded set so code can refer to them safely.
@@ -20,6 +22,7 @@ enum CrmRole: string
     case SalesRep = 'sales_rep';
     case Support = 'support';
     case ReadOnly = 'read_only';
+    case Employee = 'employee';
 
     public function label(): string
     {

@@ -128,6 +128,11 @@ trait CreatesCrmFixtures
         return $this->makeUser(CrmRole::ReadOnly, ['name' => 'Read Only User'], $team);
     }
 
+    protected function employee(?Team $team = null): User
+    {
+        return $this->makeUser(CrmRole::Employee, ['name' => 'Employee User'], $team);
+    }
+
     protected function makeTeam(string $nameEn = 'Riyadh Team', string $nameAr = 'فريق الرياض', ?User $manager = null): Team
     {
         return Team::factory()->create([

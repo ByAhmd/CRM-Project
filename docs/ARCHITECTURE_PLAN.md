@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-14 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-15 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -97,7 +97,7 @@ A single-organisation (D-2) sales CRM operated from one Filament admin panel.
 | 17 | Filtering | Advanced filters (incl. query builder) and table state (filters, sort, search) persisted per user in the session. Per-user saved views were built in step 9 and **removed on 2026-09-17**: the owner found the three list-page buttons of no use (A-8 amendment in [DECISIONS.md](DECISIONS.md)) |
 | 18 | Import / Export | Import of CSV and of Excel workbooks (`.xlsx`, converted to CSV on upload; `.xls` is not readable and `.ods` is not read faithfully — OpenSpout returns every ODS boolean cell as true — so neither is offered) with column mapping, validation, duplicate handling, failed-rows report, history; CSV/XLSX export of tables and reports; permission-gated |
 | 19 | Notifications | In-app bell (database notifications): assignment, task reminders, overdue, deal stage changes, mentions, import/export completion; mail channel only when a mailer is configured and the user opted in |
-| 20 | Roles & permissions | spatie roles/permissions, six default roles, permission keys per verb (view/create/update/delete/export/import/assign/convert/change stage/manage settings/reports/audit/admin), policies enforced server-side |
+| 20 | Roles & permissions | spatie roles/permissions, seven default roles (the employee added by D-15), permission keys per verb (view/create/update/delete/export/import/assign/convert/change stage/manage settings/reports/audit/admin), policies enforced server-side |
 | 21 | Teams & ownership | Teams, record owner, assignment with history, visibility own/team/all driven by permissions (D-4); reps cannot reassign |
 | 22 | Audit logs | spatie activitylog ledger: create/update/delete diffs, ownership, status/stage, permission and settings changes, login events; read-only UI; retention policy |
 | 23 | Reports | Lead, conversion/funnel, pipeline, sales performance, activity, source performance, win/loss, forecast, task performance; export from every report. The sales-performance report lists an owner only when they have deals open now or won or lost in the period (no all-zero lines), so a rep with nothing in the period sees an empty report |
@@ -179,7 +179,8 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   `RolesAndPermissionsSeeder` (idempotent, `syncPermissions`, cache flushed). A drift test asserts
   the seeded tables equal the matrix; runtime edits through the Roles resource are audited (D-3).
 - `super_admin` is granted every permission explicitly by `RolePermissionMatrix` and the seeder, and the role is locked (no `Gate::before`). Roles: `super_admin`, `admin`, `sales_manager`,
-  `sales_rep`, `support`, `read_only`.
+  `sales_rep`, `support`, `read_only`, and `employee` (D-15, 2026-09-28: own tasks, the tasks board and
+  calendar, files on its tasks; no sales records).
 - Policies: one per model, `Policies\Concerns\ChecksPermissions` gives `viewAny/create/update/delete/
   restore/forceDelete` plus explicit `deleteAny/restoreAny/forceDeleteAny` (Filament grants a missing
   policy method, so they are always defined) and `forceDelete = false`. Record-level checks combine the
@@ -602,6 +603,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-14 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-15 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

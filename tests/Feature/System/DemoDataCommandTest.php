@@ -106,7 +106,8 @@ final class DemoDataCommandTest extends TestCase
 
         // Users: one active demo user per role, a manager at the head of each of the two teams.
         $demoUsers = User::query()->with('roles')->where('email', 'like', '%@demo.crm.test')->get();
-        $this->assertCount(8, $demoUsers);
+        // D-15 (2026-09-28): seven seeded roles, so nine demo users.
+        $this->assertCount(9, $demoUsers);
         $this->assertTrue($demoUsers->every(static fn (User $user): bool => $user->status === UserStatus::Active));
 
         foreach (CrmRole::cases() as $role) {

@@ -18,6 +18,7 @@ return [
         'sales_rep' => 'مندوب مبيعات',
         'support' => 'دعم',
         'read_only' => 'قراءة فقط',
+        'employee' => 'موظف',
     ],
 
     'visibility_level' => [

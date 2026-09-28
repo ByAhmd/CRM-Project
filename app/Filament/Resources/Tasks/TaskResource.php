@@ -16,6 +16,7 @@ use App\Filament\Resources\Tasks\Pages\CreateTask;
 use App\Filament\Resources\Tasks\Pages\EditTask;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Filament\Resources\Tasks\Pages\ViewTask;
+use App\Filament\Resources\Tasks\RelationManagers\TaskAttachmentsRelationManager;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\Tables\TasksTable;
@@ -124,6 +125,14 @@ final class TaskResource extends Resource
     {
         return parent::getRecordRouteBindingEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class]);
+    }
+
+    /** Files on the task (D-15): gated, like every attachments panel, by the task's own `view`. */
+    public static function getRelations(): array
+    {
+        return [
+            TaskAttachmentsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
