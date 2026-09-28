@@ -89,4 +89,26 @@ final class RowMenuTeleportTest extends TestCase
             'a row with an open menu must stack above the sticky header, or the header covers the menu',
         );
     }
+
+    #[Test]
+    public function a_row_whose_menu_is_open_does_not_lift_so_the_container_cannot_clip_its_menu(): void
+    {
+        // The hover lift is a transform, and a transformed row is the containing block of
+        // the menu's fixed-position panel: the menu is then trapped in the row and the
+        // bounded table container cuts off a menu that opened upward (the owner's second
+        // screenshot, 2026-09-28 — the stacking fix alone did not cover it). The open row
+        // drops the transform and its transition, one class stronger than the hover rule,
+        // inside the motion layer's no-preference guard (MotionLayerTest).
+        $css = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
+        $motion = substr($css, (int) strpos($css, '@media (prefers-reduced-motion: no-preference)'));
+
+        $hover = strpos($motion, '.fi-ta-row:hover {');
+        $this->assertNotFalse($hover, 'the motion layer no longer lifts hovered rows — revisit this guard');
+
+        $this->assertSame(1, preg_match(
+            "/\\.fi-ta-table \\.fi-ta-row:has\\(\\[aria-expanded='true'\\]\\) \\{[^}]*?transform:\\s*none;[^}]*?transition:\\s*none;/",
+            substr($motion, $hover),
+            $matches,
+        ), 'a row with an open menu still lifts: its transform traps the menu inside the row, and the table container clips it');
+    }
 }

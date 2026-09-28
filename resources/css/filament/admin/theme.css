@@ -625,6 +625,19 @@ html.dark {
         box-shadow: 0 12px 28px -14px rgba(13, 60, 72, 0.45);
     }
 
+    /* A row whose three-dot menu is open does not lift. A transformed row is
+       the containing block of the menu's fixed-position panel, so the lift
+       trapped the menu inside the row, and the bounded table container cut
+       off a menu that opened upward (the owner's screenshot, 2026-09-28).
+       Without the transform the panel is placed against the viewport and
+       escapes the container. The transition goes too, so the menu is never
+       positioned against a half-finished lift and then left behind. One
+       class stronger than the hover rule above. */
+    .fi-ta-table .fi-ta-row:has([aria-expanded='true']) {
+        transform: none;
+        transition: none;
+    }
+
     /* Buttons feel physical. */
     .fi-btn { transition: transform 0.14s ease, box-shadow 0.2s ease; }
     .fi-btn:hover { transform: translateY(-1px); }
