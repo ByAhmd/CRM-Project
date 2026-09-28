@@ -37,9 +37,9 @@ use Illuminate\Support\Str;
  * activities per batch, and — once per run — notes and the two attachments.
  *
  * - tasks go through TaskService: six open, five overdue, eight completed
- *   (each completion writes a system `task` activity on the record), one a
- *   manager hands to a rep of the team, and one weekly task whose completion
- *   schedules the next occurrence;
+ *   (each completion writes a system `task` activity on the record), one the
+ *   administrator hands to a rep (task assignment is admin-only, D-14), and
+ *   one weekly task whose completion schedules the next occurrence;
  * - sixty activities over the last sixty days go through ActivityRecorder,
  *   which moves each lead's and deal's last activity forward;
  * - notes go through NoteService (one pinned, one naming a colleague, who is
@@ -139,20 +139,20 @@ final class DemoWorkBuilder
         $this->recurringTask($context, $batch);
     }
 
-    /** A to-do the Riyadh manager assigns to the rep of the team (needs task.assign, D-4). */
+    /** A to-do the administrator assigns to the Riyadh rep (task.assign is admin-only, D-14). */
     private function handedOverTask(DemoContext $context, int $batch): void
     {
-        $manager = $context->user('sales_manager');
+        $admin = $context->user('admin');
         $rep = $context->user('sales_rep');
 
-        $task = $context->as($manager, $context->ago(2, $batch), fn (): Task => $this->tasks->create([
+        $task = $context->as($admin, $context->ago(2, $batch), fn (): Task => $this->tasks->create([
             'title' => DemoAccountsBuilder::suffixed('تحديث بيانات العملاء المتوقعين قبل اجتماع الإدارة', $batch),
             'description' => 'التأكد من تواريخ الإغلاق المتوقعة والمبالغ في الصفقات المفتوحة.',
             'kind' => TaskKind::Task,
             'priority' => TaskPriority::High,
             'due_at' => $context->now->copy()->addDays(3)->setTime(13, 0),
             'assignee_id' => $rep->getKey(),
-        ], $manager));
+        ], $admin));
 
         $context->record('tasks', (int) $task->getKey());
     }

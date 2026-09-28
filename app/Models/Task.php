@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Contracts\OwnedRecord;
+use App\Contracts\TracksAssigner;
 use App\Enums\ActivityLogEvent;
 use App\Enums\RecurrenceFrequency;
 use App\Enums\TaskKind;
@@ -39,8 +40,11 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * attribute change reaches the audit ledger through LogsActivity. A
  * recurring task spawns its next occurrence on completion
  * (TaskRecurrence) and every occurrence points at the first task of the
- * series.
+ * series. `assigned_by` remembers who handed the task to its assignee
+ * (D-14): written via forceFill by TaskService and RecordAssignmentService
+ * only, never fillable, and cleared when the task is unassigned.
  *
+ * @property ?int $assigned_by
  * @property TaskKind $kind
  * @property TaskStatus $status
  * @property TaskPriority $priority
@@ -59,7 +63,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'assignee_id', 'lead_id', 'contact_id', 'account_id', 'deal_id',
     'recurrence_frequency', 'recurrence_interval', 'recurrence_ends_at', 'series_id', 'created_by',
 ])]
-final class Task extends Model implements OwnedRecord
+final class Task extends Model implements OwnedRecord, TracksAssigner
 {
     use GuardsWorkflowFields;
     use HasAttachments;
@@ -83,6 +87,12 @@ final class Task extends Model implements OwnedRecord
     public static function ownerColumn(): string
     {
         return 'assignee_id';
+    }
+
+    /** Who handed the task to its assignee (D-14). */
+    public static function assignerColumn(): string
+    {
+        return 'assigned_by';
     }
 
     /**
@@ -149,6 +159,17 @@ final class Task extends Model implements OwnedRecord
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Who handed the task to its current assignee (D-14); null for a task
+     * nobody assigned or one that was unassigned.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function assigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
     }
 
     /**

@@ -250,6 +250,7 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `reminder_sent_at` | DATETIME N | idempotency |
 | `overdue_notified_at` | DATETIME N | |
 | `assignee_id` | FK→users N SET NULL | I |
+| `assigned_by` | FK→users N SET NULL | I; who handed the task to its assignee (D-14), written by the services only |
 | `lead_id` / `contact_id` / `account_id` / `deal_id` | FK N SET NULL | each I |
 | `recurrence_frequency` | enum(`none`,`daily`,`weekly`,`monthly`) CHECK | default `none` |
 | `recurrence_interval` | TINYINT UNSIGNED N | every N units |

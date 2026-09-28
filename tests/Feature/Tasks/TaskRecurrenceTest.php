@@ -97,6 +97,30 @@ final class TaskRecurrenceTest extends TestCase
     }
 
     #[Test]
+    public function every_occurrence_keeps_the_assigner_who_handed_out_the_series(): void
+    {
+        // D-14: the person who handed the series out is told when EACH
+        // occurrence completes — not only the first. Losing `assigned_by` on
+        // the copy would silently redirect that notice to the creator.
+        $admin = $this->admin();
+        $rep = $this->salesRep();
+        $task = Task::factory()
+            ->recurring(RecurrenceFrequency::Weekly)
+            ->create([
+                'assignee_id' => $rep->getKey(),
+                'assigned_by' => $admin->getKey(),
+                'due_at' => Carbon::parse('2026-09-06 09:00:00'),
+            ]);
+
+        $this->service()->complete($task, $rep);
+
+        $next = Task::query()->where('series_id', $task->getKey())->firstOrFail();
+
+        $this->assertSame($admin->getKey(), (int) $next->assigned_by);
+        $this->assertTrue($next->assigner?->is($admin));
+    }
+
+    #[Test]
     public function a_weekly_task_moves_a_week_and_a_task_without_a_due_date_never_repeats(): void
     {
         $rep = $this->salesRep();

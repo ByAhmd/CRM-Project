@@ -166,6 +166,7 @@ return [
         'record_assigned' => 'إسناد سجل إليّ',
         'task_reminder' => 'تذكير بمهمة',
         'task_overdue' => 'تأخر مهمة',
+        'task_completed' => 'إكمال مهمة أسندتها إلى غيري',
         'deal_stage_changed' => 'تغيير مرحلة صفقة أنا مسؤول عنها',
         'deal_closed' => 'الفوز بصفقة أنا مسؤول عنها أو خسارتها',
         'lead_converted' => 'تحويل عميل محتمل أنا مسؤول عنه',

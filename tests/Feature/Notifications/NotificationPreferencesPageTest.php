@@ -69,7 +69,8 @@ final class NotificationPreferencesPageTest extends TestCase
                     ->assertFormFieldExists($event->value.'.mail')
                     ->assertSchemaStateSet([
                         $event->value.'.database' => true,
-                        $event->value.'.mail' => false,
+                        // D-14 (2026-09-21): RecordAssigned mail defaults to ON, everything else stays opt-in.
+                        $event->value.'.mail' => $event === NotificationEvent::RecordAssigned,
                     ]);
             }
         }

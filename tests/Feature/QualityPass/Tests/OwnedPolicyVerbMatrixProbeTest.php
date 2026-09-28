@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\QualityPass\Tests;
 
+use App\Enums\Permission;
 use App\Models\Account;
 use App\Models\Activity;
 use App\Models\Contact;
@@ -163,8 +164,20 @@ final class OwnedPolicyVerbMatrixProbeTest extends TestCase
             'cancel' => [$this->rep],
             'delete' => [$this->rep],
             'restore' => [$this->rep],
-            'assign' => [$this->manager],
         ]);
+
+        // D-14 (2026-09-21): task assignment is admin-only — the positive answer is the
+        // admin's (whose "all" reach covers both records), the negative the manager's.
+        $this->assertTrue($this->admin()->can('assign', $mine));
+        $this->assertFalse($this->manager->can('assign', $mine), 'D-14 (2026-09-21): task assignment is admin-only');
+        $this->assertFalse($this->rep->can('assign', $mine));
+        $this->assertFalse($this->readOnly()->can('assign', $mine));
+
+        // The verb still answers to record scope, as the manager's row proved
+        // before D-14: a role a super admin grants assignment at team level
+        // holds it on the team's task and not on another team's.
+        $teamAssigner = $this->userWithPermissions($this->team, [Permission::TaskViewAny, Permission::TaskViewTeam, Permission::TaskAssign]);
+        $this->assertVerbs($mine, $outside, ['assign' => [$teamAssigner]]);
 
         app(TaskService::class)->cancel($mine, $this->rep);
         $this->assertTrue($this->rep->can('reopen', $mine->refresh()));

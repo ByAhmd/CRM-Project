@@ -166,6 +166,7 @@ return [
         'record_assigned' => 'A record is assigned to me',
         'task_reminder' => 'Task reminder',
         'task_overdue' => 'Task overdue',
+        'task_completed' => 'A task I assigned is completed',
         'deal_stage_changed' => 'A deal of mine changes stage',
         'deal_closed' => 'A deal of mine is won or lost',
         'lead_converted' => 'A lead of mine is converted',

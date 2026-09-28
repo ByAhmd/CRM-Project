@@ -53,6 +53,7 @@ final class PermissionMatrixTest extends TestCase
         $this->assertTrue($manager->can(Permission::DealAssign->value));
         $this->assertTrue($manager->can(Permission::LeadImport->value));
         $this->assertTrue($manager->can(Permission::ActivityAssign->value));
+        $this->assertFalse($manager->can(Permission::TaskAssign->value), 'D-14 (2026-09-21): task assignment is admin-only');
         $this->assertFalse($manager->can(Permission::AccountSetType->value), 'D-6: only admins set the account type by hand');
         $this->assertFalse($manager->can(Permission::UsersManage->value));
         $this->assertFalse($manager->can(Permission::SettingsManage->value));
@@ -100,6 +101,7 @@ final class PermissionMatrixTest extends TestCase
         $this->assertTrue($admin->can(Permission::LeadViewAll->value));
         $this->assertTrue($admin->can(Permission::AccountSetType->value), 'D-6: admins may set the account type manually');
         $this->assertTrue($admin->can(Permission::ActivityAssign->value));
+        $this->assertTrue($admin->can(Permission::TaskAssign->value), 'D-14 (2026-09-21): task assignment is admin-only');
         $this->assertFalse($admin->can(Permission::RolesManage->value));
     }
 

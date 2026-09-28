@@ -46,9 +46,13 @@ final class DealInfolist
                             TextEntry::make('status')
                                 ->label(__('deals.fields.status'))
                                 ->badge(),
+                            // Money is typographically the hero (A-23):
+                            // .crm-amount sets tabular numerals at a heavier
+                            // weight from theme.css.
                             LtrText::entry(TextEntry::make('amount')
                                 ->label(__('deals.fields.amount'))
-                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())),
+                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())
+                                ->extraAttributes(['class' => 'crm-amount'])),
                             TextEntry::make('effective_probability')
                                 ->label(__('deals.fields.effective_probability'))
                                 ->state(fn (Deal $record): int => $record->effective_probability)
@@ -56,7 +60,8 @@ final class DealInfolist
                             LtrText::entry(TextEntry::make('weighted_amount')
                                 ->label(__('deals.fields.weighted_amount'))
                                 ->state(fn (Deal $record): string => $record->weighted_amount)
-                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())),
+                                ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())
+                                ->extraAttributes(['class' => 'crm-amount'])),
                             TextEntry::make('forecast_category')
                                 ->label(__('deals.fields.forecast_category'))
                                 ->badge(),
@@ -146,6 +151,7 @@ final class DealInfolist
                             ->label(__('deals.fields.total'))
                             ->state(fn (Deal $record): string => $record->amount)
                             ->money(currency: fn (Deal $record): string => $record->currency, locale: fn (): string => app()->getLocale())
+                            ->extraAttributes(['class' => 'crm-amount'])
                             ->weight('semibold')),
                     ])
                     ->columns(1)

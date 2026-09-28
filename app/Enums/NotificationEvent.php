@@ -9,13 +9,16 @@ use Filament\Support\Contracts\HasLabel;
 /**
  * The events a user can be notified about (plan section 3.6). One row per
  * user and event in notification_preferences decides the channels; the
- * database channel defaults to on, mail to off (opt-in, CLAUDE.md section 3).
+ * database channel defaults to on, mail to off (opt-in, CLAUDE.md section 3)
+ * except for RecordAssigned, whose mail defaults to on (D-14) — the per-user
+ * opt-out and the real-transport gate (D-10) still apply.
  */
 enum NotificationEvent: string implements HasLabel
 {
     case RecordAssigned = 'record_assigned';
     case TaskReminder = 'task_reminder';
     case TaskOverdue = 'task_overdue';
+    case TaskCompleted = 'task_completed';
     case DealStageChanged = 'deal_stage_changed';
     case DealClosed = 'deal_closed';
     case LeadConverted = 'lead_converted';
@@ -33,9 +36,9 @@ enum NotificationEvent: string implements HasLabel
         return true;
     }
 
-    /** Mail is opt-in for every event. */
+    /** Mail is opt-in for every event except an assignment, which is opt-out (D-14). */
     public function mailByDefault(): bool
     {
-        return false;
+        return $this === self::RecordAssigned;
     }
 }

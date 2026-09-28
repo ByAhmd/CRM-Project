@@ -19,6 +19,7 @@ use App\Filament\Pages\Reports\SourcePerformanceReportPage;
 use App\Filament\Pages\Reports\TaskPerformanceReportPage;
 use App\Filament\Pages\Reports\WinLossReportPage;
 use App\Filament\Pages\Settings\GeneralSettings;
+use App\Filament\Pages\TasksBoard;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Activities\ActivityResource;
 use App\Filament\Resources\ActivityLogs\ActivityLogResource;
@@ -127,6 +128,8 @@ final class RoleMatrixWalkProbeTest extends TestCase
                 [ExportResource::getUrl('index'), self::ALL],
                 [Dashboard::getUrl(), self::ALL],
                 [DealBoard::getUrl(), self::ALL],
+                // D-14 (2026-09-21): the shared tasks board is open to every role holding task.view_any — all six.
+                [TasksBoard::getUrl(), self::ALL],
                 [Calendar::getUrl(), self::ALL],
                 [NotificationPreferences::getUrl(), self::ALL],
                 [GeneralSettings::getUrl(), self::SETTINGS],

@@ -10,6 +10,7 @@ use App\Filament\Exports\AccountExporter;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\InitialsAvatar;
 use App\Filament\Support\LtrText;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
@@ -44,11 +45,16 @@ final class AccountsTable
             // width; industry and owner step in from `md`, phone and tags from
             // `lg`. CSS breakpoints only — the cells stay in the DOM.
             ->columns([
-                TextColumn::make('name')
-                    ->label(__('accounts.fields.name'))
-                    ->searchable()
-                    ->sortable()
-                    ->weight('semibold'),
+                // The initials avatar (A-23) rides inside the name column,
+                // so the phone column budget is untouched.
+                InitialsAvatar::column(
+                    TextColumn::make('name')
+                        ->label(__('accounts.fields.name'))
+                        ->searchable()
+                        ->sortable()
+                        ->weight('semibold'),
+                    'name',
+                ),
 
                 TextColumn::make('type')
                     ->label(__('accounts.fields.type'))

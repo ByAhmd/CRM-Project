@@ -178,6 +178,81 @@ html.dark {
 }
 
 /* ---------------------------------------------------------------------------
+ | Data as hero — the smooth application (A-23)
+ |
+ | The calm, server-rendered essence of «نبض البيانات», asked for by the owner
+ | after living with «فيروز»+«روح»: initials avatars beside the primary names
+ | (InitialsAvatar), the lead score as a real meter (LeadScoreMeter), and
+ | money set heavier in tabular figures on deals. No JavaScript — the markup
+ | arrives through the escape-safe Htmlable affix path — and everything
+ | visual lives here, on tokens. Logical properties throughout, so RTL and
+ | LTR need no exceptions.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    /*
+     | The per-record hue (--crm-avatar-h, 0-359) is derived from the record's
+     | name and set inline by InitialsAvatar; saturation and the two
+     | lightnesses are fixed per theme, so every avatar sits at the same
+     | visual weight and every hue keeps the same figure/ground contrast.
+     */
+    --crm-avatar-s: 42%;
+    --crm-avatar-bg-l: 88%;
+    --crm-avatar-fg-l: 27%;
+}
+
+.dark {
+    --crm-avatar-bg-l: 24%;
+    --crm-avatar-fg-l: 82%;
+}
+
+.crm-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    flex: none;
+    border-radius: 9999px;
+    margin-inline-end: 0.5rem;
+    vertical-align: middle;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background-color: hsl(var(--crm-avatar-h, 197) var(--crm-avatar-s) var(--crm-avatar-bg-l));
+    color: hsl(var(--crm-avatar-h, 197) var(--crm-avatar-s) var(--crm-avatar-fg-l));
+}
+
+/*
+ | The 0-100 score meter. The track sits on the border token; the fill's
+ | inline size and ramp colour arrive inline from LeadScoreMeter, and the
+ | fill grows from inline-start, so the bar reads correctly in both
+ | directions with no [dir] exception.
+ */
+.crm-score-meter {
+    display: inline-block;
+    inline-size: 3rem;
+    block-size: 0.375rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    margin-inline-end: 0.5rem;
+    vertical-align: middle;
+    background-color: var(--crm-border);
+}
+
+.crm-score-meter-fill {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+}
+
+/* Money is typographically the hero on deals (amount columns and entries). */
+.crm-amount {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
  | Calendar (D-12)
  |
  | FullCalendar injects its own base stylesheet from JS and paints from its

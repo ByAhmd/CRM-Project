@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
 authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-13 owner, A-1 … A-22 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-14 owner, A-1 … A-24 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -68,7 +68,8 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
 - Audit: models with business meaning use `LogsActivity` with an explicit `logOnly` whitelist; service events go
   through `Services\Audit\<Domain>ActivityLogger` with an `ActivityLogEvent` case. Secrets never logged.
 - Notifications: Laravel notification classes wrapping Filament's database envelope; `via()` adds `mail` only
-  when a real transport is configured and the user opted in.
+  when a real transport is configured and the user's preference for the event allows it — mail is opt-in by
+  default for every event except `RecordAssigned`, which is opt-out (D-14).
 - Tests: `#[Test]` attribute, snake_case sentence names, `RefreshDatabase` on `crm_testing`,
   `Filament::setCurrentPanel('admin')` before `Livewire::test`, fixtures from `Tests\Concerns\CreatesCrmFixtures`
   (upload bytes from `Tests\Concerns\BuildsUploadBytes`; never copy a helper into a test class), lazy loading prevented
@@ -99,7 +100,9 @@ note required, rule-based scoring with override, convert only from Qualified (D-
 items, SAR, Asia/Riyadh, forecast categories, stage probability with override (D-8) · typed custom fields on
 Lead/Contact/Account/Deal (D-9) · templated email via app mailer, logged as activities, log driver locally
 (D-10) · optional MFA, 12-char passwords, 120-min sessions, invite-only (D-11) · custom kanban and calendar
-pages (D-12) · audit 730 days, soft deletes kept, reps export within scope (D-13).
+pages (D-12) · audit 730 days, soft deletes kept, reps export within scope (D-13) · admin-only task
+assignment, assignment mail default-on, completion notice to the assigner, shared tasks board open to every
+role (D-14).
 
 ## 6. QA checklist before any commit
 

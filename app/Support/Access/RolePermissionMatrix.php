@@ -17,7 +17,9 @@ use App\Enums\Permission;
  *
  * Visibility defaults (D-4): sales_rep sees own records, sales_manager the
  * team's, admin / support / read_only everything. Sales reps may not reassign
- * (no *.assign). Every seeded role exports the four commercial entities
+ * (no *.assign), and task assignment is admin-only (D-14): `task.assign`
+ * belongs to super_admin and admin alone, so a manager works the team's tasks
+ * but never hands them around. Every seeded role exports the four commercial entities
  * (`{entity}.export`) within its own visibility scope (D-13): exporters run
  * through RecordVisibilityResolver, so the grant never widens what a role reads.
  * Setting an account's lifecycle type by hand (`account.set_type`) is kept
@@ -86,8 +88,9 @@ final class RolePermissionMatrix
             Permission::ActivityViewAny, Permission::ActivityViewTeam, Permission::ActivityCreate,
             Permission::ActivityDelete, Permission::ActivityAssign, Permission::ActivityExport,
 
+            // D-14 (2026-09-21): task assignment is admin-only — no Permission::TaskAssign here.
             Permission::TaskViewAny, Permission::TaskViewTeam, Permission::TaskCreate, Permission::TaskUpdate,
-            Permission::TaskDelete, Permission::TaskAssign, Permission::TaskExport,
+            Permission::TaskDelete, Permission::TaskExport,
 
             Permission::NoteCreate, Permission::NoteUpdate, Permission::NoteDelete,
             Permission::AttachmentCreate, Permission::AttachmentDownload, Permission::AttachmentDelete,

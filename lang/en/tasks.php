@@ -112,6 +112,8 @@ return [
         'overdue_body' => 'Your task ":title" was due :due and is still open.',
         'open' => 'Open task',
         'greeting' => 'Hello :name,',
+        'completed_title' => 'Task ":task" completed',
+        'completed_body' => ':by completed the task ":task".',
     ],
 
     'validation' => [
@@ -130,6 +132,26 @@ return [
         'daily' => '{1} Every day|[2,*] Every :count days',
         'weekly' => '{1} Every week|[2,*] Every :count weeks',
         'monthly' => '{1} Every month|[2,*] Every :count months',
+    ],
+
+    'pages' => [
+        'board' => [
+            'navigation' => 'Tasks board',
+            'title' => 'Tasks board',
+            'stats' => [
+                'open' => 'Open',
+                'in_progress' => 'In progress',
+                'overdue' => 'Overdue',
+                'due_today' => 'Due today',
+                'completed_this_week' => 'Completed this week',
+            ],
+            'unassigned' => 'Unassigned',
+            'deleted_assignee' => ':name (deleted account)',
+            'open_count' => '{0} No open tasks|{1} :count open task|[2,*] :count open tasks',
+            'more' => '{0} No more tasks|{1} +:count more task|[2,*] +:count more tasks',
+            'truncated' => 'Only the first :count tasks are shown here; the full list lives under Tasks.',
+            'empty' => 'No open tasks — the whole board is clear.',
+        ],
     ],
 
 ];

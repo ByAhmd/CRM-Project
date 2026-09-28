@@ -199,7 +199,8 @@ final class OwnedPolicyMatrixTest extends TestCase
             [
                 CrmRole::SuperAdmin->value => $full,
                 CrmRole::Admin->value => $full,
-                CrmRole::SalesManager->value => $full,
+                // D-14 (2026-09-21): task assignment is admin-only
+                CrmRole::SalesManager->value => ['view', 'update', 'complete', 'cancel', 'reopen', 'delete', 'restore', 'create', 'export'],
                 // Restoring a task is granted with task.delete (there is no task.restore key).
                 CrmRole::SalesRep->value => ['view', 'update', 'complete', 'cancel', 'reopen', 'delete', 'restore', 'create', 'export'],
                 // Support logs and works tasks everywhere but never deletes, reassigns or exports them.

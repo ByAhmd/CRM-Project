@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-13 and architect decisions A-1 … A-21 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-14 and architect decisions A-1 … A-24 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -201,7 +201,7 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 - Standard pages per resource; record 360 views (`ViewLead`, `ViewAccount`, `ViewDeal`) with tabs:
   overview, timeline, activities, tasks, notes, attachments, related records.
 - Custom pages: `Dashboard` (Filament dashboard with filters form), `DealBoard` (kanban),
-  `Calendar`, `Reports/*`, `Settings/General`.
+  `Calendar`, `TasksBoard` (the shared, organisation-wide tasks board, D-14), `Reports/*`, `Settings/General`.
 - Tables: `defaultSort` on every table (guard test), persisted filters/sort/search in session,
   column manager, list tabs, query-builder filter on the main lists, empty states translated.
 - Light/dark/system: `->darkMode()->themeSwitcher()->defaultThemeMode(ThemeMode::System)`; one Tailwind 4
@@ -236,7 +236,8 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
 
   | Class | Sent by | To | Queued |
   |---|---|---|---|
-  | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record) | the new owner / assignee | no |
+  | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record; `announce()` also for a task created for someone else, D-14), after the change commits | the new owner / assignee | mail yes, bell at once (D-14) |
+  | `TaskCompletedNotification` | `TaskService::complete()`, after the completion commits (D-14) | the assigner, or the creator when no assigner was ever recorded; never the completer, only a recipient who may open the task | mail yes, bell at once |
   | `DealStageChangedNotification` | `DealStageWorkflow` (open-stage move or reopen by someone else) | the deal owner | yes |
   | `DealClosedNotification` | `DealStageWorkflow` (won / lost) | the owner and the owner's team manager, never the actor | yes |
   | `LeadConvertedNotification` | `LeadConversionWorkflow` (after commit, conversion by someone else) | the lead owner | yes |
@@ -252,7 +253,10 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   can sign in (never disabled or pending accounts); a team manager is chosen among the team's active members.
 - Channels: every `via()` except the invitation goes through `App\Support\Notifications\NotificationChannels::for()`:
   `database` unless the user switched the event off; `mail` only when `config('mail.default')` is a real
-  transport (not `log`, `array` or empty) and the user's `notification_preferences` row opts in. No paid provider.
+  transport (not `log`, `array` or empty) and the user's preference for the event allows it — mail is opt-in
+  for every event except `RecordAssigned`, whose mail is on unless the user switched it off (D-14). "Bell at once"
+  in the table: the notification is queued but its `database` channel runs on the sync connection
+  (`viaConnections()`), so only the mail waits for the queue. No paid provider.
 - Queue: `QUEUE_CONNECTION=database`, drained by the scheduler every minute, `sync` in tests. Fixed by D-1
   (shared hosting, no persistent worker).
 - Scheduler (`routes/console.php`; wiring pinned by `tests/Feature/Notifications/SchedulerWiringTest.php` and
@@ -505,7 +509,7 @@ CRM_Project/
 │   │   ├── Concerns/              ScopesQueriesToVisibleRecords, RunsWorkflowActions, ChecksPermission
 │   │   ├── Exports/               LeadExporter, ContactExporter, AccountExporter, DealExporter, ActivityExporter, TaskExporter
 │   │   ├── Imports/               LeadImporter, ContactImporter, AccountImporter, DealImporter
-│   │   ├── Pages/                 Dashboard, DealBoard, Calendar, Settings/GeneralSettings,
+│   │   ├── Pages/                 Dashboard, DealBoard, Calendar, TasksBoard, Settings/GeneralSettings,
 │   │   │   ├── Reports/           LeadReport, ConversionReport, PipelineReport, SalesPerformanceReport, ActivityReport,
 │   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport
 │   │   │   └── Concerns/          HasReportFilters
@@ -526,7 +530,7 @@ CRM_Project/
 │   │                              Activity, Task, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
-│   │                              UserInvitationNotification
+│   │                              TaskCompletedNotification, UserInvitationNotification
 │   ├── Observers/                 LeadObserver, DealObserver, TaskObserver, AttachmentObserver, PipelineStageObserver,
 │   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver
 │   ├── Policies/                  <Model>Policy per model + Concerns/ChecksPermissions
@@ -591,6 +595,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-13 and architect
-decisions A-1 … A-21, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-14 and architect
+decisions A-1 … A-24, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

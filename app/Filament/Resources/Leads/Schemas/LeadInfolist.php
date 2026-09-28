@@ -10,6 +10,7 @@ use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
+use App\Filament\Support\LeadScoreMeter;
 use App\Filament\Support\LtrText;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
@@ -38,11 +39,12 @@ final class LeadInfolist
                                 ->label(__('leads.fields.status'))
                                 ->badge()
                                 ->color(fn (Lead $record): string => (string) ($record->status?->color->value ?? 'gray')),
-                            TextEntry::make('effective_score')
-                                ->label(__('leads.fields.score'))
-                                ->state(fn (Lead $record): int => $record->effective_score)
-                                ->badge()
-                                ->color(fn (Lead $record): string => self::scoreColor($record->effective_score)),
+                            // The score is a real 0-100 meter (A-23), not a bare number.
+                            LeadScoreMeter::entry(
+                                TextEntry::make('effective_score')
+                                    ->label(__('leads.fields.score'))
+                                    ->state(fn (Lead $record): int => $record->effective_score),
+                            ),
                             TextEntry::make('priority')->label(__('leads.fields.priority'))->badge(),
                             TextEntry::make('source.display_name')->label(__('leads.fields.source'))->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('owner.name')->label(__('leads.fields.owner'))->placeholder(__('assignment.placeholders.unassigned')),
@@ -149,14 +151,5 @@ final class LeadInfolist
                     ->collapsible(),
             ])
             ->columns(1);
-    }
-
-    public static function scoreColor(int $score): string
-    {
-        return match (true) {
-            $score >= 70 => 'success',
-            $score >= 40 => 'warning',
-            default => 'gray',
-        };
     }
 }

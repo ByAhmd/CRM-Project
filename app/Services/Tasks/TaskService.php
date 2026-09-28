@@ -16,6 +16,7 @@ use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Task;
 use App\Models\User;
+use App\Notifications\TaskCompletedNotification;
 use App\Services\Access\RecordAssignmentService;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Activities\ActivityRecorder;
@@ -49,7 +50,17 @@ use Spatie\Activitylog\CauserResolver;
  *   of the attribute diff LogsActivity records;
  * - completing a task linked to a record writes a system `task` activity on
  *   that record's timeline (Activity.task_id points back at the task) and
- *   schedules the next occurrence when the task repeats;
+ *   schedules the next occurrence when the task repeats; the assigner — or
+ *   the creator when no assigner was ever recorded — is told the work is
+ *   done (D-14), never the completer themselves and never a recipient who
+ *   may not open the task (A-20);
+ * - a task born with an assignee stamps `assigned_by` with the actor, and a
+ *   task created for someone else tells that assignee exactly as a
+ *   reassignment would (D-14); later changes of the column belong to
+ *   RecordAssignmentService;
+ * - every notification leaves only after the write it reports has committed,
+ *   and its mail through the queue, so a mail server can never fail or undo
+ *   a task write;
  * - the reminder and overdue stamps are re-armed when the dates they belong
  *   to move (a reminder moved after it was sent is sent again) and when a
  *   task is reopened; a deleted task has no transitions until it is restored.
@@ -84,7 +95,21 @@ final class TaskService
                 'series_id' => null,
                 'created_by' => $actor->getKey(),
             ]);
+
+            // A task born with an assignee remembers who assigned it (D-14):
+            // the actor, even for a task they created for themselves. The
+            // column is not fillable — trusted services write it directly.
+            if ($attributes['assignee_id'] !== null) {
+                $task->assigned_by = $actor->getKey();
+            }
+
             $task->save();
+
+            $assignee = $task->assignee;
+
+            if ($assignee !== null) {
+                $this->assignment->announce($task, $assignee, $actor);
+            }
 
             return $task;
         }));
@@ -163,6 +188,8 @@ final class TaskService
                 }
 
                 $this->recurrence->next($current);
+
+                $this->notifyAssignerOfCompletion($current, $actor);
             });
         });
 
@@ -279,6 +306,31 @@ final class TaskService
         }
 
         Task::withoutWorkflowGuard(static fn (): bool => $task->forceFill($stamps)->save());
+    }
+
+    /**
+     * Tells the person who handed the task out that it is done (D-14): the
+     * assigner, or the creator when no assigner was ever recorded (tasks
+     * created before D-14, unassigned tasks). A recorded assigner who has
+     * since been deleted or disabled is not replaced by the creator —
+     * nobody is told, whichever way the assigner left. The completer never
+     * notifies themselves, an account that may no longer sign in receives
+     * nothing (D-11), and — as on every other event path (A-20) — neither
+     * does a recipient who may not open the task: the message carries the
+     * task's title and a view link. The message leaves once the completion
+     * has committed.
+     */
+    private function notifyAssignerOfCompletion(Task $task, User $actor): void
+    {
+        $recipient = $task->assigned_by !== null ? $task->assigner : $task->creator;
+
+        if ($recipient === null || $recipient->is($actor) || ! $recipient->status->canAuthenticate() || ! $recipient->can('view', $task)) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($recipient, $task, $actor): void {
+            $recipient->notify((new TaskCompletedNotification($task, $actor))->locale($recipient->preferredLocale()));
+        });
     }
 
     /**

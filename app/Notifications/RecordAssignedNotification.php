@@ -12,16 +12,31 @@ use App\Support\RecordLabel;
 use App\Support\RecordUrl;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\SerializesModels;
 
 /**
  * "A record was assigned to you" — in-app bell, plus mail when a real mailer
- * is configured (D-10). Not queued: one message per human action.
+ * is configured and the recipient's preference allows it; the mail defaults
+ * on (opt-out, D-14).
+ *
+ * The bell is written at once (the `database` channel runs on the sync
+ * connection) while the mail leaves through the queue the scheduler drains
+ * (D-1): with mail on by default, a bulk assignment would otherwise hold the
+ * request for one SMTP exchange per record, and a mail server that is slow
+ * or down must never fail or undo the assignment itself — a failed message
+ * lands in failed_jobs instead. The sender dispatches it only after the
+ * assignment commits (RecordAssignmentService::announce()).
  */
-final class RecordAssignedNotification extends Notification
+final class RecordAssignedNotification extends Notification implements ShouldQueue
 {
+    use Queueable;
+    use SerializesModels;
+
     public function __construct(
         private readonly Model&OwnedRecord $record,
         private readonly User $assignedBy,
@@ -33,6 +48,14 @@ final class RecordAssignedNotification extends Notification
     public function via(User $notifiable): array
     {
         return NotificationChannels::for($notifiable, NotificationEvent::RecordAssigned);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function viaConnections(): array
+    {
+        return ['database' => 'sync'];
     }
 
     /**

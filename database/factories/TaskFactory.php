@@ -37,6 +37,7 @@ final class TaskFactory extends Factory
             'ends_at' => null,
             'reminder_at' => null,
             'assignee_id' => User::factory(),
+            'assigned_by' => null,
             'lead_id' => null,
             'contact_id' => null,
             'account_id' => null,

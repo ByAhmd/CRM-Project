@@ -445,23 +445,24 @@ final class TaskServiceTest extends TestCase
     }
 
     #[Test]
-    public function a_manager_creates_a_task_for_a_team_member_but_not_for_someone_outside_the_team(): void
+    public function an_admin_creates_a_task_for_someone_else_and_a_manager_no_longer_may(): void // D-14 (2026-09-21): task assignment is admin-only
     {
         $team = $this->makeTeam();
         $manager = $this->salesManager($team);
         $rep = $this->salesRep($team);
-        $stranger = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
+        $admin = $this->admin();
 
-        $task = $this->service()->create(['title' => 'For the rep', 'assignee_id' => $rep->getKey()], $manager);
+        $task = $this->service()->create(['title' => 'For the rep', 'assignee_id' => $rep->getKey()], $admin);
         $this->assertSame($rep->getKey(), (int) $task->assignee_id);
-        $this->assertSame($manager->getKey(), (int) $task->created_by);
+        $this->assertSame($admin->getKey(), (int) $task->created_by);
 
         $this->expectException(UnassignableUserException::class);
 
         try {
-            $this->service()->create(['title' => 'For a stranger', 'owner_id' => $stranger->getKey()], $manager);
+            // D-14 (2026-09-21): task assignment is admin-only — even a team member is refused.
+            $this->service()->create(['title' => 'From the manager', 'owner_id' => $rep->getKey()], $manager);
         } finally {
-            $this->assertSame(0, Task::query()->where('title', 'For a stranger')->count());
+            $this->assertSame(0, Task::query()->where('title', 'From the manager')->count());
         }
     }
 

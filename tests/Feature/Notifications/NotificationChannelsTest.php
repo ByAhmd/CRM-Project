@@ -42,7 +42,7 @@ final class NotificationChannelsTest extends TestCase
     }
 
     #[Test]
-    public function without_a_row_every_event_travels_on_the_bell_only(): void
+    public function without_a_row_every_event_travels_on_the_bell_only_under_the_log_mailer(): void
     {
         $rep = $this->salesRep();
 
@@ -55,8 +55,30 @@ final class NotificationChannelsTest extends TestCase
         $this->assertCount(count(NotificationEvent::cases()), $matrix);
 
         foreach (NotificationEvent::cases() as $event) {
-            $this->assertSame(['database' => true, 'mail' => false], $matrix[$event->value]);
+            // D-14 (2026-09-21): RecordAssigned mail defaults to ON, every other event stays opt-in.
+            $this->assertSame(['database' => true, 'mail' => $event === NotificationEvent::RecordAssigned], $matrix[$event->value], $event->value);
         }
+    }
+
+    #[Test]
+    public function a_record_assignment_mails_by_default_once_a_real_transport_exists(): void
+    {
+        // D-14 (2026-09-21): RecordAssigned mail defaults to ON — no row needed —
+        // while the real-transport gate (D-10) and the per-user opt-out remain.
+        $rep = $this->salesRep();
+
+        config()->set('mail.default', 'smtp');
+        $this->assertSame(['database', 'mail'], NotificationChannels::for($rep, NotificationEvent::RecordAssigned));
+        $this->assertSame(['database'], NotificationChannels::for($rep, NotificationEvent::TaskCompleted), 'the new completion event stays mail-opt-in');
+
+        // The log mailer still silences mail whatever the default says.
+        config()->set('mail.default', 'log');
+        $this->assertSame(['database'], NotificationChannels::for($rep, NotificationEvent::RecordAssigned));
+
+        // An explicit opt-out row beats the default-on.
+        config()->set('mail.default', 'smtp');
+        NotificationPreference::factory()->ofEvent(NotificationEvent::RecordAssigned)->create(['user_id' => $rep->getKey(), 'mail' => false]);
+        $this->assertSame(['database'], NotificationChannels::for($rep, NotificationEvent::RecordAssigned));
     }
 
     #[Test]
@@ -141,7 +163,8 @@ final class NotificationChannelsTest extends TestCase
         $admin = $this->admin();
 
         $this->service()->update($rep, [
-            NotificationEvent::RecordAssigned->value => ['database' => true, 'mail' => false],
+            // D-14 (2026-09-21): mail => true IS the RecordAssigned default now, so this entry stays a no-op.
+            NotificationEvent::RecordAssigned->value => ['database' => true, 'mail' => true],
             NotificationEvent::DealClosed->value => ['database' => false, 'mail' => true],
         ], $admin);
 

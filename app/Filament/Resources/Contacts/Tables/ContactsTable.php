@@ -11,6 +11,7 @@ use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\EmailActions;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\InitialsAvatar;
 use App\Filament\Support\LtrText;
 use App\Filament\Support\MergeActions;
 use App\Filament\Support\OwnershipActions;
@@ -47,12 +48,17 @@ final class ContactsTable
             // and tags from `lg`. CSS breakpoints only — the cells stay in
             // the DOM.
             ->columns([
-                TextColumn::make('full_name')
-                    ->label(__('contacts.fields.name'))
-                    ->state(fn (Contact $record): string => $record->full_name)
-                    ->searchable(['first_name', 'last_name'])
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('last_name', $direction)->orderBy('first_name', $direction))
-                    ->weight('semibold'),
+                // The initials avatar (A-23) rides inside the name column,
+                // so the phone column budget is untouched.
+                InitialsAvatar::column(
+                    TextColumn::make('full_name')
+                        ->label(__('contacts.fields.name'))
+                        ->state(fn (Contact $record): string => $record->full_name)
+                        ->searchable(['first_name', 'last_name'])
+                        ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('last_name', $direction)->orderBy('first_name', $direction))
+                        ->weight('semibold'),
+                    'full_name',
+                ),
 
                 TextColumn::make('account.name')
                     ->label(__('contacts.fields.account'))

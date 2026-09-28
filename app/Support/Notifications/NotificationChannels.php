@@ -14,8 +14,10 @@ use App\Services\Notifications\NotificationPreferenceService;
  * The answer is the user's preference for the event: the in-app bell
  * (database) unless the user switched it off, and mail only when the
  * application has a real transport — never under the log or array mailers —
- * AND the user opted in for the event (mail is off by default). Every
- * notification's via() goes through here, so no class decides on its own.
+ * AND the user's preference for the event allows it (mail defaults to off
+ * for every event except RecordAssigned, which defaults to on — opt-out,
+ * D-14). Every notification's via() goes through here, so no class decides
+ * on its own.
  */
 final class NotificationChannels
 {

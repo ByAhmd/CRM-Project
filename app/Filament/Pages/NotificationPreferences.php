@@ -73,7 +73,7 @@ final class NotificationPreferences extends Page
     {
         return [
             'records' => [NotificationEvent::RecordAssigned],
-            'tasks' => [NotificationEvent::TaskReminder, NotificationEvent::TaskOverdue],
+            'tasks' => [NotificationEvent::TaskReminder, NotificationEvent::TaskOverdue, NotificationEvent::TaskCompleted],
             'deals' => [NotificationEvent::DealStageChanged, NotificationEvent::DealClosed],
             'leads' => [NotificationEvent::LeadConverted, NotificationEvent::LeadStale],
             'notes' => [NotificationEvent::NoteMention],

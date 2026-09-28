@@ -146,18 +146,17 @@ final class TaskResourceTest extends TestCase
     }
 
     #[Test]
-    public function a_manager_reassigns_from_the_edit_form_through_the_owner_field(): void
+    public function an_admin_reassigns_from_the_edit_form_through_the_owner_field(): void // D-14 (2026-09-21): task assignment is admin-only
     {
         Notification::fake();
 
-        $team = $this->makeTeam();
-        $manager = $this->salesManager($team);
-        $rep = $this->salesRep($team);
-        $task = Task::factory()->create(['assignee_id' => $manager->getKey()]);
+        $admin = $this->admin();
+        $rep = $this->salesRep();
+        $task = Task::factory()->create(['assignee_id' => $admin->getKey()]);
 
-        Livewire::actingAs($manager)
+        Livewire::actingAs($admin)
             ->test(EditTask::class, ['record' => $task->getRouteKey()])
-            ->assertFormSet(['owner_id' => $manager->getKey()])
+            ->assertFormSet(['owner_id' => $admin->getKey()])
             ->fillForm(['owner_id' => $rep->getKey()])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -165,7 +164,7 @@ final class TaskResourceTest extends TestCase
         $this->assertSame($rep->getKey(), (int) $task->refresh()->assignee_id);
 
         // The edit is an assignment: ledger row and notice to the new assignee, as the assign action does.
-        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $manager->getKey()]);
+        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $admin->getKey()]);
 
         Notification::assertSentTo($rep, RecordAssignedNotification::class);
     }
@@ -369,17 +368,19 @@ final class TaskResourceTest extends TestCase
     }
 
     #[Test]
-    public function a_manager_assigns_within_the_team_and_a_rep_holds_no_assign_key(): void
+    public function an_admin_assigns_tasks_and_neither_a_manager_nor_a_rep_holds_the_key(): void // D-14 (2026-09-21): task assignment is admin-only
     {
         Notification::fake();
 
         $team = $this->makeTeam();
+        $admin = $this->admin();
         $manager = $this->salesManager($team);
         $rep = $this->salesRep($team);
         $colleague = $this->salesRep($team);
         $task = Task::factory()->create(['assignee_id' => $rep->getKey()]);
 
-        $this->assertTrue($manager->can('assign', $task));
+        $this->assertTrue($admin->can('assign', $task));
+        $this->assertFalse($manager->can('assign', $task), 'D-14 (2026-09-21): task assignment is admin-only');
         $this->assertFalse($rep->can('assign', $task));
 
         Livewire::actingAs($rep)
@@ -389,12 +390,17 @@ final class TaskResourceTest extends TestCase
         Livewire::actingAs($manager)
             ->test(ListTasks::class)
             ->set('activeTab', 'all')
+            ->assertTableActionHidden('assign', $task); // D-14 (2026-09-21): task assignment is admin-only
+
+        Livewire::actingAs($admin)
+            ->test(ListTasks::class)
+            ->set('activeTab', 'all')
             ->assertTableActionVisible('assign', $task)
             ->callTableAction('assign', $task, data: ['owner_id' => $colleague->getKey()])
             ->assertHasNoTableActionErrors();
 
         $this->assertSame($colleague->getKey(), (int) $task->refresh()->assignee_id);
-        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $manager->getKey()]);
+        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $admin->getKey()]);
 
         Notification::assertSentTo($colleague, RecordAssignedNotification::class);
     }

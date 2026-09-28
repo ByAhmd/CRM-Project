@@ -75,10 +75,13 @@ final class DealsTable
                     ->badge()
                     ->sortable(),
 
+                // Money is typographically the hero (A-23): .crm-amount sets
+                // tabular numerals at a heavier weight from theme.css.
                 LtrText::column(
                     TextColumn::make('amount')
                         ->label(__('deals.fields.amount'))
                         ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
+                        ->extraAttributes(['class' => 'crm-amount'])
                         ->sortable(),
                 ),
 
@@ -87,6 +90,7 @@ final class DealsTable
                         ->label(__('deals.fields.weighted_amount'))
                         ->state(fn (Deal $record): string => $record->weighted_amount)
                         ->money(currency: fn (): string => DealResource::currency(), locale: fn (): string => app()->getLocale())
+                        ->extraAttributes(['class' => 'crm-amount'])
                         ->toggleable()
                         ->visibleFrom('lg'),
                 ),

@@ -7,13 +7,14 @@ namespace App\Filament\Resources\Leads\Tables;
 use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Filament\Exports\LeadExporter;
-use App\Filament\Resources\Leads\Schemas\LeadInfolist;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\EmailActions;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\InitialsAvatar;
 use App\Filament\Support\LeadActions;
 use App\Filament\Support\LeadConversionActions;
+use App\Filament\Support\LeadScoreMeter;
 use App\Filament\Support\LtrText;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\QueryBuilderFilters;
@@ -49,12 +50,17 @@ final class LeadsTable
             // The cells stay in the DOM (CSS breakpoints), so nothing rendered
             // or asserted changes — only what a narrow screen shows.
             ->columns([
-                TextColumn::make('full_name')
-                    ->label(__('leads.fields.name'))
-                    ->state(fn (Lead $record): string => $record->full_name)
-                    ->searchable(['first_name', 'last_name'])
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('last_name', $direction)->orderBy('first_name', $direction))
-                    ->weight('semibold'),
+                // The initials avatar (A-23) rides inside the name column,
+                // so the phone column budget is untouched.
+                InitialsAvatar::column(
+                    TextColumn::make('full_name')
+                        ->label(__('leads.fields.name'))
+                        ->state(fn (Lead $record): string => $record->full_name)
+                        ->searchable(['first_name', 'last_name'])
+                        ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('last_name', $direction)->orderBy('first_name', $direction))
+                        ->weight('semibold'),
+                    'full_name',
+                ),
 
                 TextColumn::make('company_name')
                     ->label(__('leads.fields.company_name'))
@@ -70,12 +76,13 @@ final class LeadsTable
                     ->badge()
                     ->color(fn (Lead $record): string => (string) ($record->status?->color->value ?? 'gray')),
 
-                TextColumn::make('effective_score')
-                    ->label(__('leads.fields.score'))
-                    ->state(fn (Lead $record): int => $record->effective_score)
-                    ->badge()
-                    ->color(fn (Lead $record): string => LeadInfolist::scoreColor($record->effective_score))
-                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw('COALESCE(score_override, score) '.($direction === 'desc' ? 'DESC' : 'ASC'))),
+                // The score is a real 0-100 meter (A-23), not a bare number.
+                LeadScoreMeter::column(
+                    TextColumn::make('effective_score')
+                        ->label(__('leads.fields.score'))
+                        ->state(fn (Lead $record): int => $record->effective_score)
+                        ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw('COALESCE(score_override, score) '.($direction === 'desc' ? 'DESC' : 'ASC'))),
+                ),
 
                 TextColumn::make('priority')
                     ->label(__('leads.fields.priority'))

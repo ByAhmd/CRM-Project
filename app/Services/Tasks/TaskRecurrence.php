@@ -19,9 +19,9 @@ use Illuminate\Support\Carbon;
  * amount so a "one hour before" reminder stays one hour before. The series
  * stops once the next due date falls after `recurrence_ends_at`. The new
  * task is a copy of the completed one — same title, kind, priority,
- * assignee, linked records and recurrence settings — pointing at the first
- * task of the series; its creation is audited by LogsActivity as the
- * causer TaskService has set.
+ * assignee, assigner, linked records and recurrence settings — pointing at
+ * the first task of the series; its creation is audited by LogsActivity as
+ * the causer TaskService has set.
  */
 final class TaskRecurrence
 {
@@ -66,6 +66,12 @@ final class TaskRecurrence
             'series_id' => $completed->series_id ?? $completed->getKey(),
             'created_by' => $completed->created_by,
         ]);
+
+        // The occurrence keeps the series' assigner (D-14): completing it
+        // must tell the person who handed the series out, not fall back to
+        // the creator. Guarded column — trusted services write it directly.
+        $next->assigned_by = $completed->assigned_by;
+
         $next->save();
 
         return $next;
