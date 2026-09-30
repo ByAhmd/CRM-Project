@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Listeners\ActivateInvitedUser;
-use App\Listeners\PersistUserLocale;
 use App\Listeners\RecordAuthActivity;
 use App\Models\ActivityLog;
 use App\Models\CustomField;
@@ -14,7 +12,6 @@ use App\Policies\ExportPolicy;
 use App\Policies\ImportPolicy;
 use App\Services\CustomFields\CustomFieldRegistry;
 use App\Services\Leads\LeadScoringService;
-use BezhanSalleh\LanguageSwitch\Events\LocaleChanged;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\Exports\Models\Export as FilamentExport;
@@ -22,7 +19,6 @@ use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import as FilamentImport;
 use Filament\Forms\Components\FileUpload;
 use Filament\Tables\Table;
-use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -53,8 +49,9 @@ final class AppServiceProvider extends ServiceProvider
         $this->configureSecurity();
         $this->configureImportExportAuthorisation();
         $this->registerCustomFieldRegistryFlush();
+        // Listeners in app/Listeners are auto-discovered; registering them here
+        // as well ran every handler twice per event.
         $this->registerAuditing();
-        $this->registerListeners();
         $this->configureLanguageSwitch();
         $this->configureFilamentDefaults();
     }
@@ -118,12 +115,6 @@ final class AppServiceProvider extends ServiceProvider
     {
         ActivityLog::observe(ActivityLogAppendOnlyObserver::class);
         Event::subscribe(RecordAuthActivity::class);
-    }
-
-    private function registerListeners(): void
-    {
-        Event::listen(PasswordReset::class, ActivateInvitedUser::class);
-        Event::listen(LocaleChanged::class, PersistUserLocale::class);
     }
 
     /**
