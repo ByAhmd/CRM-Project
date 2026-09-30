@@ -15,7 +15,10 @@ use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Callout;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\EmbeddedSchema;
+use Filament\Schemas\Components\EmptyState;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
@@ -24,10 +27,13 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * The signed-in user's own notification preferences (plan section 3.6,
- * decision D-10): per event, the in-app bell and mail. Mail toggles are
- * disabled while the installation has no real mailer; the choice is still
- * kept. Every save goes through NotificationPreferenceService, which writes
- * only what changed and audits it on the user.
+ * decisions D-10, D-19): per event, the in-app bell and mail. Only the events
+ * the user can receive are offered — NotificationPreferenceService decides
+ * which — and a section left without an offered event disappears. While the
+ * installation has no real mailer one notice says so above the sections and
+ * the mail toggles are disabled; the choice is still kept. Every save goes
+ * through the service, which writes only what changed for offered events and
+ * audits it on the user.
  *
  * @property-read Schema $form
  */
@@ -41,6 +47,13 @@ final class NotificationPreferences extends Page
      * @var array<string, mixed>|null
      */
     public ?array $data = [];
+
+    /**
+     * The events offered to the signed-in user, computed once per request.
+     *
+     * @var list<NotificationEvent>|null
+     */
+    private ?array $offered = null;
 
     public static function getNavigationGroup(): NavigationGroup
     {
@@ -57,6 +70,11 @@ final class NotificationPreferences extends Page
         return __('notifications.title');
     }
 
+    public function getSubheading(): string
+    {
+        return __('notifications.helpers.intro');
+    }
+
     /** Every signed-in user manages their own preferences; there is nothing else on the page. */
     public static function canAccess(): bool
     {
@@ -64,8 +82,9 @@ final class NotificationPreferences extends Page
     }
 
     /**
-     * The events per section, in display order. Sections are the five areas
-     * of the sidebar the events belong to.
+     * Every event per section, in display order. Sections follow the areas of
+     * the sidebar the events belong to, then the weekly summary and the
+     * system notices.
      *
      * @return array<string, list<NotificationEvent>>
      */
@@ -73,48 +92,77 @@ final class NotificationPreferences extends Page
     {
         return [
             'records' => [NotificationEvent::RecordAssigned],
-            'tasks' => [NotificationEvent::TaskReminder, NotificationEvent::TaskOverdue, NotificationEvent::TaskProgress, NotificationEvent::TaskCompleted],
+            'tasks' => [NotificationEvent::TaskReminder, NotificationEvent::TaskOverdue, NotificationEvent::TaskProgress, NotificationEvent::TaskComment, NotificationEvent::TaskCompleted],
             'deals' => [NotificationEvent::DealStageChanged, NotificationEvent::DealClosed],
             'leads' => [NotificationEvent::LeadConverted, NotificationEvent::LeadStale],
             'notes' => [NotificationEvent::NoteMention],
+            'summaries' => [NotificationEvent::WeeklySummary],
+            'system' => [NotificationEvent::BackupFailed],
         ];
+    }
+
+    /**
+     * The sections shown to this user: each keeps only its offered events,
+     * and a section with none left is dropped.
+     *
+     * @return array<string, list<NotificationEvent>>
+     */
+    private function visibleGroups(): array
+    {
+        $offered = $this->offeredEvents();
+        $visible = [];
+
+        foreach (self::groups() as $group => $events) {
+            $kept = array_values(array_filter(
+                $events,
+                static fn (NotificationEvent $event): bool => in_array($event, $offered, true),
+            ));
+
+            if ($kept !== []) {
+                $visible[$group] = $kept;
+            }
+        }
+
+        return $visible;
     }
 
     public function mount(): void
     {
-        $this->form->fill(app(NotificationPreferenceService::class)->matrixFor($this->user()));
+        $offered = array_flip(array_map(
+            static fn (NotificationEvent $event): string => $event->value,
+            $this->offeredEvents(),
+        ));
+
+        $this->form->fill(array_intersect_key(
+            app(NotificationPreferenceService::class)->matrixFor($this->user()),
+            $offered,
+        ));
     }
 
     public function form(Schema $schema): Schema
     {
         $mailIsConfigured = NotificationChannels::mailIsConfigured();
-        $sections = [];
+        $groups = $this->visibleGroups();
+        $components = [];
 
-        foreach (self::groups() as $group => $events) {
-            $sections[] = Section::make(__('notifications.sections.'.$group))
-                ->schema(array_map(
-                    static fn (NotificationEvent $event): Fieldset => Fieldset::make($event->getLabel())
-                        ->schema([
-                            Toggle::make($event->value.'.database')
-                                ->label(__('notifications.fields.database'))
-                                ->helperText(__('notifications.helpers.database'))
-                                ->inline(false),
+        if ($groups === []) {
+            $components[] = EmptyState::make(__('notifications.empty.heading'))
+                ->description(__('notifications.empty.description'))
+                ->icon(Heroicon::OutlinedBellSlash);
+        }
 
-                            Toggle::make($event->value.'.mail')
-                                ->label(__('notifications.fields.mail'))
-                                ->helperText($mailIsConfigured ? null : __('notifications.helpers.mail_not_configured'))
-                                ->disabled(! $mailIsConfigured)
-                                ->dehydrated()
-                                ->inline(false),
-                        ])
-                        ->columns(2),
-                    $events,
-                ))
-                ->columns(1);
+        if ($groups !== [] && ! $mailIsConfigured) {
+            $components[] = Callout::make(__('notifications.helpers.mail_not_configured_title'))
+                ->description(__('notifications.helpers.mail_not_configured'))
+                ->info();
+        }
+
+        foreach ($groups as $group => $events) {
+            $components[] = $this->section($group, $events, $mailIsConfigured);
         }
 
         return $schema
-            ->components($sections)
+            ->components($components)
             ->columns(1)
             ->statePath('data');
     }
@@ -131,7 +179,8 @@ final class NotificationPreferences extends Page
                             Action::make('save')
                                 ->label(__('notifications.actions.save'))
                                 ->submit('save')
-                                ->keyBindings(['mod+s']),
+                                ->keyBindings(['mod+s'])
+                                ->visible(fn (): bool => $this->offeredEvents() !== []),
                         ])->key('form-actions'),
                     ]),
             ]);
@@ -155,12 +204,62 @@ final class NotificationPreferences extends Page
             ];
         }
 
+        // The service drops every event this user is not offered (D-19).
         app(NotificationPreferenceService::class)->update($user, $matrix, $user);
 
         Notification::make()
             ->title(__('notifications.notifications.saved'))
             ->success()
             ->send();
+    }
+
+    /**
+     * @param  list<NotificationEvent>  $events
+     */
+    private function section(string $group, array $events, bool $mailIsConfigured): Component
+    {
+        return Section::make(__('notifications.sections.'.$group))
+            ->description(__('notifications.helpers.sections.'.$group))
+            ->icon(self::icon($group))
+            ->aside()
+            ->schema(array_map(
+                static fn (NotificationEvent $event): Fieldset => Fieldset::make($event->getLabel())
+                    ->schema([
+                        Toggle::make($event->value.'.database')
+                            ->label(__('notifications.fields.database'))
+                            ->inline(false),
+
+                        Toggle::make($event->value.'.mail')
+                            ->label(__('notifications.fields.mail'))
+                            ->disabled(! $mailIsConfigured)
+                            ->dehydrated()
+                            ->inline(false),
+                    ])
+                    ->columns(2),
+                $events,
+            ))
+            ->columns(1);
+    }
+
+    private static function icon(string $group): Heroicon
+    {
+        return match ($group) {
+            'records' => Heroicon::OutlinedUserPlus,
+            'tasks' => Heroicon::OutlinedCheckCircle,
+            'deals' => Heroicon::OutlinedCurrencyDollar,
+            'leads' => Heroicon::OutlinedFunnel,
+            'notes' => Heroicon::OutlinedAtSymbol,
+            'summaries' => Heroicon::OutlinedChartBar,
+            default => Heroicon::OutlinedServerStack,
+        };
+    }
+
+    /**
+     * @return list<NotificationEvent>
+     */
+    private function offeredEvents(): array
+    {
+        return $this->offered ??= app(NotificationPreferenceService::class)->offeredEvents($this->user());
     }
 
     private function user(): User

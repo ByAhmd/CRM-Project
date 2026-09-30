@@ -6,6 +6,7 @@ namespace App\Services\Notifications;
 
 use App\Enums\ActivityLogEvent;
 use App\Enums\NotificationEvent;
+use App\Enums\Permission;
 use App\Models\NotificationPreference;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
@@ -25,6 +26,12 @@ use InvalidArgumentException;
  * account that may not sign in, otherwise the bell when the preference allows
  * it, mail only when a real transport exists AND the preference — stored, or
  * the event's default — allows it.
+ *
+ * Which events a user is OFFERED on the preferences page (D-19) is decided
+ * here too, from one mapping of event to the permissions its notices depend
+ * on: holding any one of them offers the event. A stored choice for an event
+ * the user is not offered is kept untouched and update() never writes one,
+ * so a user whose role regains the permission finds their old choice again.
  */
 final class NotificationPreferenceService
 {
@@ -93,15 +100,78 @@ final class NotificationPreferenceService
     }
 
     /**
+     * The permissions an event's notices depend on (D-19); holding any one of
+     * them offers the event. The match is exhaustive, so a new event cannot be
+     * added without deciding who may choose its channels.
+     *
+     * @return list<Permission>
+     */
+    public function requiredPermissions(NotificationEvent $event): array
+    {
+        return match ($event) {
+            // Any owned entity the user may open can be handed to them.
+            NotificationEvent::RecordAssigned => [
+                Permission::LeadViewAny, Permission::ContactViewAny, Permission::AccountViewAny,
+                Permission::DealViewAny, Permission::ActivityViewAny, Permission::TaskViewAny,
+            ],
+            NotificationEvent::TaskReminder,
+            NotificationEvent::TaskOverdue,
+            NotificationEvent::TaskCompleted,
+            NotificationEvent::TaskProgress,
+            NotificationEvent::TaskComment => [Permission::TaskViewAny],
+            NotificationEvent::DealStageChanged,
+            NotificationEvent::DealClosed => [Permission::DealViewAny],
+            NotificationEvent::LeadConverted,
+            NotificationEvent::LeadStale => [Permission::LeadViewAny],
+            NotificationEvent::NoteMention => [Permission::NoteCreate],
+            // The weekly summary goes to the people who hand out work (D-18).
+            NotificationEvent::WeeklySummary => [Permission::TaskAssign],
+            // A failed backup is reported to super admins (D-16).
+            NotificationEvent::BackupFailed => [Permission::RolesManage],
+        };
+    }
+
+    public function offers(User $user, NotificationEvent $event): bool
+    {
+        foreach ($this->requiredPermissions($event) as $permission) {
+            if ($user->can($permission->value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The events the user may choose channels for, in the enum's order.
+     *
+     * @return list<NotificationEvent>
+     */
+    public function offeredEvents(User $user): array
+    {
+        return array_values(array_filter(
+            NotificationEvent::cases(),
+            fn (NotificationEvent $event): bool => $this->offers($user, $event),
+        ));
+    }
+
+    /**
      * Stores the given matrix for the user. Every key must be a
      * NotificationEvent value and every entry two booleans; events left out
-     * of the matrix keep what they have.
+     * of the matrix keep what they have, and so do events the user is not
+     * offered (D-19): their keys are dropped, never written, and their stored
+     * rows stay as they are.
      *
      * @param  array<array-key, mixed>  $matrix  event value => ['database' => bool, 'mail' => bool]
      */
     public function update(User $user, array $matrix, User $actor): void
     {
-        $clean = $this->validate($matrix);
+        $offered = array_map(
+            static fn (NotificationEvent $event): string => $event->value,
+            $this->offeredEvents($user),
+        );
+
+        $clean = array_intersect_key($this->validate($matrix), array_flip($offered));
 
         DB::transaction(function () use ($user, $clean, $actor): void {
             $current = $this->matrixFor($user);

@@ -17,8 +17,8 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One task (decisions A-10, D-14): what it is, how the work is going (the
- * progress log), when it is due, the records it is linked to, who it is
+ * One task (decisions A-10, D-14, D-17): what it is, how the work is going
+ * (the thread of progress entries and comments), when it is due, the records it is linked to, who it is
  * assigned to and by whom, how it repeats and who created it. Links to a
  * linked record, and to the first task of its series, appear only when the
  * reader may open it — an employee (D-15) reads a handed-out task linked to
@@ -59,7 +59,7 @@ final class TaskInfolist
                     ])
                     ->columns(1),
 
-                self::progressSection(),
+                self::threadSection(),
 
                 Section::make(__('tasks.sections.schedule'))
                     ->schema([
@@ -163,15 +163,17 @@ final class TaskInfolist
     }
 
     /**
-     * The progress log (D-14 amendment, 2026-09-28): who reported what and
-     * when, newest first — the status the entry moved the task to as a
-     * badge, the author's text as plain text. The log and its authors are
-     * loaded in two queries whatever its length; the reader who may report
-     * on the task but not edit it is told where their actions are.
+     * The thread (D-14 amendment, 2026-09-28; D-17): progress entries and
+     * comments together, newest first — each marked as an update or a
+     * comment, with its author, its time in the organisation's timezone, the
+     * status a progress entry moved the task to as a badge, and the author's
+     * text as plain text. The thread and its authors are loaded in two
+     * queries whatever its length; the reader who may report on the task but
+     * not edit it is told where their actions are.
      */
-    private static function progressSection(): Section
+    private static function threadSection(): Section
     {
-        return Section::make(__('tasks.sections.progress'))
+        return Section::make(__('tasks.sections.thread'))
             ->description(static function (?Model $record): ?string {
                 $user = auth()->user();
 
@@ -183,9 +185,12 @@ final class TaskInfolist
                 RepeatableEntry::make('updates')
                     ->hiddenLabel()
                     ->state(static fn (?Model $record): ?Collection => $record instanceof Task ? $record->loadMissing('updates.author')->updates : null)
-                    ->placeholder(__('tasks.empty.progress'))
+                    ->placeholder(__('tasks.empty.thread'))
                     ->schema([
-                        Grid::make(3)->schema([
+                        Grid::make(4)->schema([
+                            TextEntry::make('kind')
+                                ->label(__('tasks.fields.update_kind'))
+                                ->badge(),
                             TextEntry::make('author_name')
                                 ->label(__('tasks.fields.update_author'))
                                 ->state(static fn (?Model $record): ?string => $record instanceof TaskUpdate ? self::authorName($record) : null),
@@ -198,7 +203,7 @@ final class TaskInfolist
                                 ->visible(static fn (?Model $record): bool => $record instanceof TaskUpdate && $record->status !== null),
                         ]),
                         TextEntry::make('body')
-                            ->label(__('tasks.fields.update_body'))
+                            ->label(static fn (?Model $record): string => $record instanceof TaskUpdate && $record->isComment() ? __('tasks.fields.comment_body') : __('tasks.fields.update_body'))
                             ->extraAttributes(['class' => 'whitespace-pre-line'])
                             ->visible(static fn (?Model $record): bool => $record instanceof TaskUpdate && filled($record->body))
                             ->columnSpanFull(),

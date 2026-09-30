@@ -41,6 +41,18 @@ return [
     // list of IPs / CIDR ranges, preferred whenever the host publishes its proxy addresses.
     'trusted_proxies' => env('CRM_TRUSTED_PROXIES'),
 
+    // D-16: the weekly backup (`crm:backup`, App\Services\System\BackupService). Every set is a
+    // gzip'd mysqldump plus a tar.gz of the private disk, written into its own timestamped folder
+    // under `path` — outside public/ and outside the private disk it archives (the backup refuses
+    // to run otherwise). The newest `keep` sets stay; older ones are deleted after each success.
+    // `mysqldump` is the dump binary: a name on the PATH or an absolute path (MariaDB hosts may
+    // name it mariadb-dump). Null or blank values fall back to the defaults.
+    'backup' => [
+        'path' => env('CRM_BACKUP_PATH') ?: storage_path('app/backups'),
+        'keep' => (int) (env('CRM_BACKUP_KEEP') ?: 8),
+        'mysqldump' => env('CRM_BACKUP_MYSQLDUMP') ?: 'mysqldump',
+    ],
+
     'invitations' => [
         // Minutes an invitation / password-reset link stays valid (Laravel broker default).
         'expire_minutes' => 60,

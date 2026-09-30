@@ -7,7 +7,7 @@ namespace App\Exceptions\Tasks;
 use RuntimeException;
 
 /**
- * A task status change the service refuses (decision A-10).
+ * A task status change — or a comment — the service refuses (decisions A-10, D-17).
  */
 final class InvalidTaskTransitionException extends RuntimeException
 {
@@ -34,5 +34,11 @@ final class InvalidTaskTransitionException extends RuntimeException
     public static function trashed(): self
     {
         return new self(__('tasks.validation.trashed'));
+    }
+
+    /** A deleted task takes no comments until it is restored (D-13, D-17). */
+    public static function commentOnTrashed(): self
+    {
+        return new self(__('tasks.validation.comment_trashed'));
     }
 }

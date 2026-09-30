@@ -18,9 +18,10 @@ use Tests\TestCase;
 
 /**
  * The preferences page (plan section 3.6): every signed-in user reaches it,
- * sees one bell/mail pair per event, saves through the service (rows
- * upserted, change audited) and cannot switch mail on while the
- * installation has no mailer.
+ * sees one bell/mail pair per event they are offered (D-19; which events each
+ * role is offered is pinned in NotificationPreferencesVisibilityTest), saves
+ * through the service (rows upserted, change audited) and cannot switch mail
+ * on while the installation has no mailer.
  */
 final class NotificationPreferencesPageTest extends TestCase
 {
@@ -53,9 +54,10 @@ final class NotificationPreferencesPageTest extends TestCase
     #[Test]
     public function the_form_is_filled_with_the_defaults_and_lists_every_event_once(): void
     {
-        $rep = $this->salesRep();
+        // The super admin holds every permission, so every event is offered.
+        $superAdmin = $this->superAdmin();
 
-        $page = Livewire::actingAs($rep)->test(NotificationPreferences::class);
+        $page = Livewire::actingAs($superAdmin)->test(NotificationPreferences::class);
         $page->assertOk();
 
         $listed = [];
@@ -69,8 +71,9 @@ final class NotificationPreferencesPageTest extends TestCase
                     ->assertFormFieldExists($event->value.'.mail')
                     ->assertSchemaStateSet([
                         $event->value.'.database' => true,
-                        // D-14 (2026-09-21): RecordAssigned mail defaults to ON, everything else stays opt-in.
-                        $event->value.'.mail' => $event === NotificationEvent::RecordAssigned,
+                        // Mail defaults to ON for RecordAssigned (D-14), the weekly summary (D-18)
+                        // and a failed backup (D-16); everything else stays opt-in.
+                        $event->value.'.mail' => in_array($event, [NotificationEvent::RecordAssigned, NotificationEvent::WeeklySummary, NotificationEvent::BackupFailed], true),
                     ]);
             }
         }
@@ -131,7 +134,7 @@ final class NotificationPreferencesPageTest extends TestCase
     #[Test]
     public function the_mail_toggles_are_disabled_while_no_mailer_is_configured(): void
     {
-        $rep = $this->salesRep();
+        $rep = $this->superAdmin();
 
         $page = Livewire::actingAs($rep)->test(NotificationPreferences::class);
 
@@ -141,7 +144,10 @@ final class NotificationPreferencesPageTest extends TestCase
                 ->assertFormFieldEnabled($event->value.'.database');
         }
 
-        $page->assertSee(__('notifications.helpers.mail_not_configured'));
+        // One notice above the sections says so, instead of a hint under every toggle.
+        $page
+            ->assertSee(__('notifications.helpers.mail_not_configured_title'))
+            ->assertSee(__('notifications.helpers.mail_not_configured'));
 
         config()->set('mail.default', 'smtp');
 
@@ -151,7 +157,9 @@ final class NotificationPreferencesPageTest extends TestCase
             $page->assertFormFieldEnabled($event->value.'.mail');
         }
 
-        $page->assertDontSee(__('notifications.helpers.mail_not_configured'));
+        $page
+            ->assertDontSee(__('notifications.helpers.mail_not_configured_title'))
+            ->assertDontSee(__('notifications.helpers.mail_not_configured'));
     }
 
     #[Test]

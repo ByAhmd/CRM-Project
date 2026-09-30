@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\AttachmentDownloadController;
+use App\Http\Controllers\BackupDownloadController;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Illuminate\Support\Facades\Route;
@@ -24,3 +25,14 @@ Route::redirect('/', '/admin/login', 302)->name('root');
 Route::middleware(['web', Authenticate::class, AuthenticateSession::class])
     ->get('/attachments/{attachment}', AttachmentDownloadController::class)
     ->name('attachments.download');
+
+/*
+ | Backup files (decision D-16) live outside the web root and are streamed to
+ | super admins (`roles.manage`) only, behind the same panel middleware. The
+ | set id and the part are constrained to their fixed shapes and resolved
+ | against the listed sets, never used as a path.
+ */
+Route::middleware(['web', Authenticate::class, AuthenticateSession::class])
+    ->get('/backups/{backup}/{file}', BackupDownloadController::class)
+    ->where(['backup' => '[0-9]{8}-[0-9]{6}', 'file' => 'database|files'])
+    ->name('backups.download');

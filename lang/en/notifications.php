@@ -17,6 +17,8 @@ return [
         'deals' => 'Deals',
         'leads' => 'Leads',
         'notes' => 'Notes',
+        'summaries' => 'Weekly summary',
+        'system' => 'System',
     ],
 
     'fields' => [
@@ -25,8 +27,23 @@ return [
     ],
 
     'helpers' => [
-        'database' => 'Shown in the bell at the top of every page.',
+        'intro' => 'Choose, for each notice, whether it appears in the bell at the top of every page and whether it is also sent to you by email. Only the notices your role can receive are listed.',
+        'mail_not_configured_title' => 'Email is not configured yet',
         'mail_not_configured' => 'Email is not configured on this installation; your choice is kept for when it is.',
+        'sections' => [
+            'records' => 'When a record is handed to you.',
+            'tasks' => 'Your tasks, and the tasks you hand out or take part in.',
+            'deals' => 'Changes to the deals you own.',
+            'leads' => 'Changes to the leads you own.',
+            'notes' => 'When someone mentions you in a note.',
+            'summaries' => 'A look back at the week\'s tasks, every Thursday evening.',
+            'system' => 'Problems with the installation that need a super administrator.',
+        ],
+    ],
+
+    'empty' => [
+        'heading' => 'No notices for your role',
+        'description' => 'Your role does not receive any notices yet. When it does, you can choose how they reach you here.',
     ],
 
     'actions' => [

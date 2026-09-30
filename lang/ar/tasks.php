@@ -28,6 +28,8 @@ return [
         'recurrence' => 'التكرار',
         'notes' => 'ملاحظات',
         'progress' => 'سير العمل',
+        'thread' => 'سير العمل والتعليقات',
+        'comment' => 'التعليق',
         'audit' => 'السجل',
     ],
 
@@ -60,6 +62,8 @@ return [
         'update_author' => 'بواسطة',
         'update_status' => 'انتقلت إلى',
         'update_created_at' => 'الوقت',
+        'update_kind' => 'النوع',
+        'comment_body' => 'التعليق',
         'assigned_by' => 'أسندها',
         'created_by' => 'أنشأها',
         'created_at' => 'تاريخ الإنشاء',
@@ -71,6 +75,7 @@ return [
         'description' => 'أي تفاصيل يحتاجها المكلَّف',
         'start_note' => 'كيف تنوي إنجازها، إن كان ذلك يستحق الذكر',
         'update_body' => 'أين وصل العمل، وما الذي أُنجز، وما الذي يعيقه',
+        'comment_body' => 'سؤال أو رد أو ملاحظة لمن يعملون على هذه المهمة',
     ],
 
     'helpers' => [
@@ -80,6 +85,7 @@ return [
         'status_readonly' => 'استخدم إجراءات «بدء» و«إكمال» و«إلغاء» و«إعادة فتح» لتغيير الحالة.',
         'handed_out' => 'أُسندت إليك هذه المهمة: تابِع سيرها بإجراءات «بدء» و«نشر تحديث» و«إكمال»؛ أما تفاصيلها فتبقى لمن أسندها.',
         'update_notifies' => 'يُنبَّه من أسند المهمة.',
+        'comment_notifies' => 'يُنبَّه المشاركون في هذه المهمة.',
         'related' => 'اختياري: اربط المهمة بعميل محتمل أو جهة اتصال أو حساب أو صفقة.',
     ],
 
@@ -100,6 +106,9 @@ return [
         'post_update' => 'نشر تحديث',
         'post_update_heading' => 'نشر تحديث عن سير العمل',
         'post_update_submit' => 'نشر التحديث',
+        'comment' => 'تعليق',
+        'comment_heading' => 'التعليق على المهمة',
+        'comment_submit' => 'نشر التعليق',
         'complete' => 'إكمال',
         'complete_heading' => 'إكمال المهمة',
         'complete_submit' => 'إكمال',
@@ -138,6 +147,9 @@ return [
         'started_body_with_note' => 'بدأ :by العمل على المهمة «:task»: :note',
         'progress_title' => 'تحديث على المهمة «:task»',
         'progress_body' => 'نشر :by تحديثاً على المهمة «:task»: :note',
+        'comment_posted' => 'نُشر التعليق',
+        'comment_title' => 'تعليق جديد على المهمة «:task»',
+        'comment_body' => 'علّق :by على المهمة «:task»: :comment',
     ],
 
     'validation' => [
@@ -146,6 +158,9 @@ return [
         'update_not_open' => 'لا تُنشر التحديثات إلا على مهمة معلقة أو قيد التنفيذ.',
         'update_body_required' => 'اكتب ما الذي حدث في المهمة.',
         'update_body_too_long' => 'لا يجوز أن يتجاوز التحديث :max حرف.',
+        'comment_body_required' => 'اكتب التعليق.',
+        'comment_body_too_long' => 'لا يجوز أن يتجاوز التعليق :max حرف.',
+        'comment_trashed' => 'لا يمكن التعليق على مهمة محذوفة؛ استعدها أولاً.',
         'not_closed' => 'لا يمكن إعادة فتح إلا مهمة مكتملة أو ملغاة.',
         'ends_before_starts' => 'لا يجوز أن تسبق النهاية البداية.',
         'trashed' => 'لا يمكن تغيير حالة مهمة محذوفة؛ استعدها أولاً.',
@@ -154,7 +169,7 @@ return [
     'empty' => [
         'heading' => 'لا توجد مهام بعد',
         'description' => 'أضف أول مهمة أو متابعة لتبقى الخطوة التالية في المتناول.',
-        'progress' => 'لم يُبلَّغ عن أي تقدم بعد.',
+        'thread' => 'لا تحديثات ولا تعليقات بعد.',
         'deleted_author' => 'حساب محذوف',
         'deleted_author_named' => ':name (حساب محذوف)',
     ],

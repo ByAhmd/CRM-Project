@@ -9,7 +9,7 @@ Arabic interface has the same structure. Commands run from the application direc
 Contents: 1 Users · 2 Roles, permissions and teams · 3 Audit ledger · 4 Deleted records · 5 Imports and exports ·
 6 Attachments and disk growth · 7 Queue and failed jobs · 8 Scheduler · 9 Currency and timezone · 10 Lookups,
 custom fields and email templates · 11 Notification preferences · 12 Demo data · 13 Command reference ·
-14 Common preflight failures.
+14 Common preflight failures · 15 Backups · 16 Weekly summary.
 
 ---
 
@@ -109,7 +109,8 @@ Everything lives on the private `local` disk, `storage/app/private` (release fol
 
 Watch the growth monthly over SSH: `du -sh storage/app/private/*` (or the host's disk-usage page). The attachment size
 limit is `CRM_ATTACHMENT_MAX_KB` (10 240 KB by default; Livewire's temporary upload caps any upload at 12 MB). The
-attachments directory is the part of the disk to back up with the database (DEPLOYMENT.md, section 7).
+attachments directory is the part of the disk to back up with the database; the weekly backup archives the whole
+private disk with it (section 15, DEPLOYMENT.md section 7).
 
 ## 7. Queue and failed jobs
 
@@ -184,11 +185,25 @@ All under *Settings* and bilingual: every name has an Arabic and an English valu
 
 ## 11. Notification preferences
 
-*System → Notification preferences*, per user, for themselves: each event (assignments, task reminders and overdue
-notices, deal stage changes and closes, lead conversions, stale leads, mentions) can be switched off for the bell.
-The e-mail choice is kept but only takes effect once a real mail transport is configured (the page says so while the
-log mailer is active). Invitations are always sent by mail. Notifications reach only users who can open the record and
-can sign in.
+*System → Notification preferences*, per user, for themselves: one bell and one e-mail switch per event, in
+sections — **records** (assigned to me), **tasks** (reminder, overdue, progress update, comment, completed), **deals**
+(stage changed, closed), **leads** (converted, stale), **notes** (mentions), **summaries** (the weekly task summary,
+section 16) and **system** (the weekly backup fails, section 15).
+
+- **Only what the user can receive is shown** (D-19). An event is offered only to holders of the permission its
+  notices depend on: assignments, any `*.view_any`; task events, `task.view_any`; deal events, `deal.view_any`; lead
+  events, `lead.view_any`; mentions, `note.create`; the weekly summary, `task.assign`; the backup failure,
+  `roles.manage`. A section with nothing offered disappears, and a user offered nothing sees an empty page. So an
+  `employee` sees only the task events, and a sales rep is not offered the weekly summary or the backup notice —
+  that is the rule working, not a fault.
+- **Hidden choices are kept.** Saving the page never writes or changes the rows of events the user is not offered.
+  If a permission is taken away and later granted again, the user's earlier choice for those events applies again.
+- **Defaults.** The bell is on for every event. Mail is off unless switched on, except for *assigned to me* (D-14),
+  the weekly summary (D-18) and the backup failure (D-16), whose mail is on unless switched off.
+- **Mail transport.** The e-mail choice is kept but only takes effect once a real mail transport is configured; while
+  the log mailer is active the page shows one notice and the mail switches are disabled.
+
+Invitations are always sent by mail. Notifications reach only users who can open the record and can sign in.
 
 ## 12. Demo data
 
@@ -238,6 +253,8 @@ php artisan app:demo-data --fresh --allow-orphans # remove the demo users even w
 | `php artisan tasks:send-reminders` | Task reminders now (scheduled every five minutes; idempotent). |
 | `php artisan tasks:notify-overdue` | Overdue notices now (scheduled every fifteen minutes; idempotent). |
 | `php artisan leads:notify-stale` | Stale-lead notices now (scheduled daily at 07:00; idempotent). |
+| `php artisan crm:backup` | One backup set now (scheduled Thursdays at 22:00); exits 1 when no complete set was written (section 15). |
+| `php artisan crm:weekly-summary` | The weekly summary now (scheduled Thursdays at 22:30); every run sends a fresh copy to every recipient (section 16). |
 | `php artisan schedule:list` / `schedule:run` / `schedule:clear-cache` | Inspect, run or unlock the scheduler (section 8). |
 | `php artisan queue:failed` / `queue:retry` / `queue:forget` | Failed jobs (section 7). |
 | `php artisan db:seed --force` | Recreate missing reference rows and permission keys; never overwrites edits. |
@@ -264,3 +281,61 @@ are the ones a running installation meets.
 | WARN `MAIL_MAILER is "log"` | SMTP not configured yet (D-10). | Configure `MAIL_*`, rebuild caches. |
 | WARN `CRM_TRUSTED_PROXIES is not set` | The proxy setting was never made. Behind the host's TLS-terminating proxy, invitation and password-reset links then answer 403, and everybody shares the sign-in, import and export throttles (they are keyed on the client IP address, which is the proxy's). | Run the `curl … \| grep -i strict-transport-security` check of DEPLOYMENT.md section 3.6; set the host's proxy list (or `*` under its stated condition), rebuild the caches, check again. |
 | WARN `SESSION_LIFETIME is N minutes` | `.env` edited. | `SESSION_LIFETIME=120`, rebuild caches. |
+| WARN `No backup set exists` / `The newest backup set is N days old` | The weekly backup has been failing (the message ends with the recorded failure) or the scheduler stopped. | Section 15. |
+| FAIL `The backup directory … lies under public/` / `… lies inside` | `CRM_BACKUP_PATH` was pointed at the web root or a storage disk. | Unset it or move it outside the web root; rebuild caches (section 15). |
+
+## 15. Backups
+
+The CRM writes one backup set every Thursday at 22:00 (D-16; what a set holds, where it lives and how to restore it:
+DEPLOYMENT.md, section 7). Super admins manage it in *System → Backups* — strictly, every holder of `roles.manage`:
+they see the page, may download sets and receive the failure notice.
+
+- **Look at it weekly.** The page lists the kept sets, newest first, with the time and the size of the database dump,
+  the files archive and both together. A new row every Thursday is the healthy picture. A red box above the list
+  means the last run failed: its reason, and underneath the exact cause in the reader's language (a tool's exit code
+  and error output are shown as the tool wrote them).
+- **Files that change during the archive.** When an upload, an export or a clean-up touches the private disk while
+  `tar` runs, GNU tar warns "file changed as we read it" or "File removed before we read it" and exits 1. The set is
+  kept (the archive is complete apart from that one file) and the warning goes to the log; any other tar message is a
+  failure.
+- **Back up now** before risky work — a large import, a bulk reassignment, a release with data migrations. The run
+  starts within a minute (it is queued for the scheduler's drain); refresh the page to see the set.
+- **Download** *Database* or *Files* on a row to take a copy off the host; every download is written to the audit
+  ledger (*System → Audit log*, event "Backup file downloaded"). Keep downloaded sets as carefully as the live system:
+  they contain every record and every attachment.
+- **Retention.** The newest `CRM_BACKUP_KEEP` sets (8) stay; older sets are deleted after each successful run. A set
+  that should be kept longer must be downloaded. Watch the disk quota (`du -sh storage/app/backups`).
+
+| Symptom | Check | Fix |
+|---|---|---|
+| Bell or e-mail "The backup failed", reason *The database could not be exported* | The detail on the Backups page: `mysqldump exited with code 127` (not found), `Access denied`, a timeout. | `CRM_BACKUP_MYSQLDUMP` = the absolute path of the host's dump binary (`command -v mysqldump mariadb-dump`); check `DB_*`; run `php artisan crm:backup` over SSH and read its output. |
+| Reason *The stored files could not be archived* | `tar exited with code …`, disk quota. | Free space; check that `tar` runs for the cron PHP (`command -v tar`). |
+| Reason *The backup folder is unsafe or cannot be written to* | `CRM_BACKUP_PATH`, its permissions, the quota. | DEPLOYMENT.md sections 3.7 and 7. |
+| No new row since last Thursday, no failure shown | The scheduler (section 8), or the site was in maintenance mode at 22:00 Thursday. | Fix the scheduler, then *Back up now*. |
+| `crm:backup` prints "Another backup run is in progress" | A run (scheduled or *Back up now*) holds the lock; a killed run's lock expires after two hours. | Wait for it; its set appears on the page. |
+
+## 16. Weekly summary
+
+Every Thursday at 22:30, half an hour after the backup, `crm:weekly-summary` sends a summary of the last seven days
+(D-18) to every **active** user who holds `task.assign` (super admins and admins among the seeded roles; a custom role
+with that permission receives it too). Each copy is written in the recipient's language, right to left in Arabic.
+
+- **What it contains.** Tasks completed in the week; open tasks overdue now, oldest due date first; *stalled* tasks —
+  in progress with no progress entry or comment for three days; tasks handed out in the week (created with an assignee
+  other than the person who assigned them); and a table per assignee with open, overdue and completed-this-week
+  counts. The lists show at most 10 tasks and the table at most 20 people, each followed by "… and *n* more". Task
+  titles and assignees are organisation-wide, as on the shared tasks board (D-14); a title links to the task only when
+  the reader may open it.
+- **System health, super admins only** (`roles.manage`): the newest backup set (time and sizes) or the failure of the
+  last run, a warning when the newest set is more than eight days old, the failed queue jobs of the week (the weekly
+  look at `queue:failed`, section 7) and the number of ERROR-or-higher entries in `storage/logs/laravel.log` and the
+  dated `laravel-YYYY-MM-DD.log` files for the week. Only the count is sent, never log contents; at most 16 MB of log
+  is read (newest first), and a larger log is reported as "at least *n*".
+- **Delivery.** The bell entry is written at once and links to the tasks board; the e-mail follows through the next
+  queue drain when a real mailer is configured (DEPLOYMENT.md, section 3.6). Mail is on by default for this event.
+- **Switching it off.** Each recipient chooses under *System → Notification preferences*, event *The weekly task
+  summary*: bell, mail, or neither (section 11). Users without `task.assign` are never sent it and are not offered
+  the choice (D-19). To stop it for everyone, remove the entry from `routes/console.php` in a release.
+- **Timing.** Dates in the summary are in the organisation timezone (*Settings*); the schedule itself runs in
+  `APP_TIMEZONE`. A run by hand (`php artisan crm:weekly-summary`) covers the seven days ending at that moment and
+  sends again to everyone — use it to test mail delivery, not to repeat the week.

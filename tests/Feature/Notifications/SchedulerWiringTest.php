@@ -18,7 +18,7 @@ use Tests\TestCase;
  * The scheduler entries the notification module depends on (decisions D-1,
  * D-13, plan section 3.6): the queue drain, the scheduler heartbeat
  * app:preflight reads, the task passes, the stale-lead pass, the lead
- * rescore, the upload prunes (attachments and Livewire temporary uploads)
+ * rescore, the weekly summary (D-18), the upload prunes (attachments and Livewire temporary uploads)
  * and the audit retention — each pinned to one
  * server, so a deploy cannot silently lose or double one.
  */
@@ -81,6 +81,16 @@ final class SchedulerWiringTest extends TestCase
         $this->assertSame('0 7 * * *', $event->expression);
         $this->assertTrue($event->onOneServer);
         $this->assertSame('Asia/Riyadh', config('app.timezone'));
+        $this->assertSame(config('app.timezone'), $event->timezone);
+    }
+
+    #[Test]
+    public function the_weekly_summary_runs_thursday_at_half_past_ten_after_the_backup_on_one_server(): void
+    {
+        $event = $this->commandEvent('crm:weekly-summary');
+
+        $this->assertSame('30 22 * * 4', $event->expression);
+        $this->assertTrue($event->onOneServer);
         $this->assertSame(config('app.timezone'), $event->timezone);
     }
 

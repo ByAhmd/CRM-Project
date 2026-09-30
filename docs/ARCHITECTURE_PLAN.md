@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-15 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-19 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -244,13 +244,16 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record; `announce()` also for a task created for someone else, D-14), after the change commits | the new owner / assignee | mail yes, bell at once (D-14) |
   | `TaskCompletedNotification` | `TaskService::complete()`, after the completion commits (D-14) | the assigner, or the creator when no assigner was ever recorded; never the completer, only a recipient who may open the task | mail yes, bell at once |
   | `TaskProgressNotification` | `TaskService::start()` and `::postUpdate()`, after the entry commits (D-14 amendment, 2026-09-28; `NotificationEvent::TaskProgress`, bell by default, mail opt-in) | the completion notice's recipient: the assigner, or the creator when no assigner was ever recorded; never the actor, only a recipient who may open the task; the author's text quoted as plain text, cut to 280 characters | mail yes, bell at once |
+  | `TaskCommentNotification` | `TaskService::comment()`, after the comment commits (D-17; `NotificationEvent::TaskComment`, bell by default, mail opt-in) | the task's participants: the assignee, the assigner (or the creator when no assigner was ever recorded) and everyone who commented before; never the author, only an active account that may open the task; the comment quoted as plain text, cut to 280 characters | mail yes, bell at once |
   | `DealStageChangedNotification` | `DealStageWorkflow` (open-stage move or reopen by someone else) | the deal owner | yes |
   | `DealClosedNotification` | `DealStageWorkflow` (won / lost) | the owner and the owner's team manager, never the actor | yes |
   | `LeadConvertedNotification` | `LeadConversionWorkflow` (after commit, conversion by someone else) | the lead owner | yes |
   | `LeadStaleNotification` | `LeadStaleService` through `leads:notify-stale` | the owner of a quiet open lead, once | yes |
+  | `BackupFailedNotification` | `BackupService` when a `crm:backup` run or *Back up now* writes no complete set (D-16; `NotificationEvent::BackupFailed`, bell and mail on by default) | every active holder of `roles.manage` (the super admins; the same permission opens *System → Backups*); the reason translated (`backups.reasons.*`), the exact cause (`backups.details.*`, in the reader's locale) only on *System → Backups* and, in English, in the log | mail yes, bell at once |
   | `NoteMentionNotification` | `NoteService` | every mentioned user except the author | yes |
   | `TaskReminderNotification` | `TaskReminderService` through `tasks:send-reminders` | the assignee, once | no |
   | `TaskOverdueNotification` | `TaskReminderService` through `tasks:notify-overdue` | the assignee, once | no |
+  | `WeeklySummaryNotification` | `WeeklySummary::send()` through `crm:weekly-summary` (D-18; `NotificationEvent::WeeklySummary`, bell by default, mail on by default) | every active user holding `task.assign`, in their locale; the system health part (newest backup or its failure, failed jobs, errors logged) only for holders of `roles.manage`; a listed task links only when the reader's TaskPolicy opens it | mail yes, bell at once |
   | `UserInvitationNotification` | `UserInvitationService` (D-11) | the invited user, mail only | no |
 
   Import and export completion notices are Filament's own database notifications. Templated e-mail (D-10)
@@ -260,9 +263,21 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
 - Channels: every `via()` except the invitation goes through `App\Support\Notifications\NotificationChannels::for()`:
   `database` unless the user switched the event off; `mail` only when `config('mail.default')` is a real
   transport (not `log`, `array` or empty) and the user's preference for the event allows it — mail is opt-in
-  for every event except `RecordAssigned`, whose mail is on unless the user switched it off (D-14). "Bell at once"
+  for every event except `RecordAssigned` (D-14), `WeeklySummary` (D-18) and `BackupFailed` (D-16), whose mail is
+  on unless the user switched it off. "Bell at once"
   in the table: the notification is queued but its `database` channel runs on the sync connection
   (`viaConnections()`), so only the mail waits for the queue. No paid provider.
+- Preferences page (`App\Filament\Pages\NotificationPreferences`, System group, every signed-in user; D-10, D-19):
+  one bell/mail pair per event, grouped into sections: records · tasks (reminder, overdue, progress, comment,
+  completed) · deals · leads · notes · summaries (weekly summary) · system (backup failed). An event is offered only
+  to holders of any permission `NotificationPreferenceService::requiredPermissions()` maps it to: record assigned, any
+  `{lead,contact,account,deal,activity,task}.view_any`; task events, `task.view_any`; deal events, `deal.view_any`;
+  lead events, `lead.view_any`; note mention, `note.create`; weekly summary, `task.assign`; backup failed,
+  `roles.manage`. The `match` is exhaustive, so a new event cannot ship without a rule. Sections with no offered event
+  are hidden, a user offered nothing sees an empty state, and a missing mail transport is shown once as a notice box
+  with the mail toggles disabled (the choice is still kept). `update()` drops keys for events not offered (never
+  written, never audited) and leaves their stored rows untouched. Pinned per seeded role by
+  `tests/Feature/Notifications/NotificationPreferencesVisibilityTest.php`.
 - Queue: `QUEUE_CONNECTION=database`, drained by the scheduler every minute, `sync` in tests. Fixed by D-1
   (shared hosting, no persistent worker).
 - Scheduler (`routes/console.php`; wiring pinned by `tests/Feature/Notifications/SchedulerWiringTest.php` and
@@ -271,13 +286,15 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   | Entry | Cadence | Purpose |
   |---|---|---|
   | `queue:work --stop-when-empty --max-time=50` | every minute, `withoutOverlapping(10)`, skipped when the queue driver is `sync` | drains the database queue (D-1) |
-  | `scheduler:heartbeat` (named closure) | every minute | stores the time under the cache key `scheduler.heartbeat` for ten minutes; `app:preflight` warns when it is missing or older than five minutes (the host's cron is not running `schedule:run`) |
+  | `scheduler:heartbeat` (named closure) | every minute | stores the time under the cache key `scheduler.heartbeat` for ten minutes; `app:preflight` warns when it is missing or older than five minutes, and in production `/up` answers 500 when it is missing, unreadable or older than ten minutes (`FailHealthCheckWithoutSchedulerHeartbeat`, D-16) |
   | `tasks:send-reminders` | every five minutes, `withoutOverlapping(5)` | task reminders, idempotent via `reminder_sent_at` (A-10) |
   | `tasks:notify-overdue` | every fifteen minutes, `withoutOverlapping(5)` | overdue notices, idempotent via `overdue_notified_at` |
   | `leads:notify-stale` | daily at 07:00 (app timezone) | stale-lead notice, idempotent via `stale_notified_at` |
   | `RescoreLeads` (queued job) | daily at 03:00 | recomputes open lead scores in batches of 500 so activity-recency points expire (D-7); unique, `$timeout = 45` so one batch fits one drain |
   | `attachments:prune-temporary` (named closure) | daily | deletes uploads parked under `tmp/` on the attachments disk for more than a day |
   | `uploads:prune-livewire-temporary` (named closure) | daily | deletes Livewire temporary uploads (import files included) older than a day under `livewire.temporary_file_upload.directory` (`livewire-tmp`) on the upload disk; Livewire itself clears them only when the next upload starts (D-13) |
+  | `crm:backup` | weekly, Thursday 22:00 (app timezone), `withoutOverlapping(120)` | one backup set (gzip'd `mysqldump` + tar.gz of the private disk) into `crm.backup.path`, newest `crm.backup.keep` (8) kept; failures reported and notified to `roles.manage` holders; `app:preflight` warns when the newest set is older than 8 days (D-16) |
+  | `crm:weekly-summary` | weekly, Thursday 22:30 (app timezone), after the backup | the weekly summary of the last seven days to every active `task.assign` holder, system health for `roles.manage` holders (D-18) |
   | `activitylog:clean --days=<crm.audit.retention_days> --force` | weekly | audit retention, 730 days by default (D-13) |
   | `queue:prune-failed --hours=168` | weekly | failed jobs older than seven days |
   | `model:prune --model=App\Models\Import --model=App\Models\Export` | daily | import history after `Import::RETENTION_DAYS` (90), export history and files after `Export::RETENTION_DAYS` (30); failed import rows leave with their import through the cascading key |
@@ -290,7 +307,8 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   exhaustive `getDescriptionForEvent`, plus service-written business events through
   `Services/Audit/<Domain>ActivityLogger` with an `ActivityLogEvent` enum (`lead.assigned`,
   `lead.converted`, `deal.stage_changed`, `user.role_changed`, `role.permissions_changed`,
-  `settings.updated`, `auth.login`, `auth.failed`, `attachment.downloaded`, …).
+  `settings.updated`, `auth.login`, `auth.failed`, `attachment.downloaded`, the `backup` log name's
+  `backup.created`, `backup.failed` and `backup.downloaded` (D-16), …).
 - Append-only observer; policy denies update/delete/restore; `audit.view` permission; read-only
   resource with filters (causer, subject, event, date) and a before/after diff modal; retention via
   `activitylog:clean --days=<config>` (default 730).
@@ -477,13 +495,28 @@ Step 13 status (2026-09-15). The runbook is [DEPLOYMENT.md](DEPLOYMENT.md), day-
 - Built: trusted proxies through `CRM_TRUSTED_PROXIES` (`App\Http\Middleware\TrustProxies`, read per request),
   `tests/Feature/System/TrustedProxiesTest.php`.
 - Built: `.github/workflows/ci.yml` (Pint, PHPStan, asset build and PHPUnit on PHP 8.3 + MySQL 8.4).
+- Built: `.github/workflows/uptime.yml` (D-16): every 15 minutes and by hand it requests the site's `/up` (URL from
+  the repository secret `UPTIME_URL`, never printed; without it the run skips with a notice), three attempts about two
+  minutes apart, then fails the run naming the last HTTP status, and GitHub e-mails the failure.
+  `App\Listeners\FailHealthCheckWithoutSchedulerHeartbeat` (a `DiagnosingHealth` listener, found by listener
+  discovery) makes `/up` answer 500 in production when the scheduler heartbeat is missing, unreadable or older than
+  ten minutes, so one check covers "site down" and "scheduler stopped" (`tests/Feature/System/UptimeMonitorTest.php`;
+  runbook `docs/DEPLOYMENT.md` section 9.1). The hourly preflight cron line is optional since.
+- Built: the weekly backup (D-16) — `App\Services\System\BackupService` (+ `BackupSet`, `BackupFailure`,
+  `BackupException`, `BackupInProgressException`), `crm:backup`, the queued `CreateBackup` job (removes its queue row
+  before the run, so a drain never re-offers a long run), *System → Backups* (`App\Filament\Pages\System\Backups`,
+  `roles.manage`; download links open in a new tab, outside SPA navigation), the authorised route `backups.download`
+  (`BackupDownloadController`), `BackupFailedNotification`, audit events `backup.created` / `backup.failed` /
+  `backup.downloaded`; the location guard resolves a not-yet-existing directory through its real parents
+  (`App\Support\System\Paths`) (`tests/Feature/System/BackupTest.php`, `tests/Feature/System/BackupsPageTest.php`).
 - Built: `app:preflight` (`tests/Feature/System/PreflightCommandTest.php`). Fails everywhere on PHP older than 8.3 or a
-  missing required extension, a blank `APP_KEY`, an attachments disk under `public/`, unwritable `storage/app`,
+  missing required extension, a blank `APP_KEY`, an attachments disk under `public/`, a backup directory
+  (`CRM_BACKUP_PATH`) under `public/` or inside the private or public disk (D-16), unwritable `storage/app`,
   `storage/logs` or `bootstrap/cache`, an unreachable or unmigrated database, pending migrations, an incomplete
   permission catalogue, no active super admin and missing reference rows (default lead status, converted status,
   default pipeline and its default stage, system activity types); in production on `APP_DEBUG=true`, a non-https
-  `APP_URL`, `SESSION_SECURE_COOKIE≠true`, a `sync` queue and the `array` cache. Warns on the `log` / `array` mailer
-  and a missing or stale scheduler heartbeat, and in production on `SESSION_LIFETIME≠120`, uncached configuration,
+  `APP_URL`, `SESSION_SECURE_COOKIE≠true`, a `sync` queue and the `array` cache. Warns on the `log` / `array` mailer,
+  a missing or stale scheduler heartbeat and no backup set or a newest set older than eight days (D-16), and in production on `SESSION_LIFETIME≠120`, uncached configuration,
   routes, views or Filament components, and unset trusted proxies. `--json` for scripts.
 - Built: `app:demo-data` (`--force`, `--fresh`, `--scale`), refused in production
   (`tests/Feature/System/DemoDataCommandTest.php`); `.env.example` lists every key the configuration reads
@@ -505,10 +538,11 @@ commands, job, notification, docs and workflow lines are as built (step 13).
 CRM_Project/
 ├── app/
 │   ├── Console/Commands/          OnboardCommand (app:onboard), PreflightCommand (app:preflight), SendTaskReminders (tasks:send-reminders),
-│   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale), DemoDataCommand (app:demo-data)
+│   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale), DemoDataCommand (app:demo-data),
+│   │                              BackupCommand (crm:backup), WeeklySummaryCommand (crm:weekly-summary)
 │   ├── Contracts/                 TranslatableStatus
 │   ├── Enums/                     NavigationGroup, Permission, CrmRole, UserStatus, LeadStatusKind, LeadPriority, StageKind, DealStatus,
-│   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskPriority, RecurrenceFrequency,
+│   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskUpdateKind, TaskPriority, RecurrenceFrequency,
 │   │                              AccountType, CompanySize, CustomFieldType, ActivityLogEvent, NotificationEvent
 │   ├── Exceptions/{Leads,Deals,Tasks,Attachments,Imports,Access}/
 │   ├── Filament/
@@ -516,7 +550,8 @@ CRM_Project/
 │   │   ├── Concerns/              ScopesQueriesToVisibleRecords, RunsWorkflowActions, ChecksPermission
 │   │   ├── Exports/               LeadExporter, ContactExporter, AccountExporter, DealExporter, ActivityExporter, TaskExporter
 │   │   ├── Imports/               LeadImporter, ContactImporter, AccountImporter, DealImporter
-│   │   ├── Pages/                 Dashboard, DealBoard, Calendar, TasksBoard, Settings/GeneralSettings,
+│   │   ├── Pages/                 Dashboard, DealBoard, Calendar, TasksBoard, Settings/GeneralSettings, System/Backups,
+│   │   │                          NotificationPreferences,
 │   │   │   ├── Reports/           LeadReport, ConversionReport, PipelineReport, SalesPerformanceReport, ActivityReport,
 │   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport
 │   │   │   └── Concerns/          HasReportFilters
@@ -527,9 +562,9 @@ CRM_Project/
 │   │   ├── Support/               LeadActions, DealActions, TaskActions, ContactActions, SharedSchemas (address, owner, tags, custom fields)
 │   │   └── Widgets/               SalesKpisWidget, LeadFunnelWidget, PipelineByStageChart, WonRevenueTrendChart, MyTasksTodayWidget,
 │   │                              OverdueTasksWidget, UpcomingFollowUpsWidget, StaleDealsWidget, RecentLeadsWidget, ActivityFeedWidget
-│   ├── Http/Controllers/          AttachmentDownloadController
-│   ├── Jobs/                      RescoreLeads
-│   ├── Listeners/                 ActivateInvitedUser, RecordAuthActivity, PersistUserLocale, RecordLastLogin
+│   ├── Http/Controllers/          AttachmentDownloadController, BackupDownloadController
+│   ├── Jobs/                      RescoreLeads, CreateBackup
+│   ├── Listeners/                 ActivateInvitedUser, RecordAuthActivity, PersistUserLocale, FailHealthCheckWithoutSchedulerHeartbeat
 │   ├── Models/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
@@ -537,7 +572,8 @@ CRM_Project/
 │   │                              Activity, Task, TaskUpdate, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
-│   │                              TaskCompletedNotification, TaskProgressNotification, UserInvitationNotification
+│   │                              TaskCompletedNotification, TaskProgressNotification, TaskCommentNotification, UserInvitationNotification,
+│   │                              WeeklySummaryNotification, BackupFailedNotification
 │   ├── Observers/                 LeadObserver, DealObserver, TaskObserver, AttachmentObserver, PipelineStageObserver,
 │   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver,
 │   │                              TaskUpdateAppendOnlyObserver
@@ -555,12 +591,15 @@ CRM_Project/
 │   │   ├── Notifications/         NotificationDispatcher, ChannelResolver
 │   │   ├── Settings/              SettingsRepository, LookupOrderingService, PipelineService
 │   │   ├── Statistics/            DashboardMetrics, LeadFunnelMetrics, DealAnalytics, ActivityAnalytics, TaskAnalytics, SourceAnalytics, ForecastAnalytics
-│   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome
+│   │   ├── System/                BackupService, BackupSet, BackupFailure, BackupException, BackupInProgressException, LoggedErrorCounter
+│   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome,
+│   │   │                          WeeklySummary (+ WeeklySummaryReport, WeeklySummaryTask, WeeklySummaryAssignee, WeeklySummaryHealth)
 │   │   └── Users/                 UserInvitationService
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
 │       ├── Database/              EnumCheck, DatabaseEngine, TimestampRange
 │       ├── Filament/              FilamentLanguageMenuItems
+│       ├── System/                PlatformRequirements, Paths
 │       ├── Money.php              deal line totals (D-8)
 │       └── PhoneNumber.php        normalisation
 ├── bootstrap/                     app.php, providers.php
@@ -571,16 +610,18 @@ CRM_Project/
 │                                  DEPLOYMENT.md, OPERATIONS.md, Static_Analysis_Known_False_Positives.md; not built: MODULES.md, DESIGN_TOKENS.md
 ├── lang/{ar,en}/                  app, navigation, enums, auth, passwords, validation, pagination, dashboard, leads, contacts, accounts, deals,
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
-│                                  views, imports, reports, activity, notifications
+│                                  views, imports, reports, activity, notifications, backups
 ├── lang/vendor/                   Filament Arabic gap patches
 ├── resources/css/                 filament/admin/theme.css (the panel is the whole front end; no non-panel stylesheet)
 ├── resources/js/                  calendar.js
-├── resources/views/filament/      pages/, widgets/, components/timeline/, activity-log/
+├── resources/views/filament/      pages/ (incl. system/backups), widgets/, components/timeline/, activity-log/
+├── resources/views/mail/          crm-message (D-10), weekly-summary (the markdown mail of D-18)
 ├── routes/                        web.php, console.php
 ├── tests/                         Concerns/, Support/, Feature/{Access,Audit,Leads,Contacts,Accounts,Deals,Activities,Tasks,Attachments,Imports,
 │                                  Views,Search,Filament,Isolation,Qa,Seeders,System,Domain,Statistics,Localization}, Unit/{Services,Deployment}
 ├── tools/                         ramp.mjs (colour ramps)
-├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); deploy.yml (release archive + SSH deploy after green CI on master, or by hand)
+├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); deploy.yml (release archive + SSH deploy after green CI on master, or by hand);
+│                                  uptime.yml (every 15 minutes: /up incl. scheduler heartbeat, D-16)
 ├── CLAUDE.md  README.md  CONTRIBUTING.md
 └── composer.json  package.json  vite.config.js  phpstan.neon.dist  phpunit.xml  .editorconfig  .gitattributes  .env.example  .gitignore
 ```
@@ -603,6 +644,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-15 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-19 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

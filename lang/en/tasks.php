@@ -28,6 +28,8 @@ return [
         'recurrence' => 'Recurrence',
         'notes' => 'Notes',
         'progress' => 'Progress',
+        'thread' => 'Progress and comments',
+        'comment' => 'Comment',
         'audit' => 'History',
     ],
 
@@ -60,6 +62,8 @@ return [
         'update_author' => 'By',
         'update_status' => 'Moved to',
         'update_created_at' => 'When',
+        'update_kind' => 'Type',
+        'comment_body' => 'Comment',
         'assigned_by' => 'Assigned by',
         'created_by' => 'Created by',
         'created_at' => 'Created',
@@ -71,6 +75,7 @@ return [
         'description' => 'Anything the assignee should know',
         'start_note' => 'How you plan to go about it, if worth saying',
         'update_body' => 'Where the work stands, what was done, what is blocking it',
+        'comment_body' => 'A question, an answer or a remark for the people on this task',
     ],
 
     'helpers' => [
@@ -80,6 +85,7 @@ return [
         'status_readonly' => 'Use the "Start", "Complete", "Cancel" and "Reopen" actions to change the status.',
         'handed_out' => 'This task was assigned to you: report on it with "Start", "Post update" and "Complete"; its details stay with whoever assigned it.',
         'update_notifies' => 'Whoever assigned the task is notified.',
+        'comment_notifies' => 'The people taking part in this task are notified.',
         'related' => 'Optional: link the task to a lead, a contact, an account or a deal.',
     ],
 
@@ -100,6 +106,9 @@ return [
         'post_update' => 'Post update',
         'post_update_heading' => 'Post a progress update',
         'post_update_submit' => 'Post update',
+        'comment' => 'Comment',
+        'comment_heading' => 'Comment on the task',
+        'comment_submit' => 'Post comment',
         'complete' => 'Complete',
         'complete_heading' => 'Complete task',
         'complete_submit' => 'Complete',
@@ -138,6 +147,9 @@ return [
         'started_body_with_note' => ':by started the task ":task": :note',
         'progress_title' => 'Progress on ":task"',
         'progress_body' => ':by posted an update on ":task": :note',
+        'comment_posted' => 'Comment posted',
+        'comment_title' => 'New comment on ":task"',
+        'comment_body' => ':by commented on ":task": :comment',
     ],
 
     'validation' => [
@@ -146,6 +158,9 @@ return [
         'update_not_open' => 'Updates can be posted only on a pending or in-progress task.',
         'update_body_required' => 'Write what happened with the task.',
         'update_body_too_long' => 'An update may be at most :max characters.',
+        'comment_body_required' => 'Write the comment.',
+        'comment_body_too_long' => 'A comment may be at most :max characters.',
+        'comment_trashed' => 'A deleted task takes no comments; restore it first.',
         'not_closed' => 'Only a completed or cancelled task can be reopened.',
         'ends_before_starts' => 'The end must not come before the start.',
         'trashed' => 'A deleted task cannot change status; restore it first.',
@@ -154,7 +169,7 @@ return [
     'empty' => [
         'heading' => 'No tasks yet',
         'description' => 'Add the first task or follow-up to keep the next step in sight.',
-        'progress' => 'No progress reported yet.',
+        'thread' => 'No updates or comments yet.',
         'deleted_author' => 'Deleted account',
         'deleted_author_named' => ':name (deleted account)',
     ],

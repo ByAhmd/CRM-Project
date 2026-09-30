@@ -15,6 +15,8 @@ use App\Models\LeadStatus;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\User;
+use App\Services\System\BackupService;
+use App\Support\System\Paths;
 use App\Support\System\PlatformRequirements;
 use Filament\Facades\Filament;
 use Illuminate\Console\Command;
@@ -35,8 +37,9 @@ use Throwable;
  * - everywhere: PHP older than 8.3 or a required extension missing
  *   (PlatformRequirements); a blank APP_KEY; the attachments disk rooted
  *   under public/ (private files would be downloadable without the
- *   authorised route, D-13); storage/app, storage/logs or bootstrap/cache
- *   not writable; a database that is unreachable, has pending migrations or
+ *   authorised route, D-13); the backup directory (CRM_BACKUP_PATH) under
+ *   public/ or inside the private or public disk (D-16);
+ *   storage/app, storage/logs or bootstrap/cache not writable; a database that is unreachable, has pending migrations or
  *   lacks what the CRM needs to run — the permission catalogue (one row per
  *   App\Enums\Permission case), an active super admin, a default lead status
  *   and the Converted status, a default pipeline with a default stage, one
@@ -47,8 +50,10 @@ use Throwable;
  *
  * WARNINGS (exit 0): degraded-but-operable states the operator should know
  * about — everywhere: the log or array mailer (D-10 allows it until
- * production SMTP exists) and a scheduler heartbeat missing or older than
- * five minutes (the host's cron is not running `schedule:run`); in
+ * production SMTP exists), a scheduler heartbeat missing or older than
+ * five minutes (the host's cron is not running `schedule:run`) and no
+ * backup set, or a newest set older than eight days (the weekly
+ * `crm:backup` is failing or not running, D-16); in
  * production: SESSION_LIFETIME other than 120 (D-11), configuration, routes,
  * views or Filament components not cached, and no trusted proxies configured
  * (behind the host's proxy, HTTPS detection, secure cookies and client IPs
@@ -71,7 +76,7 @@ final class PreflightCommand extends Command
 
     protected $description = 'Verify production configuration and reference data before the site leaves maintenance mode';
 
-    public function handle(PlatformRequirements $platform): int
+    public function handle(PlatformRequirements $platform, BackupService $backups): int
     {
         $production = $this->laravel->environment('production');
         $failures = [];
@@ -88,7 +93,7 @@ final class PreflightCommand extends Command
             array_push($warnings, ...$this->productionWarnings());
         }
 
-        array_push($failures, ...$this->filesystemFailures());
+        array_push($failures, ...$this->filesystemFailures($backups));
         array_push($failures, ...$this->databaseFailures());
 
         if (in_array(config('mail.default'), ['log', 'array'], true)) {
@@ -100,6 +105,10 @@ final class PreflightCommand extends Command
 
         if (($heartbeat = $this->heartbeatWarning()) !== null) {
             $warnings[] = $heartbeat;
+        }
+
+        if (($backup = $this->backupWarning($backups)) !== null) {
+            $warnings[] = $backup;
         }
 
         return $this->report($failures, $warnings);
@@ -246,7 +255,7 @@ final class PreflightCommand extends Command
     /**
      * @return list<string>
      */
-    private function filesystemFailures(): array
+    private function filesystemFailures(BackupService $backups): array
     {
         $failures = [];
         $disk = (string) config('crm.attachments.disk');
@@ -254,8 +263,12 @@ final class PreflightCommand extends Command
 
         if (! is_array($settings)) {
             $failures[] = sprintf('The attachments disk "%s" is not defined in config/filesystems.php.', $disk);
-        } elseif (($settings['driver'] ?? null) === 'local' && $this->isInside((string) ($settings['root'] ?? ''), public_path())) {
+        } elseif (($settings['driver'] ?? null) === 'local' && Paths::isInside((string) ($settings['root'] ?? ''), public_path())) {
             $failures[] = sprintf('The attachments disk "%s" is rooted under public/ — private files would be downloadable without authorisation (D-13).', $disk);
+        }
+
+        if (($problem = $backups->locationProblem()) !== null) {
+            $failures[] = $problem.' Set CRM_BACKUP_PATH to a directory outside public/, storage/app/private and storage/app/public (unset = storage/app/backups), then rebuild the configuration cache (D-16).';
         }
 
         $directories = [
@@ -454,19 +467,43 @@ final class PreflightCommand extends Command
         }
     }
 
-    private function isInside(string $path, string $directory): bool
+    /**
+     * The weekly `crm:backup` (routes/console.php) writes a set every Thursday;
+     * no set, or a newest set older than BackupService::STALE_AFTER_DAYS,
+     * means it has been failing or not running. The recorded failure, when
+     * there is one, is appended so the operator sees why.
+     */
+    private function backupWarning(BackupService $backups): ?string
     {
-        $normalise = static function (string $value): string {
-            $real = realpath($value);
-            $value = str_replace('\\', '/', $real === false ? $value : $real);
-            $value = rtrim($value, '/');
+        try {
+            $latest = $backups->latest();
+            $failure = $backups->lastFailure();
+        } catch (Throwable $exception) {
+            return 'The backup directory cannot be read — '.$exception->getMessage();
+        }
 
-            return PHP_OS_FAMILY === 'Windows' ? strtolower($value) : $value;
-        };
+        $cause = $failure === null ? '' : sprintf(
+            ' The last run (%s) failed: %s',
+            $failure->occurredAt->toIso8601String(),
+            $failure->detail,
+        );
+        $fix = ' — run `php artisan crm:backup` and read its output (docs/DEPLOYMENT.md section 7, D-16).';
 
-        $path = $normalise($path);
-        $directory = $normalise($directory);
+        if ($latest === null) {
+            return sprintf('No backup set exists in %s%s%s', $backups->directory(), $fix, $cause);
+        }
 
-        return $path !== '' && ($path === $directory || str_starts_with($path.'/', $directory.'/'));
+        if ($backups->isStale()) {
+            return sprintf(
+                'The newest backup set is %d days old (%s) — the weekly `crm:backup` has not succeeded for more than %d days%s%s',
+                (int) floor($latest->createdAt->diffInDays(now())),
+                $latest->id,
+                BackupService::STALE_AFTER_DAYS,
+                $fix,
+                $cause,
+            );
+        }
+
+        return null;
     }
 }

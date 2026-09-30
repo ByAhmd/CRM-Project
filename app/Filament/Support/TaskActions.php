@@ -23,8 +23,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * The task status actions (decisions A-10, D-14), shared by the table, the
  * view page and the relation managers: start and post update (the
- * assignee's progress reports, D-14 amendment 2026-09-28), complete (with an
- * optional note), cancel, reopen and the bulk complete.
+ * assignee's progress reports, D-14 amendment 2026-09-28), comment (anyone
+ * who may view the task, D-17), complete (with an optional note), cancel,
+ * reopen and the bulk complete.
  *
  * Each action authorises through the policy verb and delegates to
  * TaskService, which owns every rule; a refused transition surfaces as a
@@ -100,6 +101,43 @@ final class TaskActions
                     app(TaskService::class)->postUpdate($record, self::actor(), (string) ($data['body'] ?? ''));
 
                     Notification::make()->title(__('tasks.notifications.update_posted'))->success()->send();
+                });
+            });
+    }
+
+    /**
+     * A comment on the task (D-17) from anyone who may view it, on an open or
+     * a closed task but not a deleted one: required, at most
+     * TaskService::COMMENT_TEXT_MAX characters; the participants are told.
+     */
+    public static function comment(): Action
+    {
+        return Action::make('comment')
+            ->label(__('tasks.actions.comment'))
+            ->icon(Heroicon::OutlinedChatBubbleLeftRight)
+            ->color('gray')
+            ->modalHeading(__('tasks.actions.comment_heading'))
+            ->modalSubmitActionLabel(__('tasks.actions.comment_submit'))
+            ->schema([
+                Section::make(__('tasks.sections.comment'))
+                    ->columns(1)
+                    ->schema([
+                        Textarea::make('comment')
+                            ->label(__('tasks.fields.comment_body'))
+                            ->placeholder(__('tasks.placeholders.comment_body'))
+                            ->helperText(fn (?Model $record): ?string => self::commentNoticeHelper($record))
+                            ->required()
+                            ->rows(4)
+                            ->maxLength(TaskService::COMMENT_TEXT_MAX),
+                    ]),
+            ])
+            ->visible(fn (?Model $record): bool => $record instanceof Task && ! $record->trashed())
+            ->authorize(fn (?Model $record): bool => $record instanceof Task && self::can('comment', $record))
+            ->action(function (Task $record, array $data): void {
+                self::attempt(function () use ($record, $data): void {
+                    app(TaskService::class)->comment($record, self::actor(), (string) ($data['comment'] ?? ''));
+
+                    Notification::make()->title(__('tasks.notifications.comment_posted'))->success()->send();
                 });
             });
     }
@@ -227,6 +265,23 @@ final class TaskActions
         }
 
         return __('tasks.helpers.update_notifies');
+    }
+
+    /**
+     * The comment modal says the participants are told only when the service
+     * will actually tell someone — not on a task nobody else takes part in,
+     * nor when every other participant left, was disabled or may no longer
+     * open the task.
+     */
+    private static function commentNoticeHelper(?Model $record): ?string
+    {
+        $actor = auth()->user();
+
+        if (! $record instanceof Task || ! $actor instanceof User || ! app(TaskService::class)->commentsReachSomeone($record, $actor)) {
+            return null;
+        }
+
+        return __('tasks.helpers.comment_notifies');
     }
 
     private static function actor(): User

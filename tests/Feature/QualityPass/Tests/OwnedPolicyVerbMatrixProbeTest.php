@@ -183,6 +183,16 @@ final class OwnedPolicyVerbMatrixProbeTest extends TestCase
         $teamAssigner = $this->userWithPermissions($this->team, [Permission::TaskViewAny, Permission::TaskViewTeam, Permission::TaskAssign]);
         $this->assertVerbs($mine, $outside, ['assign' => [$teamAssigner]]);
 
+        // D-17 (2026-09-30): commenting follows view — the rep and the team's
+        // manager on the rep's task, neither on another team's.
+        foreach ([$this->rep, $this->manager] as $actor) {
+            $this->assertTrue($actor->can('comment', $mine), "D-17 (2026-09-30): {$actor->name} should hold comment on the task in reach");
+            $this->assertFalse($actor->can('comment', $outside), "D-17 (2026-09-30): {$actor->name} must not hold comment on the task out of reach");
+        }
+
+        $readOnly = $this->readOnly();
+        $this->assertSame($readOnly->can('view', $mine), $readOnly->can('comment', $mine), 'D-17 (2026-09-30): comment = view');
+
         app(TaskService::class)->cancel($mine, $this->rep);
         $this->assertTrue($this->rep->can('reopen', $mine->refresh()));
         $this->assertFalse($this->outsider->can('reopen', $mine));

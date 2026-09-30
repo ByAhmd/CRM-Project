@@ -19,6 +19,7 @@ use App\Filament\Pages\Reports\SourcePerformanceReportPage;
 use App\Filament\Pages\Reports\TaskPerformanceReportPage;
 use App\Filament\Pages\Reports\WinLossReportPage;
 use App\Filament\Pages\Settings\GeneralSettings;
+use App\Filament\Pages\System\Backups;
 use App\Filament\Pages\TasksBoard;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Activities\ActivityResource;
@@ -133,6 +134,8 @@ final class RoleMatrixWalkProbeTest extends TestCase
                 [UserResource::getUrl('index'), self::SETTINGS],
                 [TeamResource::getUrl('index'), self::SETTINGS],
                 [RoleResource::getUrl('index'), ['super_admin']],
+                // D-16 (2026-09-30): the backups page is the super admin's alone, like the roles screen.
+                [Backups::getUrl(), ['super_admin']],
                 [ActivityLogResource::getUrl('index'), self::SETTINGS],
                 [ImportResource::getUrl('index'), ['super_admin', 'admin', 'sales_manager']],
                 // D-13: every role may export within its scope, and anyone who may export sees their own runs.

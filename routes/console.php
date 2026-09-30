@@ -163,6 +163,40 @@ Schedule::call(function (): void {
 
 /*
 |--------------------------------------------------------------------------
+| Weekly backup (D-16)
+|--------------------------------------------------------------------------
+|
+| At the end of the Saudi working week, Thursday 22:00 in the app timezone,
+| crm:backup writes one set (database dump + private disk archive) outside
+| the web root and keeps the newest crm.backup.keep sets. A failure is
+| reported and sent to every active super admin; app:preflight warns when
+| the newest set is older than eight days. withoutOverlapping(120) matches
+| BackupService's own lock, so a killed run never silences next week's.
+|
+*/
+Schedule::command('crm:backup')
+    ->weeklyOn(4, '22:00') // 4 = Thursday
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
+| Weekly summary (D-18)
+|--------------------------------------------------------------------------
+|
+| Half an hour after the backup, Thursday 22:30 in the app timezone,
+| crm:weekly-summary sends the last seven days — tasks completed, overdue,
+| stalled and handed out, per assignee — to every active user who holds
+| task.assign, in their own locale; super admins' copy adds the system
+| health (the backup just taken or its failure, failed jobs, logged errors).
+|
+*/
+Schedule::command('crm:weekly-summary')
+    ->weeklyOn(4, '22:30') // 4 = Thursday
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
 | Retention (D-13)
 |--------------------------------------------------------------------------
 */

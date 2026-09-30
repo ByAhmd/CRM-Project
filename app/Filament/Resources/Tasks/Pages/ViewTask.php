@@ -15,10 +15,11 @@ use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One task with its actions (decisions A-10, D-14). The assignee of a
+ * One task with its actions (decisions A-10, D-14, D-17). The assignee of a
  * handed-out task sees start, post update and complete here while edit,
- * cancel, delete and restore stay with those TaskPolicy lets edit it; the
- * progress log and its authors are loaded with the record.
+ * cancel, delete and restore stay with those TaskPolicy lets edit it; anyone
+ * who may view the task may comment on it. The thread — progress entries and
+ * comments — and its authors are loaded with the record.
  */
 final class ViewTask extends ViewRecord
 {
@@ -36,6 +37,7 @@ final class ViewTask extends ViewRecord
         return [
             TaskActions::start(),
             TaskActions::postUpdate(),
+            TaskActions::comment(),
             TaskActions::complete(),
             TaskActions::cancel(),
             TaskActions::reopen(),

@@ -98,6 +98,7 @@ enum ActivityLogEvent: string implements HasLabel
     case TaskReopened = 'task.reopened';
     case TaskStarted = 'task.started';
     case TaskProgressPosted = 'task.progress_posted';
+    case TaskCommented = 'task.commented';
 
     // Notes
     case NoteCreated = 'note.created';
@@ -116,6 +117,11 @@ enum ActivityLogEvent: string implements HasLabel
 
     // Email (D-10)
     case EmailSent = 'email.sent';
+
+    // Backups (D-16): who took a copy of the whole database matters as much as who opened an attachment.
+    case BackupCreated = 'backup.created';
+    case BackupFailed = 'backup.failed';
+    case BackupDownloaded = 'backup.downloaded';
 
     // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';

@@ -20,13 +20,17 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\BuildsBackupSets;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
 final class PreflightCommandTest extends TestCase
 {
+    use BuildsBackupSets;
     use CreatesCrmFixtures;
     use RefreshDatabase;
+
+    private string $backups;
 
     protected function setUp(): void
     {
@@ -35,6 +39,7 @@ final class PreflightCommandTest extends TestCase
         $this->seedAccess();
         $this->seedLookups();
         $this->superAdmin();
+        $this->backups = $this->useBackupDirectory();
     }
 
     #[Test]
@@ -337,6 +342,58 @@ final class PreflightCommandTest extends TestCase
     }
 
     #[Test]
+    public function a_missing_or_stale_backup_warns_and_a_fresh_one_does_not(): void
+    {
+        $this->artisan('app:preflight')
+            ->expectsOutputToContain('No backup set exists in '.$this->backups.' — run `php artisan crm:backup` and read its output (docs/DEPLOYMENT.md section 7, D-16).')
+            ->assertSuccessful();
+
+        $stale = $this->makeBackupSet($this->backups, now()->subDays(9));
+
+        $this->artisan('app:preflight')
+            ->expectsOutputToContain('The newest backup set is 9 days old ('.$stale.') — the weekly `crm:backup` has not succeeded for more than 8 days')
+            ->assertSuccessful();
+
+        $this->makeBackupSet($this->backups, now()->subDays(6));
+
+        $this->artisan('app:preflight')
+            ->doesntExpectOutputToContain('backup set')
+            ->assertSuccessful();
+    }
+
+    #[Test]
+    public function the_recorded_failure_of_the_last_run_is_appended_to_the_backup_warning(): void
+    {
+        file_put_contents($this->backups.DIRECTORY_SEPARATOR.'last-failure.json', (string) json_encode([
+            'occurred_at' => '2026-10-01T22:00:00+03:00',
+            'reason' => 'database',
+            'detail' => 'mysqldump exited with code 127: sh: mysqldump: not found',
+        ]));
+
+        $this->artisan('app:preflight')
+            ->expectsOutputToContain('The last run (2026-10-01T22:00:00+03:00) failed: mysqldump exited with code 127: sh: mysqldump: not found')
+            ->assertSuccessful();
+    }
+
+    #[Test]
+    public function a_backup_directory_under_public_or_inside_the_private_disk_refuses_to_go_live(): void
+    {
+        config()->set('crm.backup.path', public_path('backups'));
+
+        $this->artisan('app:preflight')
+            ->expectsOutputToContain('lies under public/ — the database would be downloadable without authorisation. Set CRM_BACKUP_PATH to a directory outside public/')
+            ->expectsOutputToContain('Refusing to go live')
+            ->assertFailed();
+
+        config()->set('crm.backup.path', storage_path('app/private/backups'));
+        config()->set('filesystems.disks.local.root', storage_path('app/private'));
+
+        $this->artisan('app:preflight')
+            ->expectsOutputToContain('lies inside the private disk it archives')
+            ->assertFailed();
+    }
+
+    #[Test]
     public function the_json_option_reports_status_failures_and_warnings_with_the_same_exit_codes(): void
     {
         config()->set('mail.default', 'log');
@@ -391,6 +448,8 @@ final class PreflightCommandTest extends TestCase
         config()->set('filament.cache_path', $filament);
 
         Cache::put(PreflightCommand::HEARTBEAT_KEY, now()->toIso8601String(), now()->addMinutes(10));
+
+        $this->makeBackupSet($this->backups, now()->subDay());
     }
 
     /** An empty directory under the system temp directory, removed after the test. */

@@ -456,12 +456,12 @@ final class TaskProgressTest extends TestCase
         Livewire::actingAs($this->admin)
             ->test(ViewTask::class, ['record' => $task->getKey()])
             ->assertOk()
-            ->assertSee(__('tasks.sections.progress'))
+            ->assertSee(__('tasks.sections.thread'))
             ->assertSeeHtmlInOrder(['Agreed at five percent', 'They want a &lt;b&gt;discount&lt;/b&gt;', 'Calling them first'])
             ->assertSee('Sales Rep')
             ->assertSee(TaskStatus::InProgress->getLabel())
             ->assertSee('2026-09-28 09:10')
-            ->assertDontSee(__('tasks.empty.progress'));
+            ->assertDontSee(__('tasks.empty.thread'));
     }
 
     #[Test]
@@ -471,7 +471,7 @@ final class TaskProgressTest extends TestCase
 
         Livewire::actingAs($this->admin)
             ->test(ViewTask::class, ['record' => $task->getKey()])
-            ->assertSee(__('tasks.empty.progress'));
+            ->assertSee(__('tasks.empty.thread'));
 
         $this->tasks->postUpdate($task, $this->rep, 'Before leaving');
         $this->rep->delete();

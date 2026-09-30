@@ -120,6 +120,7 @@ abstract class BaseTasksRelationManager extends RelationManager
 
                     TaskActions::start(),
                     TaskActions::postUpdate(),
+                    TaskActions::comment(),
                     TaskActions::complete(),
                     TaskActions::cancel(),
                     TaskActions::reopen(),

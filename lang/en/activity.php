@@ -57,6 +57,7 @@ return [
         'note' => 'Notes',
         'attachment' => 'Attachments',
         'email' => 'Email',
+        'backup' => 'Backups',
     ],
 
     'events' => [
@@ -121,6 +122,7 @@ return [
         'task.reopened' => 'Task reopened',
         'task.started' => 'Task started',
         'task.progress_posted' => 'Task progress update posted',
+        'task.commented' => 'Comment on a task',
         'note.created' => 'Note added',
         'note.updated' => 'Note edited',
         'note.deleted' => 'Note deleted',
@@ -133,6 +135,9 @@ return [
         'attachment.restored' => 'Attachment restored',
         'attachment.downloaded' => 'Attachment downloaded',
         'email.sent' => 'Email sent',
+        'backup.created' => 'Backup taken',
+        'backup.failed' => 'Backup failed',
+        'backup.downloaded' => 'Backup file downloaded',
         'settings.updated' => 'Settings updated',
         'settings.lookup_created' => 'Settings item added',
         'settings.lookup_updated' => 'Settings item updated',
@@ -263,6 +268,7 @@ return [
         'deal_title' => 'Deal',
         'subject' => 'Subject',
         'body' => 'Body',
+        'comment' => 'Comment',
         'occurred_at' => 'Occurred at',
         'direction' => 'Direction',
         'duration_minutes' => 'Duration (minutes)',

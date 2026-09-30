@@ -342,6 +342,8 @@ Asia/Riyadh). While the site is in maintenance mode (`php artisan down`) **no** 
 | `RescoreLeads` (queued job) | daily at 03:00 | Queued; the next drain recomputes open lead scores in batches of 500 so activity-recency points expire (D-7). |
 | `attachments:prune-temporary` (named callback) | daily at 00:00 | Deletes abandoned uploads older than a day under `tmp/` on the attachments disk. |
 | `uploads:prune-livewire-temporary` (named callback) | daily at 00:00 | Deletes Livewire temporary uploads older than a day under `livewire-tmp/` (`livewire.temporary_file_upload.directory`) on the upload disk — the CSV and `.xlsx` files an import reads included, which the import never deletes and which would otherwise stay in `storage/app/private` and its backups. A workbook is converted to CSV in a `php://temp` stream inside the request, so an import leaves no second file to prune. |
+| `crm:backup` | weekly, Thursday 22:00; `withoutOverlapping(120)` | One backup set — gzip'd database dump plus a tar.gz of `storage/app/private` — into `CRM_BACKUP_PATH`, keeping the newest `CRM_BACKUP_KEEP` sets (D-16, section 7). A failure is reported and sent to every active holder of `roles.manage` (the super admins). |
+| `crm:weekly-summary` | weekly, Thursday 22:30 | The weekly summary of the last seven days (D-18) to every active user holding `task.assign`, in their locale: tasks completed, overdue, stalled and handed out, per assignee; super admins' copy adds the system health (newest backup or its failure, failed jobs, errors logged). Bell and mail both on by default, each switchable per recipient under *Notification preferences* (so a recipient may get the bell, the mail, or neither); mail needs a real mailer and leaves through the next queue drain. |
 | `activitylog:clean --days=<CRM_AUDIT_RETENTION_DAYS> --force` | weekly, Sunday 00:00 | Audit retention, 730 days by default (D-13). |
 | `queue:prune-failed --hours=168` | weekly, Sunday 00:00 | Deletes failed-job records older than seven days. |
 | `model:prune --model=App\Models\Import --model=App\Models\Export` | daily at 00:00 | Import history after 90 days (`Import::RETENTION_DAYS`), export history and files after 30 days (`Export::RETENTION_DAYS`). |
@@ -398,6 +400,7 @@ Failures (exit 1):
 | `QUEUE_CONNECTION is sync` | Queued work would run inside web requests (D-1). | `QUEUE_CONNECTION=database`, rebuild caches. |
 | `CACHE_STORE is array` | Nothing survives a request: scheduler locks, login throttling, settings and permission caches break. | `CACHE_STORE=file` or `database`, rebuild caches. |
 | `The attachments disk "local" is not defined` / `is rooted under public/` | Private files would be missing or downloadable without authorisation (D-13). | Restore `config/filesystems.php` from the release; the `local` disk is `storage/app/private`. |
+| `The backup directory … lies under public/` / `… lies inside` | `CRM_BACKUP_PATH` points into the web root or into a disk the backup archives or the web server serves (D-16). | Unset it (= `storage/app/backups`) or choose a directory outside the web root; rebuild caches (section 7). |
 | `storage/app is not writable` (or `storage/logs`, `bootstrap/cache`) | Uploads, logs or caches cannot be written. | Section 3.7. |
 | `The database cannot be reached or read` | Wrong `DB_*`, database down, or missing privileges. | Check `DB_*` against hPanel; rebuild caches. |
 | `The database has never been migrated` / `N migration(s) pending` | Schema not current. | `php artisan migrate --force`. |
@@ -413,6 +416,7 @@ Warnings (exit 0) — operable, but read them:
 |---|---|---|
 | `MAIL_MAILER is "log"` (or `"array"`) | everywhere | Nothing is delivered (D-10). Configure SMTP when it exists. |
 | `No scheduler heartbeat` / `The last scheduler heartbeat is N minutes old` / `... unreadable` / `... cannot be read from the cache` | everywhere | `schedule:run` is not running every minute. Check the cron line and its PHP binary (section 3.10). Expected right after a release: maintenance mode pauses the scheduler and `optimize:clear` empties the cache — rerun preflight two minutes after `php artisan up`. |
+| `No backup set exists in …` / `The newest backup set is N days old` / `The backup directory cannot be read` | everywhere | The weekly `crm:backup` has not produced a set for more than eight days, or never (D-16); the message ends with the recorded failure when there is one. Run `php artisan crm:backup` and read its output (section 7). Expected on a fresh installation until the first Thursday or the first *Back up now*. |
 | `SESSION_LIFETIME is N minutes; the decided lifetime is 120` | production | Set `SESSION_LIFETIME=120` (D-11). |
 | `Not cached: configuration, routes, views, Filament components` | production | `php artisan optimize` and `php artisan filament:optimize`. |
 | `CRM_TRUSTED_PROXIES is not set` | production | Behind a TLS-terminating proxy this breaks invitation and reset links (403) and shares the sign-in throttle; run the `curl` check of section 3.6. |
@@ -537,30 +541,83 @@ so a huge sheet costs bounded memory — exports up to 20 000
 rows in chunks of 500, 5 imports and 10 exports per client IP address per list page per minute
 (`App\Filament\Support\ImportExportActions`; behind an untrusted proxy every user shares that limit, section 3.6);
 `RescoreLeads` has `$timeout = 45` under the 50-second drain and `DB_QUEUE_RETRY_AFTER=90`.
+The one deliberate exception is the backup (D-16): a dump and an archive cannot be cut into batches, so `crm:backup`
+and the queued *Back up now* (`CreateBackup`) run as long as they need in the CLI (`max_execution_time` 0), with each
+tool stopped after an hour. `CreateBackup` deletes its own queue row before the run starts, so a later drain never
+finds a reservation older than `DB_QUEUE_RETRY_AFTER` to re-offer — which, with `tries = 1`, would mark the running
+backup failed — and its unique lock stays held until the run ends; BackupService's lock still refuses a second run.
 
 ---
 
 ## 7. Backups
 
-Nothing in the tree backs anything up; the owner decides the retention (checklist section 12).
+The CRM backs itself up once a week (D-16); the host's own backups remain an independent second layer.
 
-- **Database, daily.** The host's backup feature, if the plan has one, plus an own dump kept outside the web root.
-  Credentials in a `~/.my.cnf` with mode `600`, never on the command line:
+**What runs.** Every **Thursday at 22:00** (`APP_TIMEZONE`, Asia/Riyadh — the end of the Saudi working week) the
+scheduler runs `crm:backup` (section 3.10). One run writes one **set**: a folder named after the moment it started
+(`20261001-220000`) holding
 
-  ```cron
-  30 2 * * * mysqldump --defaults-extra-file=$HOME/.my.cnf --single-transaction --routines --no-tablespaces <database> | gzip > $HOME/backups/crm-$(date +\%F).sql.gz
-  ```
+- `database.sql.gz` — `mysqldump --single-transaction --routines --triggers --no-tablespaces
+  --loose-set-gtid-purged=OFF --default-character-set=utf8mb4` of the application database (the default
+  connection's `DB_*` values), gzip'd. None of these needs a privilege a shared-hosting database user lacks: without
+  `--set-gtid-purged=OFF` MySQL's client runs `FLUSH TABLES` (the `RELOAD` privilege) on a server with GTIDs; the
+  `loose-` prefix lets MariaDB's client, which has no such option, merely warn. The credentials reach `mysqldump`
+  through a temporary option file (`storage/framework/crm-backup-*`, mode `600`, values quoted with `\` and `"`
+  escaped), deleted as soon as the dump ends — never on the command line, in the log or in an error message. A run
+  the host kills mid-dump cannot delete it; the next run removes every such leftover before it starts;
+- `files.tar.gz` — `tar -czf` of the whole private disk `storage/app/private` (release folders:
+  `DEPLOY_PATH/shared/storage/app/private`): attachments under `crm/<entity>/<id>/`, export files under
+  `filament_exports/`, report downloads under `reports/`, temporary uploads. Attachments are the part that cannot be
+  recreated, and they travel in the same set as the rows that point at them.
 
-  (`%` must be escaped as `\%` in crontab.) Delete dumps older than the agreed retention; copy them off the host.
-  Without SSH use phpMyAdmin's export.
-- **Private storage disk.** `storage/app/private` (release folders: `DEPLOY_PATH/shared/storage/app/private`):
-  attachments under `crm/<entity>/<id>/`, export files under `filament_exports/` (pruned after 30 days), report
-  downloads under `reports/` (pruned hourly). Attachments are the part that cannot be recreated — back them up with
-  the same cadence as the database, so a restore finds the files its rows point at.
-- **`.env`**, stored separately and securely (it holds `APP_KEY`: without it, encrypted values in a restored database
-  cannot be read).
-- **Restore rehearsal:** load a dump into a scratch database, point a copy of the app at it, run `app:preflight`
-  (open checklist row).
+The set is written into a hidden `.<id>.partial` folder and renamed to its id only when both files exist and are
+non-empty, so a run killed half-way never leaves something that looks like a set (the next successful run removes the
+leftover). One run at a time: the scheduled run and *Back up now* share a lock.
+
+**Where.** `CRM_BACKUP_PATH`, by default `storage/app/backups` (release folders: inside the shared `storage/`, so sets
+survive releases). Never under `public/`, `storage/app/private` or `storage/app/public`: the run refuses such a
+directory and `app:preflight` fails on it. The check resolves the path where it would really land even before it
+exists — a `..` segment or a symlinked parent such as `public_html` → `current/public` is followed — and is repeated
+once the directory has been created, before anything is written.
+
+**Retention.** After every successful run the newest `CRM_BACKUP_KEEP` sets stay (8: two months of weekly sets) and
+older ones are deleted. Nothing else in the directory, and nothing outside it, is ever touched. A set is about the size
+of the compressed database plus the compressed private disk; watch the quota with `du -sh storage/app/backups`.
+
+**What the host must offer.** `mysqldump` (or the binary named in `CRM_BACKUP_MYSQLDUMP`, for example `mariadb-dump`)
+and `tar` on the `PATH` of the PHP CLI that runs the cron line, `proc_open` enabled, and the zlib extension. Check it
+once after the first deployment: `php artisan crm:backup` must print `[backup] Set … written to …`.
+
+**Failures are never silent.** A run that does not produce a complete set deletes its partial folder, writes the
+error to the log, records it in `last-failure.json` next to the sets (shown on the Backups page until the next success),
+writes `backup.failed` to the audit ledger and notifies every active holder of `roles.manage` (the super admins, plus
+any custom role granted it) — bell, and e-mail unless they switched it off (`BackupFailed` is mail-on by default).
+GNU tar's exit code 1 for a file that changed or vanished while it was archived is not a failure (the set is kept and
+the warning logged); any other tar message is. `crm:backup` exits 1. `app:preflight` warns when no set exists
+or the newest set is older than eight days.
+
+**Download.** *System → Backups* (super admins, `roles.manage`) lists every kept set, newest first, with its date and
+sizes. *Database* and *Files* download that part through the authorised route `/backups/<set>/<database|files>` —
+there is no public URL, and every download is written to the audit ledger (`backup.downloaded`). *Back up now*
+queues a run that the next scheduler minute picks up. Copy a recent set **off the host** regularly (the owner decides
+where): a backup on the same disk does not survive the loss of the hosting account.
+
+**Restore** (engineer, over SSH). Rehearse it once on a scratch copy before it is needed (open checklist row).
+
+1. `php artisan down --retry=60`.
+2. Database — the dump drops and recreates every table, so it replaces the current data. With the credentials in a
+   `~/.my.cnf` of mode `600`, never on the command line:
+   `gunzip < <set>/database.sql.gz | mysql --defaults-extra-file=$HOME/.my.cnf <database>` (`mariadb` instead of
+   `mysql` where the host names the client so).
+3. Files — move the current `storage/app/private` aside, then
+   `mkdir storage/app/private && tar -xzf <set>/files.tar.gz -C storage/app/private`.
+4. `php artisan migrate --force` (a set taken before a later release's migrations), `php artisan optimize`,
+   `php artisan filament:optimize`, `php artisan app:preflight`, then `php artisan up`.
+
+**Not in a set.** `.env` — store it separately and securely: it holds `APP_KEY`, without which encrypted values in a
+restored database cannot be read. The code is the release (section 2) and needs no backup of its own. Hostinger's own
+backups, where the plan has them, remain the independent layer; without SSH, phpMyAdmin's export is the manual
+fallback for the database.
 
 ---
 
@@ -576,10 +633,47 @@ Nothing in the tree backs anything up; the owner decides the retention (checklis
 
 ## 9. Monitoring
 
-- **Uptime:** an external monitor on `https://crm.example.com/up` (Laravel's health route; 200 when the application
-  boots). Choosing the monitor and the alert recipient is an owner item.
-- **Preflight from cron, alerting on failure only:** hourly, keeping the last result in `storage/logs` (not
-  web-reachable) and printing it **only** when something is wrong:
+### 9.1 The uptime monitor (D-16)
+
+`.github/workflows/uptime.yml` is the external monitor. GitHub runs it every 15 minutes from `master` (and by hand:
+**Actions → Uptime → Run workflow**). It requests the site's health route `/up` and succeeds on the first `200`.
+
+- **What `/up` checks.** Laravel's health route answers `200` when the application boots. In production the listener
+  `App\Listeners\FailHealthCheckWithoutSchedulerHeartbeat` also makes it answer `500` when the scheduler heartbeat
+  (`scheduler.heartbeat`, section 3.10) is missing, unreadable or older than 10 minutes. One request therefore covers
+  both "the site is down" and "the host's cron stopped running the scheduler". The reason for a `500` goes to the site's
+  log (section 8), never into the response. Outside production `/up` ignores the heartbeat.
+- **Three attempts before an alert.** A failed request is retried twice, about two minutes apart (roughly five minutes in
+  all). A release puts the site in maintenance mode (`503`) and clears the heartbeat until the scheduler's next minute,
+  so a release never alerts by itself.
+- **The secret `UPTIME_URL`.** Set it under **Settings → Secrets and variables → Actions → New repository secret**. The
+  value is the site's full `/up` address, e.g. `https://crm.example.com/up`: `https`, no redirect in between (a
+  redirect counts as a failure). The address stays out of the public repository (A-24). The workflow passes it to
+  `curl` through the environment and never prints it; `curl`'s own error text, which names the host, is discarded, and
+  the log shows only the HTTP status and `curl`'s exit code. Without the secret every run skips with a notice and
+  succeeds, so nothing is monitored until it is set.
+- **What an alert e-mail means.** GitHub e-mails a failed scheduled run to the account that last changed the
+  workflow's `cron` line (keep **Settings → Notifications → Actions** on e-mail); a green run sends nothing. The failed
+  run's annotation names the last HTTP status:
+  - `500`: the application answered but failed its health check — most often the scheduler stopped. Check the cron
+    line and its PHP binary (section 3.10), then `php artisan app:preflight`; the log (section 8) holds the reason.
+  - `503`: maintenance mode is still on — a release stopped half-way (section 5) or someone ran `php artisan down`.
+  - `000`: no HTTP answer at all (DNS, TLS, the host or its network); `curl`'s exit code narrows it down (6 name not
+    resolved, 7 connection refused, 28 timed out, 35/60 TLS).
+  - any other status: the host answered for the application (a hosting error page, a changed document root, a
+    redirect).
+  The next green run clears the state; GitHub sends no "recovered" mail.
+- **GitHub's 60-day rule.** In a public repository GitHub disables scheduled workflows after 60 days without
+  repository activity (no push, for instance) and says so by e-mail. Re-enable it under **Actions → Uptime →
+  Enable workflow**. GitHub may also start a scheduled run a few minutes late under load; the monitor is a 15-minute
+  check, not a second-by-second one.
+
+### 9.2 Other checks
+
+- **Preflight from cron (optional since the uptime monitor):** the uptime monitor already reports a stopped scheduler.
+  This hourly line remains useful where the host mails cron output, because it also reports the other preflight
+  failures. It keeps the last result in `storage/logs` (not web-reachable) and prints it **only** when something is
+  wrong:
 
   ```cron
   0 * * * * <php> /path/to/app/artisan app:preflight --json > /path/to/app/storage/logs/preflight-last.json 2>&1; rc=$?; if [ "$rc" -ne 0 ] || grep -qi 'scheduler heartbeat' /path/to/app/storage/logs/preflight-last.json; then cat /path/to/app/storage/logs/preflight-last.json; fi
@@ -595,12 +689,12 @@ Nothing in the tree backs anything up; the owner decides the retention (checklis
   the second clause looks for `scheduler heartbeat` in the output (every heartbeat warning contains those words).
   `--json` prints the document on every run, so never simply drop the redirection: that would mail every hour.
 
-  **The alert itself is not in the tree.** Output of a cron job becomes an e-mail only when the host sends cron output
-  to an address (an option of the host's cron page, or a `MAILTO=` line where the crontab is editable) — confirm the
-  plan offers it. Otherwise the owner chooses another way to be told (nothing is assumed here); that choice and the
-  alert recipient are open monitoring rows of [GoLive_Checklist.md](GoLive_Checklist.md) (section 15). Right after a
-  release the heartbeat warning is expected for a minute or two (section 4.1); an hourly run rarely coincides with it.
-- **Scheduler:** the heartbeat (section 3.10) through preflight.
+  Output of a cron job becomes an e-mail only when the host sends cron output to an address (an option of the host's
+  cron page, or a `MAILTO=` line where the crontab is editable). Without that the line only refreshes
+  `storage/logs/preflight-last.json`, and the uptime monitor (9.1) stays the alert. Right after a release the heartbeat
+  warning is expected for a minute or two (section 4.1); an hourly run rarely coincides with it.
+- **Scheduler:** the heartbeat (section 3.10), alerted through `/up` and the uptime monitor (9.1); `app:preflight`
+  shows it on demand.
 - **Failed jobs:** `php artisan queue:failed` (OPERATIONS.md).
 
 ---
@@ -798,7 +892,7 @@ Unused channels, keep as shipped: `LOG_SLACK_WEBHOOK_URL`, `LOG_SLACK_USERNAME`,
 | `DB_QUEUE_CONNECTION` | `null`. |
 | `DB_QUEUE_TABLE` | `jobs`. |
 | `DB_QUEUE` | `default`. |
-| `DB_QUEUE_RETRY_AFTER` | `90` (must stay above the longest job timeout, 45 seconds). |
+| `DB_QUEUE_RETRY_AFTER` | `90` (must stay above the longest batched job timeout, 45 seconds; the single-try backup job is the documented exception, section 6). |
 | `QUEUE_FAILED_DRIVER` | `database-uuids`. |
 
 Services the CRM does not use on shared hosting (D-1), keep as shipped: `MEMCACHED_PERSISTENT_ID`,
@@ -844,5 +938,8 @@ Unused providers, keep `null`: `POSTMARK_API_KEY`, `RESEND_API_KEY`, `SLACK_BOT_
 | `CRM_AUDIT_RETENTION_DAYS` | `730` (D-13). |
 | `CRM_ATTACHMENT_MAX_KB` | `10240`, within the PHP upload limits (section 6). |
 | `CRM_TRUSTED_PROXIES` | The host's proxy addresses, or `*` only when PHP is reachable solely through the proxy. Left unset behind a TLS-terminating proxy, invitation and password-reset links answer 403 and the sign-in, import and export throttles are shared by everybody (section 3.6, with the `curl` check). |
+| `CRM_BACKUP_PATH` | `null` (= `storage/app/backups`), or an absolute directory outside the web root; never under `public/`, `storage/app/private` or `storage/app/public` (preflight fails) (D-16, section 7). |
+| `CRM_BACKUP_KEEP` | `8` — weekly sets kept (D-16); blank or `null` also means 8. |
+| `CRM_BACKUP_MYSQLDUMP` | `mysqldump`, or the absolute path of the host's dump binary (`mariadb-dump` on some MariaDB hosts) when the cron PHP's `PATH` does not find it (D-16). |
 
 **Front-end build** — `VITE_APP_NAME`: keep (`${APP_NAME}`; read at build time in CI).

@@ -166,6 +166,7 @@ final class TasksTable
                     EditAction::make(),
                     TaskActions::start(),
                     TaskActions::postUpdate(),
+                    TaskActions::comment(),
                     TaskActions::complete(),
                     TaskActions::cancel(),
                     TaskActions::reopen(),

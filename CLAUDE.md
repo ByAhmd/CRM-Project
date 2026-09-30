@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
 authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-15 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-19 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -105,7 +105,8 @@ Lead/Contact/Account/Deal (D-9) · templated email via app mailer, logged as act
 (D-10) · optional MFA, 12-char passwords, 120-min sessions, invite-only (D-11) · custom kanban and calendar
 pages (D-12) · audit 730 days, soft deletes kept, reps export within scope (D-13) · admin-only task
 assignment, assignment mail default-on, completion notice to the assigner, shared tasks board open to every
-role (D-14) · Employee role for task-receiving staff (D-15).
+role (D-14) · Employee role for task-receiving staff (D-15) · weekly self-backup and uptime monitor (D-16) ·
+task comments (D-17) · weekly summary e-mail (D-18) · preferences show only receivable events (D-19).
 
 ## 6. QA checklist before any commit
 

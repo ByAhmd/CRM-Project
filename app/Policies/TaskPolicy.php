@@ -36,6 +36,9 @@ use Illuminate\Database\Eloquent\Model;
  * holder of `task.update` within reach (a team manager) keep editing; a
  * task a user created for themselves stays fully theirs, and a task from
  * before `assigned_by` existed (null) is not handed out.
+ *
+ * Commenting (D-17) follows `view`: whoever may open a task may comment on
+ * it, whatever their part in it, until the task is deleted.
  */
 final class TaskPolicy
 {
@@ -97,6 +100,20 @@ final class TaskPolicy
     public function complete(User $user, ?Task $task = null): bool
     {
         return $this->progress($user, $task);
+    }
+
+    /**
+     * Commenting on the task (D-17): anyone who may view it may comment —
+     * the handed-out assignee included, since a comment is not an edit — and,
+     * like every other write, never on a deleted task (D-13).
+     */
+    public function comment(User $user, ?Task $task = null): bool
+    {
+        if ($task === null) {
+            return $this->viewAny($user);
+        }
+
+        return ! $this->isTrashed($task) && $this->view($user, $task);
     }
 
     public function cancel(User $user, ?Task $task = null): bool

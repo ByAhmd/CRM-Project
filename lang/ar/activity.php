@@ -57,6 +57,7 @@ return [
         'note' => 'الملاحظات',
         'attachment' => 'المرفقات',
         'email' => 'البريد الإلكتروني',
+        'backup' => 'النسخ الاحتياطية',
     ],
 
     'events' => [
@@ -121,6 +122,7 @@ return [
         'task.reopened' => 'إعادة فتح مهمة',
         'task.started' => 'بدء مهمة',
         'task.progress_posted' => 'نشر تحديث على مهمة',
+        'task.commented' => 'تعليق على مهمة',
         'note.created' => 'إضافة ملاحظة',
         'note.updated' => 'تعديل ملاحظة',
         'note.deleted' => 'حذف ملاحظة',
@@ -133,6 +135,9 @@ return [
         'attachment.restored' => 'استعادة مرفق',
         'attachment.downloaded' => 'تنزيل مرفق',
         'email.sent' => 'إرسال بريد إلكتروني',
+        'backup.created' => 'إنشاء نسخة احتياطية',
+        'backup.failed' => 'فشل نسخة احتياطية',
+        'backup.downloaded' => 'تنزيل ملف نسخة احتياطية',
         'settings.updated' => 'تعديل الإعدادات',
         'settings.lookup_created' => 'إضافة عنصر إعدادات',
         'settings.lookup_updated' => 'تعديل عنصر إعدادات',
@@ -263,6 +268,7 @@ return [
         'deal_title' => 'الصفقة',
         'subject' => 'الموضوع',
         'body' => 'النص',
+        'comment' => 'التعليق',
         'occurred_at' => 'وقت الحدوث',
         'direction' => 'الاتجاه',
         'duration_minutes' => 'المدة (دقائق)',

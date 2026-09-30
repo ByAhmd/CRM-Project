@@ -151,7 +151,7 @@ final class EmployeeRoleTest extends TestCase
     {
         $own = app(TaskService::class)->create(['title' => 'Book the meeting room'], $this->employee);
 
-        foreach (['view', 'update', 'cancel', 'delete', 'progress', 'start', 'postUpdate', 'complete'] as $ability) {
+        foreach (['view', 'update', 'cancel', 'delete', 'progress', 'start', 'postUpdate', 'complete', 'comment'] as $ability) {
             $this->assertTrue($this->employee->can($ability, $own), "own to-do: {$ability}");
         }
 
@@ -164,7 +164,7 @@ final class EmployeeRoleTest extends TestCase
     {
         $task = $this->handedOut();
 
-        foreach (['view', 'progress', 'start', 'postUpdate', 'complete'] as $ability) {
+        foreach (['view', 'progress', 'start', 'postUpdate', 'complete', 'comment'] as $ability) {
             $this->assertTrue($this->employee->can($ability, $task), "handed-out task: {$ability}");
         }
 

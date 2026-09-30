@@ -115,6 +115,11 @@ return [
         'cancelled' => 'Cancelled',
     ],
 
+    'task_update_kind' => [
+        'progress' => 'Update',
+        'comment' => 'Comment',
+    ],
+
     'task_priority' => [
         'low' => 'Low',
         'medium' => 'Medium',
@@ -169,6 +174,9 @@ return [
         'task_overdue' => 'Task overdue',
         'task_completed' => 'A task I assigned is completed',
         'task_progress' => 'A task I assigned is started or gets a progress update',
+        'task_comment' => 'A new comment on a task I take part in',
+        'weekly_summary' => 'The weekly task summary',
+        'backup_failed' => 'The weekly backup fails',
         'deal_stage_changed' => 'A deal of mine changes stage',
         'deal_closed' => 'A deal of mine is won or lost',
         'lead_converted' => 'A lead of mine is converted',

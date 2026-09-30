@@ -259,13 +259,16 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `created_by` | FK→users N SET NULL | |
 | timestamps, SD | | |
 
-### `task_updates` (append-only progress log — D-14 amendment, 2026-09-28)
+### `task_updates` (append-only task thread: progress entries and comments — D-14 amendment, 2026-09-28; D-17)
 
-`task_id` FK→tasks CASCADE (owned child; tasks are only soft-deleted, so the log survives a delete and a restore),
-`user_id` FK→users N SET NULL (I; the author), `status` enum(`pending`,`in_progress`,`completed`,`cancelled`) CHECK N (I;
+`task_id` FK→tasks CASCADE (owned child; tasks are only soft-deleted, so the thread survives a delete and a restore),
+`user_id` FK→users N SET NULL (I; the author), `kind` enum(`progress`,`comment`) CHECK default `progress` (D-17,
+migration `2026_09_30_100002`; `progress` for a start, a progress update, a completion or a reopening, `comment` for a
+comment from anyone who may view the task), `status` enum(`pending`,`in_progress`,`completed`,`cancelled`) CHECK N (I;
 the status the entry moved the task to — `in_progress` for a start, `completed` for a completion, `pending` for a reopening,
-NULL for a plain progress note), `body` TEXT N (plain text; start notes and updates capped at 2000 characters by
-`TaskService`), `created_at` DATETIME. I (`task_id`,`created_at`). No `updated_at`; written by `TaskService` only,
+NULL for a plain progress note and for every comment), `body` TEXT N (plain text; start notes, updates and comments capped
+at 2000 characters by `TaskService`, a comment is required), `created_at` DATETIME. I (`task_id`,`created_at`) for the
+thread, I (`task_id`,`kind`) for a comment's earlier commenters. No `updated_at`; written by `TaskService` only,
 `TaskUpdateAppendOnlyObserver` refuses every update and delete.
 
 ### `notes`
@@ -315,7 +318,7 @@ Step-13 amendments (migrations dated 2026-09-15, from the EXPLAIN evidence on vo
 - Lead conversion is one transaction: create/link account, create/link contact, optionally create deal, set `converted_*`, move status to the `converted` kind, write status log, audit and timeline entries.
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
 - Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`) checked on the server-sniffed type, max size from `config('crm.attachments.max_kb')`, files parked under `tmp/{user id}/` until the form is submitted (pruned daily), soft delete keeps the file, force delete removes it, downloads go through the panel's authentication middleware and the subject's `view` policy; uploads are refused on soft-deleted subjects.
-- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`. Starting (Pending → In progress), posting a progress update, completing and reopening each append a `task_updates` row inside the same transaction (D-14 amendment, 2026-09-28).
+- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`. Starting (Pending → In progress), posting a progress update, completing and reopening each append a `task_updates` row inside the same transaction (D-14 amendment, 2026-09-28); a comment appends a `kind = comment` row (no status) on an open or closed task, never on a soft-deleted one (D-17).
 - Notes: body trimmed and capped at 5000 characters in the service; a note on a contact or deal is listed on the account only when the reader may read that contact or deal.
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).

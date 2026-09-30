@@ -11,12 +11,14 @@ use App\Enums\RecurrenceFrequency;
 use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
+use App\Enums\TaskUpdateKind;
 use App\Exceptions\Access\UnassignableUserException;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Task;
 use App\Models\TaskUpdate;
 use App\Models\User;
+use App\Notifications\TaskCommentNotification;
 use App\Notifications\TaskCompletedNotification;
 use App\Notifications\TaskProgressNotification;
 use App\Services\Access\RecordAssignmentService;
@@ -27,6 +29,7 @@ use App\Services\Audit\AuditLogger;
 use BackedEnum;
 use Closure;
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -65,6 +68,10 @@ use Spatie\Activitylog\CauserResolver;
  *   open task, and both — with completions and reopenings — are kept in the
  *   task's append-only progress log (TaskUpdate); a start or an update tells
  *   the assigner under the same recipient rule as a completion;
+ * - anyone who may view a task may comment on it (D-17), open or closed but
+ *   never once deleted; a comment is an entry of the same append-only log
+ *   (kind `comment`) and tells the task's participants — assignee, assigner
+ *   (or creator) and earlier commenters — never its author;
  * - every notification leaves only after the write it reports has committed,
  *   and its mail through the queue, so a mail server can never fail or undo
  *   a task write;
@@ -80,6 +87,9 @@ final class TaskService
 {
     /** The longest start note or progress update, in characters. */
     public const int PROGRESS_TEXT_MAX = 2000;
+
+    /** The longest comment, in characters (D-17). */
+    public const int COMMENT_TEXT_MAX = 2000;
 
     public function __construct(
         private readonly AuditLogger $audit,
@@ -225,6 +235,39 @@ final class TaskService
         $task->refresh();
 
         return $update;
+    }
+
+    /**
+     * A comment on the task (D-17) from anyone who may view it — the policy
+     * decides that, as for every other verb. Open and closed tasks take
+     * comments; a deleted one takes none until it is restored. The text is
+     * trimmed, required and at most COMMENT_TEXT_MAX characters; the entry
+     * joins the task's append-only thread and the participants are told once
+     * it has committed.
+     */
+    public function comment(Task $task, User $actor, string $body): TaskUpdate
+    {
+        $body = $this->commentText($body);
+
+        $comment = $this->asCauser($actor, fn (): TaskUpdate => DB::transaction(function () use ($task, $actor, $body): TaskUpdate {
+            $current = $this->lock($task, commenting: true);
+
+            $comment = $this->log($current, $actor, null, $body, TaskUpdateKind::Comment);
+
+            $this->audit->record(ActivityLogEvent::TaskCommented, $current, $actor, [
+                'subject_label' => $current->title,
+                'comment' => $body,
+            ]);
+
+            $this->notifyParticipantsOfComment($current, $actor, $comment);
+
+            return $comment;
+        }));
+
+        // The caller's instance shows the new entry at once.
+        $task->refresh();
+
+        return $comment;
     }
 
     public function complete(Task $task, User $actor, ?string $note = null): Task
@@ -432,6 +475,73 @@ final class TaskService
     }
 
     /**
+     * Tells the task's participants about a new comment (D-17), once it has
+     * committed; the recipients are commentRecipients()'s.
+     */
+    private function notifyParticipantsOfComment(Task $task, User $actor, TaskUpdate $comment): void
+    {
+        $recipients = $this->commentRecipients($task, $actor);
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($recipients, $task, $actor, $comment): void {
+            foreach ($recipients as $recipient) {
+                $recipient->notify((new TaskCommentNotification($task, $actor, $comment))->locale($recipient->preferredLocale()));
+            }
+        });
+    }
+
+    /**
+     * Whether a comment the actor posts on the task tells anyone (D-17) — the
+     * comment modal promises a notice only when this holds, under the very
+     * rule that sends it.
+     */
+    public function commentsReachSomeone(Task $task, User $actor): bool
+    {
+        return $this->commentRecipients($task, $actor)->isNotEmpty();
+    }
+
+    /**
+     * Who hears about a comment on the task (D-17): its participants — the
+     * assignee, the assigner (or the creator when no assigner was ever
+     * recorded, as for a completion) and everyone who commented on it before.
+     * Never the author, never a deleted account or one that may no longer
+     * sign in (D-11), and — as on every event path (A-20) — never someone who
+     * may not open the task: the message quotes the comment and links to it.
+     *
+     * @return Collection<int, User>
+     */
+    private function commentRecipients(Task $task, User $actor): Collection
+    {
+        $ids = TaskUpdate::query()
+            ->where('task_id', $task->getKey())
+            ->where('kind', TaskUpdateKind::Comment->value)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id')
+            ->push($task->assignee_id, $task->assigned_by ?? $task->created_by)
+            ->filter(static fn (mixed $id): bool => $id !== null)
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->reject(static fn (int $id): bool => $id === (int) $actor->getKey())
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return new Collection;
+        }
+
+        return User::query()
+            ->whereKey($ids)
+            ->orderBy('id')
+            ->get()
+            ->filter(static fn (User $user): bool => $user->status->canAuthenticate() && $user->can('view', $task))
+            ->values();
+    }
+
+    /**
      * Whether a start or an update the actor posts on the task tells anyone
      * (D-14 amendment, 2026-09-28) — the report modals promise a notice only
      * when this holds, under the very rule that sends it.
@@ -462,12 +572,13 @@ final class TaskService
         return $recipient;
     }
 
-    /** One entry of the task's progress log, written inside the caller's transaction. */
-    private function log(Task $task, User $actor, ?TaskStatus $status, ?string $body): TaskUpdate
+    /** One entry of the task's thread, written inside the caller's transaction. */
+    private function log(Task $task, User $actor, ?TaskStatus $status, ?string $body, TaskUpdateKind $kind = TaskUpdateKind::Progress): TaskUpdate
     {
         return TaskUpdate::query()->create([
             'task_id' => $task->getKey(),
             'user_id' => $actor->getKey(),
+            'kind' => $kind,
             'status' => $status,
             'body' => $body,
         ]);
@@ -498,6 +609,25 @@ final class TaskService
     }
 
     /**
+     * The text of a comment (D-17): trimmed, required and at most
+     * COMMENT_TEXT_MAX characters.
+     */
+    private function commentText(string $text): string
+    {
+        $text = trim($text);
+
+        if ($text === '') {
+            throw ValidationException::withMessages(['comment' => __('tasks.validation.comment_body_required')]);
+        }
+
+        if (mb_strlen($text) > self::COMMENT_TEXT_MAX) {
+            throw ValidationException::withMessages(['comment' => __('tasks.validation.comment_body_too_long', ['max' => self::COMMENT_TEXT_MAX])]);
+        }
+
+        return $text;
+    }
+
+    /**
      * A new task handed to anyone but its creator is an assignment (D-4): the
      * actor needs `task.assign`, and a named assignee must be within the
      * actor's reach (RecordVisibilityResolver::assignableUsers — own team for
@@ -521,16 +651,16 @@ final class TaskService
 
     /**
      * The row locked for the transition, so two concurrent completions cannot
-     * both spawn the next occurrence. A deleted task has no transitions until
-     * it is restored.
+     * both spawn the next occurrence. A deleted task has no transitions — and
+     * takes no comments — until it is restored.
      */
-    private function lock(Task $task): Task
+    private function lock(Task $task, bool $commenting = false): Task
     {
         /** @var Task $current */
         $current = Task::query()->withTrashed()->whereKey($task->getKey())->lockForUpdate()->firstOrFail();
 
         if ($current->trashed()) {
-            throw InvalidTaskTransitionException::trashed();
+            throw $commenting ? InvalidTaskTransitionException::commentOnTrashed() : InvalidTaskTransitionException::trashed();
         }
 
         return $current;

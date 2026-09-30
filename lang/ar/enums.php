@@ -115,6 +115,11 @@ return [
         'cancelled' => 'ملغاة',
     ],
 
+    'task_update_kind' => [
+        'progress' => 'تحديث',
+        'comment' => 'تعليق',
+    ],
+
     'task_priority' => [
         'low' => 'منخفضة',
         'medium' => 'متوسطة',
@@ -169,6 +174,9 @@ return [
         'task_overdue' => 'تأخر مهمة',
         'task_completed' => 'إكمال مهمة أسندتها إلى غيري',
         'task_progress' => 'بدء مهمة أسندتها إلى غيري أو نشر تحديث عليها',
+        'task_comment' => 'تعليق جديد على مهمة أشارك فيها',
+        'weekly_summary' => 'الملخص الأسبوعي للمهام',
+        'backup_failed' => 'فشل النسخ الاحتياطي الأسبوعي',
         'deal_stage_changed' => 'تغيير مرحلة صفقة أنا مسؤول عنها',
         'deal_closed' => 'الفوز بصفقة أنا مسؤول عنها أو خسارتها',
         'lead_converted' => 'تحويل عميل محتمل أنا مسؤول عنه',

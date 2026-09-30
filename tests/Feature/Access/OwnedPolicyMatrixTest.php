@@ -240,6 +240,18 @@ final class OwnedPolicyMatrixTest extends TestCase
         }
 
         $this->assertFalse($employee->can('assign', $own), 'D-15: the employee never assigns');
+
+        // D-17 (2026-09-30): every role may comment exactly where it may view.
+        $theirs = Task::factory()->create(['assignee_id' => $this->rep->getKey()]);
+        $elsewhere = Task::factory()->create(['assignee_id' => $this->outsider->getKey()]);
+
+        foreach ($this->actors as $role => $actor) {
+            foreach ([$theirs, $elsewhere, $own] as $task) {
+                $this->assertSame($actor->can('view', $task), $actor->can('comment', $task), "{$role}: Task::comment must follow Task::view");
+            }
+        }
+
+        $this->assertTrue($employee->can('comment', $own));
     }
 
     #[Test]
