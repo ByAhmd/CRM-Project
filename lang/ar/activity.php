@@ -174,6 +174,7 @@ return [
         'EmailTemplate' => 'قالب بريد',
         'NotificationPreference' => 'تفضيل إشعارات',
         'CustomField' => 'حقل مخصص',
+        'TaskTemplate' => 'مهمة دورية',
     ],
 
     'subject' => [
@@ -269,6 +270,7 @@ return [
         'subject' => 'الموضوع',
         'body' => 'النص',
         'comment' => 'التعليق',
+        'mentioned' => 'المُشار إليهم',
         'occurred_at' => 'وقت الحدوث',
         'direction' => 'الاتجاه',
         'duration_minutes' => 'المدة (دقائق)',
@@ -310,12 +312,23 @@ return [
         'is_listed' => 'متاح كعمود',
         'validation' => 'قيود التحقق',
         'is_system' => 'نظامي',
+        'frequency' => 'التكرار',
+        'weekday' => 'يوم الأسبوع',
+        'day_of_month' => 'يوم الشهر',
+        'due_time' => 'وقت الاستحقاق',
+        'due_in_days' => 'الاستحقاق بعد (أيام)',
     ],
 
     // Labels that differ for one audited model; checked before the shared attribute labels.
     'subject_attributes' => [
         'Attachment' => [
             'size' => 'حجم الملف',
+        ],
+        'TaskTemplate' => [
+            'added' => 'المكلَّفون المضافون',
+            'removed' => 'المكلَّفون المحذوفون',
+            'assigner' => 'تُسنَد المهام الآن باسم',
+            'previous_assigner' => 'كانت تُسنَد المهام باسم',
         ],
     ],
 

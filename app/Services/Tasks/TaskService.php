@@ -12,14 +12,17 @@ use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Enums\TaskUpdateKind;
+use App\Enums\UserStatus;
 use App\Exceptions\Access\UnassignableUserException;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Task;
 use App\Models\TaskUpdate;
+use App\Models\TaskUpdateMention;
 use App\Models\User;
 use App\Notifications\TaskCommentNotification;
 use App\Notifications\TaskCompletedNotification;
+use App\Notifications\TaskMentionNotification;
 use App\Notifications\TaskProgressNotification;
 use App\Services\Access\RecordAssignmentService;
 use App\Services\Access\RecordVisibilityResolver;
@@ -29,6 +32,7 @@ use App\Services\Audit\AuditLogger;
 use BackedEnum;
 use Closure;
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -71,7 +75,14 @@ use Spatie\Activitylog\CauserResolver;
  * - anyone who may view a task may comment on it (D-17), open or closed but
  *   never once deleted; a comment is an entry of the same append-only log
  *   (kind `comment`) and tells the task's participants — assignee, assigner
- *   (or creator) and earlier commenters — never its author;
+ *   (or creator), earlier commenters and colleagues mentioned earlier —
+ *   never its author;
+ * - a comment may mention colleagues (D-20): every active user holding
+ *   `task.view_any` but the author, whatever the author's reach; other ids
+ *   are dropped without complaint. Each mention is stored with the comment
+ *   (append-only, like the thread), makes the colleague a participant who
+ *   may open the task, and tells them with a "mentioned you" notice instead
+ *   of the general comment notice;
  * - every notification leaves only after the write it reports has committed,
  *   and its mail through the queue, so a mail server can never fail or undo
  *   a task write;
@@ -244,22 +255,42 @@ final class TaskService
      * trimmed, required and at most COMMENT_TEXT_MAX characters; the entry
      * joins the task's append-only thread and the participants are told once
      * it has committed.
+     *
+     * The comment may mention colleagues (D-20): of the given ids only
+     * mentionable users are kept (mentionableUsers(); the rest are dropped
+     * without complaint, as for note mentions), each stored with the comment
+     * in the same transaction, named in its ledger entry and told with a
+     * "mentioned you" notice in place of the general one. The text already
+     * holds their "@Name" (CommentDraft); it is stored as written.
+     *
+     * @param  list<int>  $mentionUserIds
      */
-    public function comment(Task $task, User $actor, string $body): TaskUpdate
+    public function comment(Task $task, User $actor, string $body, array $mentionUserIds = []): TaskUpdate
     {
         $body = $this->commentText($body);
+        $mentioned = $this->mentionedUsers($actor, $mentionUserIds);
 
-        $comment = $this->asCauser($actor, fn (): TaskUpdate => DB::transaction(function () use ($task, $actor, $body): TaskUpdate {
+        $comment = $this->asCauser($actor, fn (): TaskUpdate => DB::transaction(function () use ($task, $actor, $body, $mentioned): TaskUpdate {
             $current = $this->lock($task, commenting: true);
 
             $comment = $this->log($current, $actor, null, $body, TaskUpdateKind::Comment);
 
-            $this->audit->record(ActivityLogEvent::TaskCommented, $current, $actor, [
+            foreach ($mentioned as $user) {
+                TaskUpdateMention::query()->create([
+                    'task_update_id' => $comment->getKey(),
+                    'task_id' => $current->getKey(),
+                    'user_id' => $user->getKey(),
+                ]);
+            }
+
+            $this->audit->record(ActivityLogEvent::TaskCommented, $current, $actor, array_filter([
                 'subject_label' => $current->title,
                 'comment' => $body,
-            ]);
+                'mentioned' => $mentioned === [] ? null : array_map(static fn (User $user): string => $user->name, $mentioned),
+            ], static fn (mixed $value): bool => $value !== null));
 
-            $this->notifyParticipantsOfComment($current, $actor, $comment);
+            $this->notifyMentioned($current, $actor, $comment, $mentioned);
+            $this->notifyParticipantsOfComment($current, $actor, $comment, $mentioned);
 
             return $comment;
         }));
@@ -475,12 +506,44 @@ final class TaskService
     }
 
     /**
-     * Tells the task's participants about a new comment (D-17), once it has
-     * committed; the recipients are commentRecipients()'s.
+     * Tells each colleague the comment mentions that they were pulled into
+     * the task (D-20), once it has committed — only those who may sign in
+     * and open the task (A-20), which the stored mention itself now allows.
+     *
+     * @param  list<User>  $mentioned
      */
-    private function notifyParticipantsOfComment(Task $task, User $actor, TaskUpdate $comment): void
+    private function notifyMentioned(Task $task, User $actor, TaskUpdate $comment, array $mentioned): void
     {
-        $recipients = $this->commentRecipients($task, $actor);
+        $recipients = array_values(array_filter(
+            $mentioned,
+            static fn (User $user): bool => $user->status->canAuthenticate() && $user->can('view', $task),
+        ));
+
+        if ($recipients === []) {
+            return;
+        }
+
+        DB::afterCommit(static function () use ($recipients, $task, $actor, $comment): void {
+            foreach ($recipients as $recipient) {
+                $recipient->notify((new TaskMentionNotification($task, $actor, $comment))->locale($recipient->preferredLocale()));
+            }
+        });
+    }
+
+    /**
+     * Tells the task's participants about a new comment (D-17), once it has
+     * committed; the recipients are commentRecipients()'s, less the users the
+     * comment mentions — they have their own notice (D-20).
+     *
+     * @param  list<User>  $mentioned
+     */
+    private function notifyParticipantsOfComment(Task $task, User $actor, TaskUpdate $comment, array $mentioned = []): void
+    {
+        $mentionedIds = array_map(static fn (User $user): int => (int) $user->getKey(), $mentioned);
+
+        $recipients = $this->commentRecipients($task, $actor)
+            ->reject(static fn (User $user): bool => in_array((int) $user->getKey(), $mentionedIds, true))
+            ->values();
 
         if ($recipients->isEmpty()) {
             return;
@@ -506,10 +569,11 @@ final class TaskService
     /**
      * Who hears about a comment on the task (D-17): its participants — the
      * assignee, the assigner (or the creator when no assigner was ever
-     * recorded, as for a completion) and everyone who commented on it before.
-     * Never the author, never a deleted account or one that may no longer
-     * sign in (D-11), and — as on every event path (A-20) — never someone who
-     * may not open the task: the message quotes the comment and links to it.
+     * recorded, as for a completion), everyone who commented on it before and
+     * everyone a comment on it mentioned (D-20). Never the author, never a
+     * deleted account or one that may no longer sign in (D-11), and — as on
+     * every event path (A-20) — never someone who may not open the task: the
+     * message quotes the comment and links to it.
      *
      * @return Collection<int, User>
      */
@@ -521,6 +585,7 @@ final class TaskService
             ->whereNotNull('user_id')
             ->distinct()
             ->pluck('user_id')
+            ->merge(TaskUpdateMention::query()->where('task_id', $task->getKey())->distinct()->pluck('user_id'))
             ->push($task->assignee_id, $task->assigned_by ?? $task->created_by)
             ->filter(static fn (mixed $id): bool => $id !== null)
             ->map(static fn (mixed $id): int => (int) $id)
@@ -539,6 +604,58 @@ final class TaskService
             ->get()
             ->filter(static fn (User $user): bool => $user->status->canAuthenticate() && $user->can('view', $task))
             ->values();
+    }
+
+    /**
+     * The colleagues the actor may mention in a task comment (D-20): every
+     * user who may sign in (D-11, an active account that is not deleted) and
+     * holds `task.view_any` through a role or a direct grant — so the mention
+     * lets them open the task — except the actor. Deliberately not limited to
+     * the actor's assignment reach: an employee pulls in a manager or a
+     * colleague from another team. The comment editor lists these users and
+     * comment() keeps only these; ordered by name.
+     *
+     * @return Builder<User>
+     */
+    public function mentionableUsers(User $actor): Builder
+    {
+        $viewAny = Permission::TaskViewAny->value;
+
+        return User::query()
+            ->where('status', UserStatus::Active->value)
+            ->whereKeyNot($actor->getKey())
+            ->where(static function (Builder $holders) use ($viewAny): void {
+                $holders
+                    ->whereHas('permissions', static fn (Builder $permission): Builder => $permission->where($permission->qualifyColumn('name'), $viewAny))
+                    ->orWhereHas('roles.permissions', static fn (Builder $permission): Builder => $permission->where($permission->qualifyColumn('name'), $viewAny));
+            })
+            ->orderBy('name');
+    }
+
+    /**
+     * The mentionable users among the given ids, each once, in the order the
+     * comment mentions them; every other id is dropped without complaint.
+     *
+     * @param  list<int>  $userIds
+     * @return list<User>
+     */
+    private function mentionedUsers(User $actor, array $userIds): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $id): int => (int) $id, $userIds),
+            static fn (int $id): bool => $id > 0,
+        )));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $users = $this->mentionableUsers($actor)->whereKey($ids)->get()->keyBy(static fn (User $user): int => (int) $user->getKey());
+
+        return array_values(array_filter(array_map(
+            static fn (int $id): ?User => $users->get($id),
+            $ids,
+        )));
     }
 
     /**

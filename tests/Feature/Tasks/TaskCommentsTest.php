@@ -28,7 +28,7 @@ use App\Services\Settings\SettingsRepository;
 use App\Services\Tasks\TaskService;
 use App\Support\Notifications\NotificationChannels;
 use Closure;
-use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\RichEditor;
 use Filament\Schemas\Components\Text;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\QueryException;
@@ -574,9 +574,10 @@ final class TaskCommentsTest extends TestCase
         $this->assertTrue($this->tasks->commentsReachSomeone($own, $this->manager), 'the rep hears the manager on their own to-do');
 
         // The modal renders lazily, so the field's helper (its below-content text) is read off the mounted schema.
-        $helper = static fn (?string $expected): Closure => static function (Textarea $field) use ($expected): bool {
+        // The comment box is the mention-aware editor since D-20.
+        $helper = static fn (?string $expected): Closure => static function (RichEditor $field) use ($expected): bool {
             $texts = array_values(array_filter(
-                $field->getChildSchema(Textarea::BELOW_CONTENT_SCHEMA_KEY)?->getComponents() ?? [],
+                $field->getChildSchema(RichEditor::BELOW_CONTENT_SCHEMA_KEY)?->getComponents() ?? [],
                 static fn (mixed $component): bool => $component instanceof Text,
             ));
 

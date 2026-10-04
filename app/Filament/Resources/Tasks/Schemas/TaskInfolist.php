@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Tasks\Schemas;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
 use App\Models\TaskUpdate;
+use App\Models\TaskUpdateMention;
 use App\Models\User;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -15,9 +16,10 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 /**
- * One task (decisions A-10, D-14, D-17): what it is, how the work is going
+ * One task (decisions A-10, D-14, D-17, D-20): what it is, how the work is going
  * (the thread of progress entries and comments), when it is due, the records it is linked to, who it is
  * assigned to and by whom, how it repeats and who created it. Links to a
  * linked record, and to the first task of its series, appear only when the
@@ -167,9 +169,10 @@ final class TaskInfolist
      * comments together, newest first — each marked as an update or a
      * comment, with its author, its time in the organisation's timezone, the
      * status a progress entry moved the task to as a badge, and the author's
-     * text as plain text. The thread and its authors are loaded in two
-     * queries whatever its length; the reader who may report on the task but
-     * not edit it is told where their actions are.
+     * text as plain text, the names a comment mentions highlighted (D-20).
+     * The thread, its authors and its mentions are loaded in a fixed number
+     * of queries whatever its length; the reader who may report on the task
+     * but not edit it is told where their actions are.
      */
     private static function threadSection(): Section
     {
@@ -184,7 +187,7 @@ final class TaskInfolist
             ->schema([
                 RepeatableEntry::make('updates')
                     ->hiddenLabel()
-                    ->state(static fn (?Model $record): ?Collection => $record instanceof Task ? $record->loadMissing('updates.author')->updates : null)
+                    ->state(static fn (?Model $record): ?Collection => $record instanceof Task ? $record->loadMissing(['updates.author', 'updates.mentions.user'])->updates : null)
                     ->placeholder(__('tasks.empty.thread'))
                     ->schema([
                         Grid::make(4)->schema([
@@ -204,12 +207,53 @@ final class TaskInfolist
                         ]),
                         TextEntry::make('body')
                             ->label(static fn (?Model $record): string => $record instanceof TaskUpdate && $record->isComment() ? __('tasks.fields.comment_body') : __('tasks.fields.update_body'))
+                            ->formatStateUsing(static fn (?string $state, ?Model $record): string|HtmlString => $record instanceof TaskUpdate ? self::body($record) : (string) $state)
                             ->extraAttributes(['class' => 'whitespace-pre-line'])
                             ->visible(static fn (?Model $record): bool => $record instanceof TaskUpdate && filled($record->body))
                             ->columnSpanFull(),
                     ]),
             ])
             ->columns(1);
+    }
+
+    /**
+     * The entry's text, with each "@Name" of a colleague the comment mentions
+     * set in the mention highlight (D-20). The text is escaped first and the
+     * names are matched in their escaped form, so nothing the author or a
+     * user's name holds is ever read as markup; the longest name wins where
+     * one starts another, and a name is not marked inside a longer word —
+     * neither one that runs on after it nor one it ends ("omar@Sara" is an
+     * address, not a mention; the editor itself opens its "@" list only at
+     * the start of a word). An entry that mentions nobody stays a plain
+     * string, escaped by the entry.
+     */
+    private static function body(TaskUpdate $update): string|HtmlString
+    {
+        $body = (string) $update->body;
+
+        $names = $update->mentions
+            ->map(static fn (TaskUpdateMention $mention): ?string => $mention->user?->name)
+            ->filter(static fn (?string $name): bool => filled($name))
+            ->map(static fn (?string $name): string => e('@'.$name))
+            ->unique()
+            ->sortByDesc(static fn (string $name): int => mb_strlen($name))
+            ->values()
+            ->all();
+
+        if ($names === [] || ! str_contains($body, '@')) {
+            return $body;
+        }
+
+        // A letter, a combining mark (an Arabic diacritic belongs to the letter before it), a digit or "_" continues a word.
+        $pattern = '/(?<![\p{L}\p{M}\p{N}_])(?:'.implode('|', array_map(static fn (string $name): string => preg_quote($name, '/'), $names)).')(?![\p{L}\p{M}\p{N}_])/u';
+
+        $highlighted = preg_replace_callback(
+            $pattern,
+            static fn (array $match): string => '<span class="crm-mention">'.$match[0].'</span>',
+            e($body),
+        );
+
+        return new HtmlString($highlighted ?? e($body));
     }
 
     /** The author's name, marked when their account was deleted, or a fallback when it is gone. */

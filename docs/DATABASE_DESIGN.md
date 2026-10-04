@@ -4,7 +4,9 @@ Status: **as built at the end of step 12, 2026-09-15.** Designed 2026-09-05 (dec
 quality-pass migrations dated 2026-09-14 (section 6) and checked against `information_schema` on `crm_testing_c` after
 `migrate:fresh` on MySQL 8.4.11. The migrations are also proven on MariaDB 10.4.32 (A-21); engine differences are listed
 under *Engine-aware migrations* below. The schema contract is pinned by `tests/Feature/Database/SchemaContractTest.php`
-and the `tests/Feature/QualityPass/Schema` probes.
+and the `tests/Feature/QualityPass/Schema` probes. Later owner decisions amend it in place: task updates and comments
+(D-14 amendment, D-17), and the migrations dated 2026-10-04 — `task_update_mentions` and the `task_mention` preference
+event (D-20), `tasks.assigned_at` (D-21), `task_templates`, `task_template_user` and `tasks.template_id` (D-22).
 
 ## Conventions
 
@@ -66,7 +68,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `imports`, `failed_import_rows`, `exports` | Filament actions migrations (`vendor:publish --tag=filament-actions-migrations`) |
 | `settings` | `key` VARCHAR(100) U, `value` JSON N, `group` VARCHAR(50) I, timestamps. Typed access through `SettingsRepository`; audited. |
 | `teams` | `name_ar`, `name_en`, `manager_user_id` FK→users N SET NULL, `is_active` bool, `sort` SMALLINT, timestamps, SD. U (`name_en`), U (`name_ar`). |
-| `notification_preferences` | `user_id` FK→users CASCADE, `event` VARCHAR(64) (CHECK from `NotificationEvent`), `database` bool default 1, `mail` bool default 0, timestamps. U (`user_id`,`event`). |
+| `notification_preferences` | `user_id` FK→users CASCADE, `event` VARCHAR(64) (CHECK from `NotificationEvent`, rebuilt through `EnumCheck` whenever a case is added — last by `2026_10_04_100002` for `task_mention`, D-20, whose `down()` deletes that event's rows and restores the earlier list), `database` bool default 1, `mail` bool default 0 (a missing row means the event's default: mail on for `record_assigned`, `task_mention`, `weekly_summary`, `backup_failed`), timestamps. U (`user_id`,`event`). |
 
 **Removed table.** `saved_views` (`user_id` FK→users CASCADE, `resource`, `name`, `filters` JSON, `sort_column`,
 `sort_direction`, `search`, `columns` JSON, `is_shared`, `is_default`, timestamps; U (`user_id`,`resource`,`name`)) was
@@ -251,11 +253,13 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `overdue_notified_at` | DATETIME N | |
 | `assignee_id` | FK→users N SET NULL | I |
 | `assigned_by` | FK→users N SET NULL | I; who handed the task to its assignee (D-14), written by the services only |
+| `assigned_at` | DATETIME N | I `tasks_assigned_at_index`; when the task reached its current assignee (D-21, migration `2026_10_04_200001`): written only by `TaskAssignmentStampObserver` — stamped on create with an assignee, restamped when the assignee changes, cleared when unassigned, a direct write undone; not fillable, not audited. Backfilled from `created_at` for the rows that had an assignee; `down()` drops index and column. No CHECK ties it to `assignee_id`: MySQL 8 refuses a CHECK on a column with an FK referential action (error 3823) |
 | `lead_id` / `contact_id` / `account_id` / `deal_id` | FK N SET NULL | each I |
 | `recurrence_frequency` | enum(`none`,`daily`,`weekly`,`monthly`) CHECK | default `none` |
 | `recurrence_interval` | TINYINT UNSIGNED N | every N units |
 | `recurrence_ends_at` | DATE N | |
 | `series_id` | FK→tasks N SET NULL | first task of the series |
+| `template_id` | FK→task_templates N SET NULL | I `tasks_template_id_index`; the routine the task was created from (D-22, migration `2026_10_04_300003`), written by `RoutineTaskService` only (not fillable); cleared when the routine is deleted, the task stays |
 | `created_by` | FK→users N SET NULL | |
 | timestamps, SD | | |
 
@@ -270,6 +274,53 @@ NULL for a plain progress note and for every comment), `body` TEXT N (plain text
 at 2000 characters by `TaskService`, a comment is required), `created_at` DATETIME. I (`task_id`,`created_at`) for the
 thread, I (`task_id`,`kind`) for a comment's earlier commenters. No `updated_at`; written by `TaskService` only,
 `TaskUpdateAppendOnlyObserver` refuses every update and delete.
+
+### `task_update_mentions` (append-only — D-20)
+
+Who a task comment mentions (migration `2026_10_04_100001`): `task_update_id` FK→task_updates CASCADE, `task_id`
+FK→tasks CASCADE (denormalised from the comment, so "which tasks was this user mentioned on" needs no join), `user_id`
+FK→users CASCADE (a row exists only for its mentioned user; users are soft-deleted, so in practice a mention outlives the
+account like the comment holding it), `created_at` DATETIME. U (`task_update_id`,`user_id`) — a comment mentions a user
+once; I (`user_id`,`task_id`) answers the participant read path (`TaskPolicy::view`, `TaskResource::constrainToReadable`)
+from the index; I (`task_id`) lists the earlier-mentioned recipients of a later comment. Written by
+`TaskService::comment()` inside the comment's transaction; `TaskUpdateMentionAppendOnlyObserver` refuses every update
+and delete and, on create, refuses a row whose entry is missing, is not a comment, or belongs to another task — the
+denormalised `task_id` is what grants access, so it must be the comment's own. The comment text itself stays plain
+(`@Name`); no name is stored here, so after a rename older comments read the old name and are no longer highlighted.
+
+### `task_templates` (routine tasks — D-22)
+
+Configuration, not a business entity: no soft deletes; deleting a routine never touches the tasks it created
+(`tasks.template_id` SET NULL). Migration `2026_10_04_300001`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `title` | VARCHAR(200) | sized like `tasks.title`, which every task copies |
+| `description` | TEXT N | at most 2000 characters (service) |
+| `priority` | enum(`low`,`medium`,`high`,`urgent`) CHECK | default `medium` (`TaskPriority`) |
+| `frequency` | enum(`weekly`,`monthly`) CHECK | I (`RoutineFrequency`) |
+| `weekday` | TINYINT UNSIGNED N | 0 = Sunday … 6 = Saturday; CHECK `task_templates_weekday_check` (NULL or 0–6) |
+| `day_of_month` | TINYINT UNSIGNED N | 1–28, so every month has it; CHECK `task_templates_day_of_month_check` (NULL or 1–28) |
+| `due_time` | TIME | default 17:00:00; the time of day the tasks are due, organisation time |
+| `due_in_days` | TINYINT UNSIGNED | default 0 (the scheduled day itself); CHECK `task_templates_due_in_days_check` (0–30) |
+| `is_active` | bool | default 1; a paused routine produces nothing |
+| `next_run_on` | DATE N | the organisation day the hourly `tasks:generate-routines` produces next; CHECK `task_templates_next_run_on_check`: set exactly while the routine is active |
+| `last_run_on` | DATE N | the day produced last, so no day is produced twice (not even after a same-day schedule change or resume) |
+| `assigned_by` | FK→users N SET NULL | I; whoever last saved the routine — its tasks are handed out in their name (D-14) |
+| timestamps | | `updated_at` is the last save by a person; the hourly advance writes without timestamps |
+
+CHECK `task_templates_schedule_check`: `weekly` ⇒ `weekday` set and `day_of_month` NULL; `monthly` ⇒ `day_of_month` set
+and `weekday` NULL. I (`is_active`,`next_run_on`) serves the hourly pass. `assigned_by`, `next_run_on` and `last_run_on`
+are not fillable; `RoutineTaskService` writes them. `down()` drops the enum CHECKs, then the table (the range and schedule
+CHECKs go with it). Audited as configuration (`AuditsAsLookup`, explicit whitelist without the run days or the
+assigner); assignee changes and a takeover by another saver (`assigner`, `previous_assigner`) are recorded by the
+service as one `settings.lookup_updated` entry.
+
+### `task_template_user` (routine assignees — D-22)
+
+`task_template_id` FK→task_templates CASCADE, `user_id` FK→users CASCADE (I). U (`task_template_id`,`user_id`). No
+timestamps. Written by `RoutineTaskService` (sync), one task per row on each scheduled day. Migration
+`2026_10_04_300002`.
 
 ### `notes`
 
@@ -301,7 +352,8 @@ thread, I (`task_id`,`kind`) for a comment's earlier commenters. No `updated_at`
 - Deal `belongsTo` account, contact, pipeline, stage, owner, closeReason, lead; `hasMany` stageLogs, activities, tasks, notes, products; `belongsToMany` contacts, competitors, tags; morph attachments.
 - Pipeline `hasMany` stages, deals.
 - Activity/Task/Note `belongsTo` lead/contact/account/deal (nullable), owner/assignee/author; morph attachments.
-- Task `hasMany` updates (`task_updates`, newest first), `belongsTo` assigner (`assigned_by`); TaskUpdate `belongsTo` task, author.
+- Task `hasMany` updates (`task_updates`, newest first), `belongsTo` assigner (`assigned_by`), `belongsTo` template (`template_id`, D-22); TaskUpdate `belongsTo` task, author, `hasMany` mentions (`task_update_mentions`, D-20).
+- TaskTemplate `belongsToMany` assignees (`task_template_user`), `belongsTo` assigner (`assigned_by`, soft-deleted users included), `hasMany` tasks.
 - Custom field values `morphTo` entity, `belongsTo` field.
 
 ## 6. Data integrity rules enforced outside the schema (services + observers + tests)
@@ -318,7 +370,8 @@ Step-13 amendments (migrations dated 2026-09-15, from the EXPLAIN evidence on vo
 - Lead conversion is one transaction: create/link account, create/link contact, optionally create deal, set `converted_*`, move status to the `converted` kind, write status log, audit and timeline entries.
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
 - Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`) checked on the server-sniffed type, max size from `config('crm.attachments.max_kb')`, files parked under `tmp/{user id}/` until the form is submitted (pruned daily), soft delete keeps the file, force delete removes it, downloads go through the panel's authentication middleware and the subject's `view` policy; uploads are refused on soft-deleted subjects.
-- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`. Starting (Pending → In progress), posting a progress update, completing and reopening each append a `task_updates` row inside the same transaction (D-14 amendment, 2026-09-28); a comment appends a `kind = comment` row (no status) on an open or closed task, never on a soft-deleted one (D-17).
+- Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`. Starting (Pending → In progress), posting a progress update, completing and reopening each append a `task_updates` row inside the same transaction (D-14 amendment, 2026-09-28); a comment appends a `kind = comment` row (no status) on an open or closed task, never on a soft-deleted one (D-17), plus one `task_update_mentions` row per mentionable colleague it mentions (active `task.view_any` holders other than the author; other ids are dropped) in the same transaction (D-20). `assigned_at` follows `assignee_id` on every Eloquent save (`TaskAssignmentStampObserver`, D-21); no code path changes `assignee_id` through the query builder or `saveQuietly`, and users are only soft-deleted, so the observer sees every change.
+- Routine tasks (D-22): `RoutineTaskService` is the only writer of `task_templates` and `task_template_user`; every save checks the assignees against the saver's assignment reach; the hourly pass locks each due routine, re-checks it, creates one task per assignee who may sign in and holds `task.view_any` (with `assigned_by` and `template_id` force-filled) for the latest matching day only, and advances `next_run_on` / `last_run_on` in the same transaction.
 - Notes: body trimmed and capped at 5000 characters in the service; a note on a contact or deal is listed on the account only when the reader may read that contact or deal.
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).

@@ -11,10 +11,13 @@ use Illuminate\Support\Collection;
  * report's columns, keyed the way the report's columns() declares them.
  *
  * Values are raw numbers (money as floats in the organisation currency,
- * rates as percentages with one decimal, counts as integers) so the page
- * formats them for the locale and the export writes them as numbers; a text
- * column carries a string. `meta` is what the presentation may need beyond
- * the values — the grouped record's id, a badge colour — never a figure.
+ * rates as percentages with one decimal, counts as integers, durations as
+ * whole seconds) so the page formats them for the locale and the export
+ * writes them as numbers; a text column carries a string, and so does a
+ * duration nothing was measured for (NOT_MEASURED). A row may carry values
+ * no column shows — the sum behind a mean, so a totals line can weight it
+ * (D-21). `meta` is what the presentation may need beyond the values — the
+ * grouped record's id, a badge colour — never a figure.
  *
  * The FORMAT_* constants name how a column is rendered; each report's
  * formats() maps its column keys onto them.
@@ -30,6 +33,12 @@ final readonly class ReportRow
     public const FORMAT_DECIMAL = 'decimal';
 
     public const FORMAT_TEXT = 'text';
+
+    /** A span of time in whole seconds: days and hours on the page, hours in the export (D-21). */
+    public const FORMAT_DURATION = 'duration';
+
+    /** The value of a duration with nothing to measure: the page shows the empty marker, the export an empty cell. */
+    public const NOT_MEASURED = '';
 
     /**
      * @param  array<string, int|float|string>  $values
@@ -92,5 +101,11 @@ final readonly class ReportRow
     public static function average(int|float $total, int|float $count, int $decimals = 1): float
     {
         return $count > 0 ? round($total / $count, $decimals) : 0.0;
+    }
+
+    /** A mean duration in whole seconds; NOT_MEASURED when there is nothing to divide by. */
+    public static function meanSeconds(int|float $totalSeconds, int|float $count): int|string
+    {
+        return $count > 0 ? (int) round($totalSeconds / $count) : self::NOT_MEASURED;
     }
 }

@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-19 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-22 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -206,6 +206,15 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   badge), `Reports/*`, `Settings/General`. `ViewTask` shows the task's progress log (D-14 amendment,
   2026-09-28) and offers the assignee start / post update / complete; a handed-out task's edit, cancel and
   delete stay with those who may edit it, and the calendar sends the assignee's click to the task page.
+  The thread (D-17) takes comments from a mention-aware editor (D-20): Filament's `RichEditor` with a
+  `MentionProvider` and no formatting toolbar — `@` lists up to eight mentionable colleagues, typing narrows the
+  list through a server search — whose TipTap JSON `App\Services\Tasks\CommentDraft` reduces to plain text holding
+  `@Name` plus the mentioned ids; the same comment action serves the task page, the task list row menu and the
+  relation managers' task rows (`TaskActions::comment()`). The thread escapes each body before it marks the
+  mentioned names (`.crm-mention`).
+- Routine tasks (D-22): *Activities → Routine tasks* is an ordinary resource (`TaskTemplates/`: list, create and
+  edit pages; pause, resume and delete on the row menu and the edit page; bulk delete), gated by `task.assign`
+  through `TaskTemplatePolicy`; the form, list and actions only call `RoutineTaskService`.
 - Tables: `defaultSort` on every table (guard test), persisted filters/sort/search in session,
   column manager, list tabs, query-builder filter on the main lists, empty states translated.
 - Light/dark/system: `->darkMode()->themeSwitcher()->defaultThemeMode(ThemeMode::System)`; one Tailwind 4
@@ -241,10 +250,11 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
 
   | Class | Sent by | To | Queued |
   |---|---|---|---|
-  | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record; `announce()` also for a task created for someone else, D-14), after the change commits | the new owner / assignee | mail yes, bell at once (D-14) |
+  | `RecordAssignedNotification` | `RecordAssignmentService` (owner changes from the edit pages, the assign actions, task assignment and import rows that reassign an existing record; `announce()` also for a task created for someone else, D-14, and for each task a routine hands out, D-22), after the change commits | the new owner / assignee | mail yes, bell at once (D-14) |
   | `TaskCompletedNotification` | `TaskService::complete()`, after the completion commits (D-14) | the assigner, or the creator when no assigner was ever recorded; never the completer, only a recipient who may open the task | mail yes, bell at once |
   | `TaskProgressNotification` | `TaskService::start()` and `::postUpdate()`, after the entry commits (D-14 amendment, 2026-09-28; `NotificationEvent::TaskProgress`, bell by default, mail opt-in) | the completion notice's recipient: the assigner, or the creator when no assigner was ever recorded; never the actor, only a recipient who may open the task; the author's text quoted as plain text, cut to 280 characters | mail yes, bell at once |
-  | `TaskCommentNotification` | `TaskService::comment()`, after the comment commits (D-17; `NotificationEvent::TaskComment`, bell by default, mail opt-in) | the task's participants: the assignee, the assigner (or the creator when no assigner was ever recorded) and everyone who commented before; never the author, only an active account that may open the task; the comment quoted as plain text, cut to 280 characters | mail yes, bell at once |
+  | `TaskCommentNotification` | `TaskService::comment()`, after the comment commits (D-17; `NotificationEvent::TaskComment`, bell by default, mail opt-in) | the task's participants: the assignee, the assigner (or the creator when no assigner was ever recorded), everyone who commented before and everyone a comment mentioned before (D-20); never the author nor a user this comment mentions (they get the next row instead), only an active account that may open the task; the comment quoted as plain text, cut to 280 characters | mail yes, bell at once |
+  | `TaskMentionNotification` | `TaskService::comment()` when the comment mentions colleagues, after it commits (D-20; `NotificationEvent::TaskMention`, bell and mail on by default) | each mentioned user — an active `task.view_any` holder other than the author, whom the stored mention now lets open the task; in place of the comment notice for that comment; the comment quoted as plain text, cut to 280 characters | mail yes, bell at once |
   | `DealStageChangedNotification` | `DealStageWorkflow` (open-stage move or reopen by someone else) | the deal owner | yes |
   | `DealClosedNotification` | `DealStageWorkflow` (won / lost) | the owner and the owner's team manager, never the actor | yes |
   | `LeadConvertedNotification` | `LeadConversionWorkflow` (after commit, conversion by someone else) | the lead owner | yes |
@@ -263,15 +273,15 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
 - Channels: every `via()` except the invitation goes through `App\Support\Notifications\NotificationChannels::for()`:
   `database` unless the user switched the event off; `mail` only when `config('mail.default')` is a real
   transport (not `log`, `array` or empty) and the user's preference for the event allows it — mail is opt-in
-  for every event except `RecordAssigned` (D-14), `WeeklySummary` (D-18) and `BackupFailed` (D-16), whose mail is
-  on unless the user switched it off. "Bell at once"
+  for every event except `RecordAssigned` (D-14), `TaskMention` (D-20), `WeeklySummary` (D-18) and `BackupFailed`
+  (D-16), whose mail is on unless the user switched it off (`NotificationEvent::mailByDefault()`). "Bell at once"
   in the table: the notification is queued but its `database` channel runs on the sync connection
   (`viaConnections()`), so only the mail waits for the queue. No paid provider.
 - Preferences page (`App\Filament\Pages\NotificationPreferences`, System group, every signed-in user; D-10, D-19):
   one bell/mail pair per event, grouped into sections: records · tasks (reminder, overdue, progress, comment,
-  completed) · deals · leads · notes · summaries (weekly summary) · system (backup failed). An event is offered only
+  mention, completed) · deals · leads · notes · summaries (weekly summary) · system (backup failed). An event is offered only
   to holders of any permission `NotificationPreferenceService::requiredPermissions()` maps it to: record assigned, any
-  `{lead,contact,account,deal,activity,task}.view_any`; task events, `task.view_any`; deal events, `deal.view_any`;
+  `{lead,contact,account,deal,activity,task}.view_any`; task events (the task mention included), `task.view_any`; deal events, `deal.view_any`;
   lead events, `lead.view_any`; note mention, `note.create`; weekly summary, `task.assign`; backup failed,
   `roles.manage`. The `match` is exhaustive, so a new event cannot ship without a rule. Sections with no offered event
   are hidden, a user offered nothing sees an empty state, and a missing mail transport is shown once as a notice box
@@ -289,6 +299,7 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   | `scheduler:heartbeat` (named closure) | every minute | stores the time under the cache key `scheduler.heartbeat` for ten minutes; `app:preflight` warns when it is missing or older than five minutes, and in production `/up` answers 500 when it is missing, unreadable or older than ten minutes (`FailHealthCheckWithoutSchedulerHeartbeat`, D-16) |
   | `tasks:send-reminders` | every five minutes, `withoutOverlapping(5)` | task reminders, idempotent via `reminder_sent_at` (A-10) |
   | `tasks:notify-overdue` | every fifteen minutes, `withoutOverlapping(5)` | overdue notices, idempotent via `overdue_notified_at` |
+  | `tasks:generate-routines` | hourly, `withoutOverlapping(30)` | routine tasks (D-22, `RoutineTaskService::generateDue()`): each active routine whose `next_run_on` has come in the organisation timezone is locked, re-checked and produces one task per eligible assignee for its latest matching day only (no backlog after downtime), announced like any assignment; `next_run_on` / `last_run_on` move in the same transaction, so a doubled run creates nothing; a routine that throws is reported and retried next hour without holding up the others |
   | `leads:notify-stale` | daily at 07:00 (app timezone) | stale-lead notice, idempotent via `stale_notified_at` |
   | `RescoreLeads` (queued job) | daily at 03:00 | recomputes open lead scores in batches of 500 so activity-recency points expire (D-7); unique, `$timeout = 45` so one batch fits one drain |
   | `attachments:prune-temporary` (named closure) | daily | deletes uploads parked under `tmp/` on the attachments disk for more than a day |
@@ -334,6 +345,15 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   `Services/Statistics/*Analytics` or `*ReportQuery` service (aggregate SQL with `ONLY_FULL_GROUP_BY`
   compatible grouping), table + chart, `ExportAction`, `reports.view` permission plus the visibility
   resolver.
+- Task performance (`TaskPerformanceReportPage`, `Services/Statistics/Reports/TaskPerformanceReport`): one line per
+  assignee within the reader's task scope — completed, on time, late, still open, overdue now, completion rate and
+  **average time to finish** (D-21): for the tasks completed in the period, the mean of
+  `completed_at − COALESCE(assigned_at, created_at)`, never negative, summed in SQL (`finish_seconds`) so the totals
+  line is the mean over every completed task, not a mean of the per-assignee means. `tasks.assigned_at` is kept by
+  `TaskAssignmentStampObserver` on every Eloquent save (stamped on create with an assignee, restamped on reassignment,
+  cleared on unassignment; a direct write is undone) and was backfilled from `created_at` for tasks assigned before
+  D-21. The page shows whole days and hours — under an hour reads "less than an hour", from one hour up the mean is
+  rounded to the nearest hour — and the export writes hours with one decimal.
 
 ### 3.10 Integration architecture
 
@@ -368,6 +388,7 @@ Foundation (auth, users, roles/permissions, teams, settings infra, lang, theme, 
    │        └─► Timeline (needs all of the above + audit ledger)
    │        └─► Calendar (tasks + meetings)
    │        └─► Reminders & notifications (tasks + queue/scheduler)
+   │        └─► Routine tasks (tasks + assignment + scheduler, D-22)
    │
    ├─► Search, filters, import/export (need the entities and visibility resolver)
    ├─► Dashboard & reports (need deals, leads, activities, tasks, statistics services)
@@ -539,10 +560,11 @@ CRM_Project/
 ├── app/
 │   ├── Console/Commands/          OnboardCommand (app:onboard), PreflightCommand (app:preflight), SendTaskReminders (tasks:send-reminders),
 │   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale), DemoDataCommand (app:demo-data),
-│   │                              BackupCommand (crm:backup), WeeklySummaryCommand (crm:weekly-summary)
+│   │                              BackupCommand (crm:backup), WeeklySummaryCommand (crm:weekly-summary),
+│   │                              GenerateRoutineTasksCommand (tasks:generate-routines, D-22)
 │   ├── Contracts/                 TranslatableStatus
 │   ├── Enums/                     NavigationGroup, Permission, CrmRole, UserStatus, LeadStatusKind, LeadPriority, StageKind, DealStatus,
-│   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskUpdateKind, TaskPriority, RecurrenceFrequency,
+│   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskUpdateKind, TaskPriority, RecurrenceFrequency, RoutineFrequency,
 │   │                              AccountType, CompanySize, CustomFieldType, ActivityLogEvent, NotificationEvent
 │   ├── Exceptions/{Leads,Deals,Tasks,Attachments,Imports,Access}/
 │   ├── Filament/
@@ -555,7 +577,7 @@ CRM_Project/
 │   │   │   ├── Reports/           LeadReport, ConversionReport, PipelineReport, SalesPerformanceReport, ActivityReport,
 │   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport
 │   │   │   └── Concerns/          HasReportFilters
-│   │   ├── Resources/             Leads/, Contacts/, Accounts/, Deals/, Activities/, Tasks/, Notes/ (relation-only), Attachments/ (relation-only),
+│   │   ├── Resources/             Leads/, Contacts/, Accounts/, Deals/, Activities/, Tasks/, TaskTemplates/ (routine tasks, D-22), Notes/ (relation-only), Attachments/ (relation-only),
 │   │   │                          Pipelines/ (+StagesRelationManager), LeadStatuses/, LeadSources/, Industries/, ActivityTypes/, CloseReasons/,
 │   │   │                          Competitors/, Tags/, Teams/, CustomFields/, Users/, Roles/, ActivityLogs/, Imports/, Exports/
 │   │   │                          (each: XResource, Schemas/, Tables/, Pages/, RelationManagers/)
@@ -569,14 +591,15 @@ CRM_Project/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
 │   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
-│   │                              Activity, Task, TaskUpdate, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
+│   │                              Activity, Task, TaskUpdate, TaskUpdateMention, TaskTemplate, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
-│   │                              TaskCompletedNotification, TaskProgressNotification, TaskCommentNotification, UserInvitationNotification,
-│   │                              WeeklySummaryNotification, BackupFailedNotification
+│   │                              TaskCompletedNotification, TaskProgressNotification, TaskCommentNotification, TaskMentionNotification,
+│   │                              UserInvitationNotification, WeeklySummaryNotification, BackupFailedNotification
 │   ├── Observers/                 LeadObserver, DealObserver, TaskObserver, AttachmentObserver, PipelineStageObserver,
 │   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver,
-│   │                              TaskUpdateAppendOnlyObserver
+│   │                              TaskUpdateAppendOnlyObserver, TaskUpdateMentionAppendOnlyObserver (D-20),
+│   │                              TaskAssignmentStampObserver (tasks.assigned_at, D-21)
 │   ├── Policies/                  <Model>Policy per model + Concerns/ChecksPermissions
 │   ├── Providers/                 AppServiceProvider, Filament/AdminPanelProvider
 │   ├── Services/
@@ -593,7 +616,9 @@ CRM_Project/
 │   │   ├── Statistics/            DashboardMetrics, LeadFunnelMetrics, DealAnalytics, ActivityAnalytics, TaskAnalytics, SourceAnalytics, ForecastAnalytics
 │   │   ├── System/                BackupService, BackupSet, BackupFailure, BackupException, BackupInProgressException, LoggedErrorCounter
 │   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome,
-│   │   │                          WeeklySummary (+ WeeklySummaryReport, WeeklySummaryTask, WeeklySummaryAssignee, WeeklySummaryHealth)
+│   │   │                          WeeklySummary (+ WeeklySummaryReport, WeeklySummaryTask, WeeklySummaryAssignee, WeeklySummaryHealth),
+│   │   │                          CommentDraft and TaskParticipants (mentions and the participant read path, D-20),
+│   │   │                          RoutineTaskService (routine tasks, D-22)
 │   │   └── Users/                 UserInvitationService
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
@@ -610,7 +635,7 @@ CRM_Project/
 │                                  DEPLOYMENT.md, OPERATIONS.md, Static_Analysis_Known_False_Positives.md; not built: MODULES.md, DESIGN_TOKENS.md
 ├── lang/{ar,en}/                  app, navigation, enums, auth, passwords, validation, pagination, dashboard, leads, contacts, accounts, deals,
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
-│                                  views, imports, reports, activity, notifications, backups
+│                                  views, imports, reports, activity, notifications, backups, task_templates
 ├── lang/vendor/                   Filament Arabic gap patches
 ├── resources/css/                 filament/admin/theme.css (the panel is the whole front end; no non-panel stylesheet)
 ├── resources/js/                  calendar.js
@@ -644,6 +669,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-19 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-22 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

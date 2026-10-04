@@ -14,9 +14,11 @@ use App\Enums\TaskStatus;
 use App\Models\Concerns\GuardsWorkflowFields;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasOwner;
+use App\Observers\TaskAssignmentStampObserver;
 use App\Support\RecordLabel;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -45,9 +47,15 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * only, never fillable, and cleared when the task is unassigned. A task
  * handed out to its assignee (isHandedOutTo) belongs to its assigner: the
  * assignee reports progress through the `updates` log instead of editing it
- * (D-14 amendment, 2026-09-28).
+ * (D-14 amendment, 2026-09-28). `assigned_at` — when the task reached its
+ * current assignee (D-21) — is written by TaskAssignmentStampObserver only.
+ * `template_id` links a task to the routine that created it (D-22): written
+ * via forceFill by RoutineTaskService only, never fillable, and cleared when
+ * the routine is deleted.
  *
  * @property ?int $assigned_by
+ * @property ?int $template_id
+ * @property ?Carbon $assigned_at
  * @property TaskKind $kind
  * @property TaskStatus $status
  * @property TaskPriority $priority
@@ -61,6 +69,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property ?Carbon $overdue_notified_at
  * @property ?Carbon $recurrence_ends_at
  */
+#[ObservedBy(TaskAssignmentStampObserver::class)]
 #[Fillable([
     'title', 'description', 'kind', 'status', 'priority', 'due_at', 'starts_at', 'ends_at', 'reminder_at',
     'assignee_id', 'lead_id', 'contact_id', 'account_id', 'deal_id',
@@ -124,6 +133,7 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
             'reminder_sent_at' => 'datetime',
             'overdue_notified_at' => 'datetime',
             'recurrence_ends_at' => 'date',
+            'assigned_at' => 'datetime',
         ];
     }
 
@@ -225,6 +235,17 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
     public function occurrences(): HasMany
     {
         return $this->hasMany(self::class, 'series_id')->orderBy('due_at')->orderBy('id');
+    }
+
+    /**
+     * The routine task this task was created from (D-22); null for every
+     * other task and once the routine is deleted.
+     *
+     * @return BelongsTo<TaskTemplate, $this>
+     */
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(TaskTemplate::class, 'template_id');
     }
 
     /**

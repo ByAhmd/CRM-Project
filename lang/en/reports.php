@@ -52,7 +52,7 @@ return [
         ],
         'tasks' => [
             'title' => 'Task performance',
-            'description' => 'Tasks completed per assignee in the period, on time or late, what is still open and what is overdue now.',
+            'description' => 'Tasks completed per assignee in the period, on time or late, how long they took on average, what is still open and what is overdue now.',
         ],
     ],
 
@@ -165,6 +165,7 @@ return [
             'still_open' => 'Still open',
             'overdue_now' => 'Overdue now',
             'completion_rate' => 'Completion %',
+            'avg_time_to_finish' => 'Average time to finish',
         ],
     ],
 
@@ -199,6 +200,14 @@ return [
         'overdue' => 'Overdue',
         'later' => 'Later',
         'unscheduled' => 'No close date',
+        'in_hours' => ':column (hours)',
+    ],
+
+    // A time to finish on the task report (D-21): whole days and hours.
+    'durations' => [
+        'days' => '{0} less than a day|{1} :count day|[2,*] :count days',
+        'hours' => '{0} less than an hour|{1} :count hour|[2,*] :count hours',
+        'days_and_hours' => ':days :hours',
     ],
 
     'actions' => [

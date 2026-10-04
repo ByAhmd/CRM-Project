@@ -10,17 +10,22 @@ use App\Enums\TaskStatus;
 use App\Models\Task;
 use App\Models\User;
 use App\Policies\Concerns\ChecksPermissions;
+use App\Services\Tasks\TaskParticipants;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Tasks (decisions D-4, A-10, D-13, D-14).
+ * Tasks (decisions D-4, A-10, D-13, D-14, D-20).
  *
- * Reading follows two paths, either of which is enough: the task's own
- * visibility scope (assignee / team / all through RecordVisibilityResolver,
- * the assignee being the owner column) or the visibility of a record it is
- * linked to — a task on a deal the user may read is readable even when
- * someone else is assigned. Writing needs the `task.*` key plus the actor's
- * reach over the assignee. A soft-deleted task is frozen: every write but
+ * Reading follows three paths, any of which is enough once the user holds
+ * `task.view_any`: the task's own visibility scope (assignee / team / all
+ * through RecordVisibilityResolver, the assignee being the owner column),
+ * participation — a comment on the task mentioned the user (D-20) — or the
+ * visibility of a record it is linked to — a task on a deal the user may
+ * read is readable even when someone else is assigned. Participation opens
+ * the task, its thread, its files and its comments, nothing more. Writing
+ * needs the `task.*` key plus the actor's reach over the assignee, so a
+ * mentioned colleague never edits, reports progress on, cancels, deletes or
+ * reassigns the task. A soft-deleted task is frozen: every write but
  * the restore refuses it (D-13). There is no `task.restore` key: restoring
  * undoes a delete, so it is granted with `task.delete`. Permanent deletion
  * is never granted.
@@ -52,13 +57,21 @@ final class TaskPolicy
         return Task::permissionGroup();
     }
 
+    /**
+     * The cheap checks first: the permission and the task's own scope are
+     * answered from memory, participation costs one memoised query per user
+     * and request, and the linked records come last (each may still need its
+     * own policy check).
+     */
     public function view(User $user, Model&OwnedRecord $record): bool
     {
         if (! $this->viewAny($user)) {
             return false;
         }
 
-        return $this->resolver()->canRead($user, $record) || $this->subjectReadable($user, $record);
+        return $this->resolver()->canRead($user, $record)
+            || $this->participates($user, $record)
+            || $this->subjectReadable($user, $record);
     }
 
     /** The details: title, description, kind, priority, dates, reminder, related record, recurrence. */
@@ -155,6 +168,12 @@ final class TaskPolicy
         return $record instanceof Task
             && $record->isHandedOutTo($user)
             && ! $user->can(Permission::TaskAssign->value);
+    }
+
+    /** Whether a comment on the task mentioned the user (D-20). */
+    private function participates(User $user, Model $task): bool
+    {
+        return $task instanceof Task && app(TaskParticipants::class)->includes($user, $task);
     }
 
     /** Whether the user may read at least one of the records the task is linked to. */

@@ -9,7 +9,8 @@ Arabic interface has the same structure. Commands run from the application direc
 Contents: 1 Users · 2 Roles, permissions and teams · 3 Audit ledger · 4 Deleted records · 5 Imports and exports ·
 6 Attachments and disk growth · 7 Queue and failed jobs · 8 Scheduler · 9 Currency and timezone · 10 Lookups,
 custom fields and email templates · 11 Notification preferences · 12 Demo data · 13 Command reference ·
-14 Common preflight failures · 15 Backups · 16 Weekly summary.
+14 Common preflight failures · 15 Backups · 16 Weekly summary · 17 Routine tasks · 18 Task mentions and the task
+report.
 
 ---
 
@@ -142,11 +143,11 @@ five minutes.
 | Preflight: "No scheduler heartbeat" | Is the cron entry present? Does its PHP binary print 8.3 (`<php> -v`)? Is the site in maintenance mode (`storage/framework/down` exists)? | Restore the cron line with the absolute PHP 8.3 path; `php artisan up` if a release was left down. |
 | Heartbeat present, but reminders, notifications or imports do not arrive | `php artisan schedule:list` (next due times); `php artisan queue:failed`; the log. | Run `php artisan schedule:run` by hand and read its output; fix the failing job. |
 | Heartbeat warning right after a release | Maintenance mode pauses the scheduler and `optimize:clear` empties the cache. | Expected; rerun `app:preflight` two minutes after `php artisan up`. |
-| An entry never runs after a killed process | `withoutOverlapping` locks expire on their own (10 minutes for the drain, 5 for the task passes). | Wait, or `php artisan schedule:clear-cache` to release the locks. |
+| An entry never runs after a killed process | `withoutOverlapping` locks expire on their own (10 minutes for the drain, 5 for the reminder and overdue passes, 30 for routine tasks). | Wait, or `php artisan schedule:clear-cache` to release the locks. |
 | The heartbeat "cannot be read from the cache" | `CACHE_STORE`, cache directory permissions or the `cache` table. | Fix the cache store (DEPLOYMENT.md, section 3.6). |
 
 `schedule:run` itself can be run by hand at any time; every task command is idempotent (reminders, overdue notices and
-stale-lead notices are stamped once sent).
+stale-lead notices are stamped once sent; a routine's day is produced once, section 17).
 
 ## 9. Currency and timezone
 
@@ -162,7 +163,8 @@ nothing.
   dashboard buckets fold days and months (A-19, A-20). Stored values stay in `APP_TIMEZONE` (Asia/Riyadh), so changing
   the setting changes the display only. **Never change `APP_TIMEZONE` once data exists** — stored date-times would be
   misread. Scheduled times (`leads:notify-stale` at 07:00, `RescoreLeads` at 03:00) follow `APP_TIMEZONE`, not the
-  setting.
+  setting. Routine tasks are the exception: the hourly `tasks:generate-routines` decides which calendar day it is, and
+  a routine's due time, in the organisation timezone (section 17).
 
 ## 10. Lookups, custom fields and email templates
 
@@ -186,7 +188,8 @@ All under *Settings* and bilingual: every name has an Arabic and an English valu
 ## 11. Notification preferences
 
 *System → Notification preferences*, per user, for themselves: one bell and one e-mail switch per event, in
-sections — **records** (assigned to me), **tasks** (reminder, overdue, progress update, comment, completed), **deals**
+sections — **records** (assigned to me), **tasks** (reminder, overdue, progress update, comment, mentioned in a
+comment, completed), **deals**
 (stage changed, closed), **leads** (converted, stale), **notes** (mentions), **summaries** (the weekly task summary,
 section 16) and **system** (the weekly backup fails, section 15).
 
@@ -199,7 +202,8 @@ section 16) and **system** (the weekly backup fails, section 15).
 - **Hidden choices are kept.** Saving the page never writes or changes the rows of events the user is not offered.
   If a permission is taken away and later granted again, the user's earlier choice for those events applies again.
 - **Defaults.** The bell is on for every event. Mail is off unless switched on, except for *assigned to me* (D-14),
-  the weekly summary (D-18) and the backup failure (D-16), whose mail is on unless switched off.
+  *mentioned in a task comment* (D-20), the weekly summary (D-18) and the backup failure (D-16), whose mail is on
+  unless switched off. A task a routine hands out is an assignment like any other (section 17).
 - **Mail transport.** The e-mail choice is kept but only takes effect once a real mail transport is configured; while
   the log mailer is active the page shows one notice and the mail switches are disabled.
 
@@ -252,6 +256,7 @@ php artisan app:demo-data --fresh --allow-orphans # remove the demo users even w
 | `php artisan app:demo-data [--force] [--fresh] [--allow-orphans] [--scale=N]` | Demo dataset; never in production (section 12). |
 | `php artisan tasks:send-reminders` | Task reminders now (scheduled every five minutes; idempotent). |
 | `php artisan tasks:notify-overdue` | Overdue notices now (scheduled every fifteen minutes; idempotent). |
+| `php artisan tasks:generate-routines` | Hands out the tasks of every routine whose day has come, now (scheduled hourly; idempotent — a day already produced creates nothing; section 17). |
 | `php artisan leads:notify-stale` | Stale-lead notices now (scheduled daily at 07:00; idempotent). |
 | `php artisan crm:backup` | One backup set now (scheduled Thursdays at 22:00); exits 1 when no complete set was written (section 15). |
 | `php artisan crm:weekly-summary` | The weekly summary now (scheduled Thursdays at 22:30); every run sends a fresh copy to every recipient (section 16). |
@@ -339,3 +344,68 @@ with that permission receives it too). Each copy is written in the recipient's l
 - **Timing.** Dates in the summary are in the organisation timezone (*Settings*); the schedule itself runs in
   `APP_TIMEZONE`. A run by hand (`php artisan crm:weekly-summary`) covers the seven days ending at that moment and
   sends again to everyone — use it to test mail delivery, not to repeat the week.
+
+## 17. Routine tasks
+
+*Activities → Routine tasks* (D-22) is where the people who hand out work — holders of `task.assign`, super admins and
+admins among the seeded roles — set recurring work up once. A routine has a title, a description, a priority, a
+schedule (**weekly** on a day Sunday … Saturday, or **monthly** on a day 1–28, so every month has it), the time the
+tasks are due (organisation time, 17:00 unless changed), how many days after the scheduled day they are due (0–30;
+0 = the same day), one or more assignees and an *Active* switch. Saving a routine makes the saver its assigner: the
+tasks are handed out in their name, its assignees report progress on them as on any handed-out task, and completing one
+notifies that person (D-14). When another `task.assign` holder saves the routine, it becomes theirs, and the audit log
+records the takeover.
+
+**What `tasks:generate-routines` does.** The scheduler runs it every hour (`withoutOverlapping(30)`). For each active
+routine whose next day (*Next run* in the list, `task_templates.next_run_on`) has come — "today" in the organisation
+timezone (section 9) — it locks the routine and creates **one task per assignee**: kind *task*, the routine's title,
+description and priority, due on the scheduled day plus the offset at the due time, linked to the routine. Each
+assignee is told exactly as for any assignment (bell and, when a real mailer is configured, mail by default). It
+then moves *Next run* to the following scheduled day in the same transaction, so a second run on the same day — or a
+run by hand — creates nothing. A day missed while the scheduler was stopped is not replayed one by one: the next run
+creates the tasks of the **latest** missed day only. An assignee whose account is disabled or pending, deleted, or no
+longer holds `task.view_any` is skipped (the others still get their task). A routine whose assigner has since been
+disabled or deleted keeps running in that person's name, and the completion notices of its tasks then reach nobody
+(D-14: a recorded assigner is never replaced) — have another `task.assign` holder open the routine and save it to take
+it over.
+
+**Running it by hand.** `php artisan tasks:generate-routines` prints `[tasks] N routine tasks created.` and exits 0.
+Use it after the scheduler was down to hand out the day's work without waiting for the next hour; it never creates
+a day twice. To check what is due first, sort the routine list by *Next run*.
+
+- **Pause / resume.** *Pause* (row menu or edit page) stops a routine: it creates nothing and shows *Paused* in place of
+  its next run. *Resume* works its next day out from today. Changing the schedule of a saved routine does the same.
+  A day already handed out is never produced again, even after a same-day change or resume.
+- **Deleting** a routine (single or bulk) never deletes the tasks it already created; they stay ordinary handed-out
+  tasks, no longer linked to a routine. Pausing is the reversible way to stop one.
+- **Assignees.** Only active users who hold `task.view_any` and are within the saver's assignment reach can be chosen.
+  An assignee who has since been disabled must be taken off the routine before it can be saved again (the form names
+  them); until then the routine keeps running for the others.
+- **Per-task repeat.** The *repeat after completion* setting on a single task (A-10) is unchanged and still suits a
+  one-off series; a routine suits work that falls on a fixed day whoever completed the last one.
+
+| Symptom | Check | Fix |
+|---|---|---|
+| A routine's tasks did not appear on its day | Is it *Active*? Is *Next run* today or earlier? Is the scheduler alive (section 8)? | Fix the scheduler; run `php artisan tasks:generate-routines`. |
+| *Next run* stays in the past after a run | The routine failed to write its tasks; the run reported it to the log and will retry it next hour without holding up the other routines. | Read the exception in `storage/logs/laravel-YYYY-MM-DD.log`; fix the cause (for example the routine's data), then run the command by hand. |
+| One assignee got no task | Is their account active? Does their role still hold `task.view_any`? | Re-enable the account or restore the permission; the next scheduled day includes them again. |
+| Tasks are due at an unexpected hour | The due time is organisation time (*Settings → General settings → Timezone*). | Correct the due time on the routine. |
+
+## 18. Task mentions and the task report
+
+- **Mentions (D-20).** Typing `@` in a task's comment box lists colleagues — every active user holding `task.view_any`
+  except the author, whatever their team. A mentioned colleague becomes a participant: they may open the task, read
+  its thread, download its files (with `attachment.download`) and comment, and the task appears in their task list,
+  search and calendar. They never gain edit, progress, cancel or delete rights. They get a *mentioned you* notice (bell,
+  and mail by default) instead of the general comment notice, and hear about later comments. A mention is permanent,
+  like the comment holding it: there is no way to withdraw it in the panel. To end a participant's access, disable the
+  account or take `task.view_any` from its role. Users holding `attachment.create` may also upload to a task they were
+  mentioned on, as on any task they can open.
+- **Renamed users.** The comment stores the text as written (`@Old Name`). After a user is renamed, older comments
+  still show the old name and no longer highlight it; the participant access and the notices are unaffected.
+- **Average time to finish (D-21).** *Reports → Tasks* shows, per assignee, the mean time from when a task reached its
+  assignee (`tasks.assigned_at`) to its completion, for the tasks completed in the period; the totals line is the mean
+  over all those tasks. The page shows whole days and hours (under an hour reads *less than an hour*; from one hour up
+  the mean is rounded to the nearest hour); the export writes hours with one decimal. Tasks assigned before the
+  feature shipped count from their creation (the backfill), as do tasks with no assignee — so a task that was
+  reassigned before then is measured from its creation, not from the reassignment.

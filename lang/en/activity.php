@@ -174,6 +174,7 @@ return [
         'EmailTemplate' => 'Email template',
         'NotificationPreference' => 'Notification preference',
         'CustomField' => 'Custom field',
+        'TaskTemplate' => 'Routine task',
     ],
 
     'subject' => [
@@ -269,6 +270,7 @@ return [
         'subject' => 'Subject',
         'body' => 'Body',
         'comment' => 'Comment',
+        'mentioned' => 'Mentioned',
         'occurred_at' => 'Occurred at',
         'direction' => 'Direction',
         'duration_minutes' => 'Duration (minutes)',
@@ -310,12 +312,23 @@ return [
         'is_listed' => 'Available as a column',
         'validation' => 'Validation rules',
         'is_system' => 'System',
+        'frequency' => 'Repeats',
+        'weekday' => 'Day of the week',
+        'day_of_month' => 'Day of the month',
+        'due_time' => 'Due time',
+        'due_in_days' => 'Due after (days)',
     ],
 
     // Labels that differ for one audited model; checked before the shared attribute labels.
     'subject_attributes' => [
         'Attachment' => [
             'size' => 'File size',
+        ],
+        'TaskTemplate' => [
+            'added' => 'Assignees added',
+            'removed' => 'Assignees removed',
+            'assigner' => 'Now handed out by',
+            'previous_assigner' => 'Previously handed out by',
         ],
     ],
 

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -23,7 +24,9 @@ use Illuminate\Support\Carbon;
  *
  * `status` is the status the entry moved the task to — null for a plain
  * progress note and for every comment — and `body` the author's plain text.
- * The author is null once their account is gone.
+ * The author is null once their account is gone. A comment may mention
+ * colleagues (D-20): the body holds "@Name" as plain text and the mentioned
+ * users are rows of `mentions`.
  *
  * @property TaskUpdateKind $kind
  * @property ?TaskStatus $status
@@ -74,6 +77,17 @@ final class TaskUpdate extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id')->withTrashed();
+    }
+
+    /**
+     * The colleagues the comment mentions (D-20), in the order they were
+     * stored; always empty for a progress entry.
+     *
+     * @return HasMany<TaskUpdateMention, $this>
+     */
+    public function mentions(): HasMany
+    {
+        return $this->hasMany(TaskUpdateMention::class)->orderBy('id');
     }
 
     public function isComment(): bool

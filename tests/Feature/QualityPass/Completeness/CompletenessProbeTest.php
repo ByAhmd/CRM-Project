@@ -61,7 +61,7 @@ final class CompletenessProbeTest extends TestCase
     {
         $plan = (string) file_get_contents(base_path('docs/ARCHITECTURE_PLAN.md'));
         $missing = array_values(array_filter(
-            ['tasks:send-reminders', 'tasks:notify-overdue', 'leads:notify-stale', 'RescoreLeads', 'attachments:prune-temporary', 'uploads:prune-livewire-temporary', 'reports:prune-downloads'],
+            ['tasks:send-reminders', 'tasks:notify-overdue', 'tasks:generate-routines', 'leads:notify-stale', 'RescoreLeads', 'attachments:prune-temporary', 'uploads:prune-livewire-temporary', 'reports:prune-downloads', 'crm:backup', 'crm:weekly-summary'],
             static fn (string $entry): bool => ! str_contains($plan, $entry),
         ));
 

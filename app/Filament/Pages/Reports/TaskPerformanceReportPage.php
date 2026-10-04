@@ -13,8 +13,8 @@ use Illuminate\Support\Collection;
 
 /**
  * Task performance page (module 23): completed, on-time, late, open and
- * overdue tasks per assignee. Presentation only — TaskPerformanceReport
- * owns the figures.
+ * overdue tasks per assignee, with the average time to finish (D-21).
+ * Presentation only — TaskPerformanceReport owns the figures.
  */
 final class TaskPerformanceReportPage extends BaseReportPage
 {

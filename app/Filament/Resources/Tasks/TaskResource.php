@@ -23,6 +23,7 @@ use App\Filament\Resources\Tasks\Tables\TasksTable;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Tasks\TaskParticipants;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -33,14 +34,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 /**
- * Tasks and follow-ups (decisions A-10, D-4).
+ * Tasks and follow-ups (decisions A-10, D-4, D-20).
  *
- * Visibility per D-4 with one addition mirrored in TaskPolicy: a task is
+ * Visibility per D-4 with two additions mirrored in TaskPolicy: a task is
  * readable when it falls inside the actor's own task scope (assignee / team
- * / all) OR when it is linked to a lead, contact, account or deal the actor
- * may read, each resolved through that resource's own query so the four
- * scopes are never re-implemented here. The status changes only through
- * the actions, which call TaskService.
+ * / all) OR when a comment on it mentioned the actor (a participant, D-20)
+ * OR when it is linked to a lead, contact, account or deal the actor may
+ * read, each resolved through that resource's own query so the four scopes
+ * are never re-implemented here. The status changes only through the
+ * actions, which call TaskService.
  *
  * @extends resource<Task>
  */
@@ -185,10 +187,11 @@ final class TaskResource extends Resource
     }
 
     /**
-     * Own task scope OR linked to a readable subject. At the `all` level
-     * nothing needs adding; at `none` the resolver already fails closed and
-     * the subject paths are not opened either, since viewAny is the policy's
-     * precondition for every read.
+     * Own task scope OR mentioned on the task (the participant path, D-20)
+     * OR linked to a readable subject. At the `all` level nothing needs
+     * adding; at `none` the resolver already fails closed and neither the
+     * participant nor the subject paths are opened, since viewAny is the
+     * policy's precondition for every read.
      *
      * @param  Builder<Task>  $query
      * @return Builder<Task>
@@ -207,8 +210,9 @@ final class TaskResource extends Resource
             return self::constrainToVisible($query);
         }
 
-        return $query->where(function (Builder $nested): void {
+        return $query->where(function (Builder $nested) use ($user): void {
             self::constrainToVisible($nested)
+                ->orWhereIn('tasks.id', app(TaskParticipants::class)->taskIdsQuery($user))
                 ->orWhereIn('tasks.lead_id', LeadResource::getEloquentQuery()->select('leads.id'))
                 ->orWhereIn('tasks.contact_id', ContactResource::getEloquentQuery()->select('contacts.id'))
                 ->orWhereIn('tasks.account_id', AccountResource::getEloquentQuery()->select('accounts.id'))

@@ -76,6 +76,25 @@ Schedule::command('tasks:notify-overdue')
 
 /*
 |--------------------------------------------------------------------------
+| Routine tasks (D-22)
+|--------------------------------------------------------------------------
+|
+| Every hour, tasks:generate-routines hands out the tasks of each active
+| routine whose day has come in the organisation timezone — one task per
+| assignee, announced like any assignment. Idempotent: a routine's next day
+| advances in the transaction that produces its tasks, so a doubled run
+| creates nothing, and days missed while the server was down produce only
+| the latest one. withoutOverlapping(30) keeps a killed run from silencing
+| the entry for a day.
+|
+*/
+Schedule::command('tasks:generate-routines')
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->onOneServer();
+
+/*
+|--------------------------------------------------------------------------
 | Stale leads (module 19, plan section 3.6)
 |--------------------------------------------------------------------------
 |

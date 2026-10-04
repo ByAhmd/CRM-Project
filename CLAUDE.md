@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
 authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-19 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-22 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -69,7 +69,8 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   through `Services\Audit\<Domain>ActivityLogger` with an `ActivityLogEvent` case. Secrets never logged.
 - Notifications: Laravel notification classes wrapping Filament's database envelope; `via()` adds `mail` only
   when a real transport is configured and the user's preference for the event allows it — mail is opt-in by
-  default for every event except `RecordAssigned`, which is opt-out (D-14).
+  default for every event except `RecordAssigned` (D-14), `TaskMention` (D-20), `WeeklySummary` (D-18) and
+  `BackupFailed` (D-16), which are opt-out (`NotificationEvent::mailByDefault()`).
 - Tests: `#[Test]` attribute, snake_case sentence names, `RefreshDatabase` on `crm_testing`,
   `Filament::setCurrentPanel('admin')` before `Livewire::test`, fixtures from `Tests\Concerns\CreatesCrmFixtures`
   (upload bytes from `Tests\Concerns\BuildsUploadBytes`; never copy a helper into a test class), lazy loading prevented
@@ -106,7 +107,10 @@ Lead/Contact/Account/Deal (D-9) · templated email via app mailer, logged as act
 pages (D-12) · audit 730 days, soft deletes kept, reps export within scope (D-13) · admin-only task
 assignment, assignment mail default-on, completion notice to the assigner, shared tasks board open to every
 role (D-14) · Employee role for task-receiving staff (D-15) · weekly self-backup and uptime monitor (D-16) ·
-task comments (D-17) · weekly summary e-mail (D-18) · preferences show only receivable events (D-19).
+task comments (D-17) · weekly summary e-mail (D-18) · preferences show only receivable events (D-19) ·
+@mentions in task comments pull a colleague into the task: read, files and comments, never edit (D-20) · the task
+report shows each employee's average time to finish, from `tasks.assigned_at` (D-21) · routine tasks: weekly or
+monthly templates, `task.assign` only, one task per assignee handed out hourly by `tasks:generate-routines` (D-22).
 
 ## 6. QA checklist before any commit
 

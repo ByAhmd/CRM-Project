@@ -23,8 +23,10 @@ use Illuminate\Support\Str;
 /**
  * "New comment on a task you take part in" — sent by TaskService::comment(),
  * after the comment commits, to the task's participants: its assignee, its
- * assigner (or creator when no assigner was recorded) and everyone who
- * commented before, never the author (decision D-17). In-app bell by
+ * assigner (or creator when no assigner was recorded), everyone who
+ * commented before and everyone mentioned before (D-20), never the author
+ * (decision D-17). A user the comment itself mentions gets
+ * TaskMentionNotification instead of this one. In-app bell by
  * default, plus mail when a real mailer is configured AND the recipient
  * opted in (D-10). Rendered in the recipient's locale.
  *

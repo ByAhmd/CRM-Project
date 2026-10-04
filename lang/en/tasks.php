@@ -86,6 +86,7 @@ return [
         'handed_out' => 'This task was assigned to you: report on it with "Start", "Post update" and "Complete"; its details stay with whoever assigned it.',
         'update_notifies' => 'Whoever assigned the task is notified.',
         'comment_notifies' => 'The people taking part in this task are notified.',
+        'mention_hint' => 'Type @ to mention a colleague',
         'related' => 'Optional: link the task to a lead, a contact, an account or a deal.',
     ],
 
@@ -150,6 +151,8 @@ return [
         'comment_posted' => 'Comment posted',
         'comment_title' => 'New comment on ":task"',
         'comment_body' => ':by commented on ":task": :comment',
+        'mention_title' => ':by mentioned you on ":task"',
+        'mention_body' => ':by mentioned you in a comment on ":task": :comment',
     ],
 
     'validation' => [
@@ -170,6 +173,7 @@ return [
         'heading' => 'No tasks yet',
         'description' => 'Add the first task or follow-up to keep the next step in sight.',
         'thread' => 'No updates or comments yet.',
+        'mention_results' => 'No colleague by that name can be mentioned.',
         'deleted_author' => 'Deleted account',
         'deleted_author_named' => ':name (deleted account)',
     ],

@@ -33,6 +33,7 @@ use App\Models\Setting;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Notifications\NotificationPreferenceService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Demo\DemoRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -196,6 +197,20 @@ final class DemoDataCommandTest extends TestCase
         $this->assertEqualsCanonicalizing(['application/pdf', 'image/png'], Attachment::query()->pluck('mime_type')->all());
         $this->assertTrue(NotificationPreference::query()->exists());
         $this->assertTrue(DB::table('notifications')->exists());
+
+        // Mail stays off for every demo user and every event they can receive,
+        // the opt-out ones included (D-14, D-16, D-18, D-20): their addresses
+        // are undeliverable.
+        $preferences = app(NotificationPreferenceService::class);
+
+        foreach ($demoUsers->modelKeys() as $id) {
+            $demoUser = User::query()->findOrFail($id);
+            $matrix = $preferences->matrixFor($demoUser);
+
+            foreach ($preferences->offeredEvents($demoUser) as $event) {
+                $this->assertFalse($matrix[$event->value]['mail'], "{$demoUser->email} would be mailed about {$event->value}");
+            }
+        }
 
         $this->assertTrue(app(DemoRegistry::class)->exists());
     }

@@ -141,6 +141,11 @@ return [
         'monthly' => 'شهرياً',
     ],
 
+    'routine_frequency' => [
+        'weekly' => 'أسبوعياً',
+        'monthly' => 'شهرياً',
+    ],
+
     'activity_direction' => [
         'inbound' => 'وارد',
         'outbound' => 'صادر',
@@ -175,6 +180,7 @@ return [
         'task_completed' => 'إكمال مهمة أسندتها إلى غيري',
         'task_progress' => 'بدء مهمة أسندتها إلى غيري أو نشر تحديث عليها',
         'task_comment' => 'تعليق جديد على مهمة أشارك فيها',
+        'task_mention' => 'إشارة زميل إليّ في تعليق على مهمة',
         'weekly_summary' => 'الملخص الأسبوعي للمهام',
         'backup_failed' => 'فشل النسخ الاحتياطي الأسبوعي',
         'deal_stage_changed' => 'تغيير مرحلة صفقة أنا مسؤول عنها',

@@ -33,12 +33,16 @@ final class SchemaContractTest extends TestCase
 
     /**
      * Foreign keys to users that delete with the user: rows that exist only
-     * for that user (preferences, Filament import/export runs).
+     * for that user (preferences, Filament import/export runs, the mentions
+     * of that user in task comments, D-20, the routine tasks that user is an
+     * assignee of, D-22).
      */
     private const array USER_OWNED_REFERENCES = [
         'exports.user_id',
         'imports.user_id',
         'notification_preferences.user_id',
+        'task_update_mentions.user_id',
+        'task_template_user.user_id',
     ];
 
     #[Test]
@@ -162,6 +166,9 @@ final class SchemaContractTest extends TestCase
             'deal_competitors.deal_id' => ['deal_competitors.deal_id', 'deals', 'CASCADE'],
             'deal_products.deal_id' => ['deal_products.deal_id', 'deals', 'CASCADE'],
             'task_updates.task_id' => ['task_updates.task_id', 'tasks', 'CASCADE'],
+            'task_update_mentions.task_update_id' => ['task_update_mentions.task_update_id', 'task_updates', 'CASCADE'],
+            'task_update_mentions.task_id' => ['task_update_mentions.task_id', 'tasks', 'CASCADE'],
+            'task_template_user.task_template_id' => ['task_template_user.task_template_id', 'task_templates', 'CASCADE'],
             'taggables.tag_id' => ['taggables.tag_id', 'tags', 'CASCADE'],
             'custom_field_values.custom_field_id' => ['custom_field_values.custom_field_id', 'custom_fields', 'CASCADE'],
             // Optional links survive the removal of what they point at.
@@ -183,6 +190,7 @@ final class SchemaContractTest extends TestCase
             'tasks.account_id' => ['tasks.account_id', 'accounts', 'SET NULL'],
             'tasks.deal_id' => ['tasks.deal_id', 'deals', 'SET NULL'],
             'tasks.series_id' => ['tasks.series_id', 'tasks', 'SET NULL'],
+            'tasks.template_id' => ['tasks.template_id', 'task_templates', 'SET NULL'],
             'notes.lead_id' => ['notes.lead_id', 'leads', 'SET NULL'],
             'notes.contact_id' => ['notes.contact_id', 'contacts', 'SET NULL'],
             'notes.account_id' => ['notes.account_id', 'accounts', 'SET NULL'],
@@ -241,6 +249,8 @@ final class SchemaContractTest extends TestCase
             'deal_competitors.deal_id,competitor_id' => ['deal_competitors', ['deal_id', 'competitor_id']],
             'notification_preferences.user_id,event' => ['notification_preferences', ['user_id', 'event']],
             'attachments.uuid' => ['attachments', ['uuid']],
+            'task_update_mentions.task_update_id,user_id' => ['task_update_mentions', ['task_update_id', 'user_id']],
+            'task_template_user.task_template_id,user_id' => ['task_template_user', ['task_template_id', 'user_id']],
         ];
     }
 
@@ -295,10 +305,11 @@ final class SchemaContractTest extends TestCase
             'lead_status_logs' => ['changed_at'],
             'deal_stage_logs' => ['changed_at'],
             'notes' => ['edited_at'],
-            'tasks' => ['due_at', 'starts_at', 'ends_at', 'completed_at', 'reminder_at', 'reminder_sent_at', 'overdue_notified_at'],
+            'tasks' => ['due_at', 'starts_at', 'ends_at', 'completed_at', 'reminder_at', 'reminder_sent_at', 'overdue_notified_at', 'assigned_at'],
             'activities' => ['occurred_at'],
             'custom_field_values' => ['value_datetime'],
             'task_updates' => ['created_at'],
+            'task_update_mentions' => ['created_at'],
         ];
 
         $wrong = [];

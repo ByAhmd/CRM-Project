@@ -8,13 +8,17 @@ use App\Enums\TaskStatus;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Tasks\CommentDraft;
 use App\Services\Tasks\TaskService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
+use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\RichEditor\MentionProvider;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -24,7 +28,8 @@ use Illuminate\Validation\ValidationException;
  * The task status actions (decisions A-10, D-14), shared by the table, the
  * view page and the relation managers: start and post update (the
  * assignee's progress reports, D-14 amendment 2026-09-28), comment (anyone
- * who may view the task, D-17), complete (with an optional note), cancel,
+ * who may view the task, D-17, mentioning colleagues with "@", D-20),
+ * complete (with an optional note), cancel,
  * reopen and the bulk complete.
  *
  * Each action authorises through the policy verb and delegates to
@@ -34,6 +39,9 @@ use Illuminate\Validation\ValidationException;
  */
 final class TaskActions
 {
+    /** The most colleagues the "@" list offers at once; typing narrows it. */
+    public const int MENTION_RESULTS = 8;
+
     /**
      * Pending → In progress, with an optional note (D-14 amendment,
      * 2026-09-28); the assigner is told.
@@ -109,6 +117,9 @@ final class TaskActions
      * A comment on the task (D-17) from anyone who may view it, on an open or
      * a closed task but not a deleted one: required, at most
      * TaskService::COMMENT_TEXT_MAX characters; the participants are told.
+     * Typing "@" lists the colleagues who may be mentioned (D-20); the
+     * editor's document becomes plain text and mentioned ids through
+     * CommentDraft before the service sees it.
      */
     public static function comment(): Action
     {
@@ -122,24 +133,121 @@ final class TaskActions
                 Section::make(__('tasks.sections.comment'))
                     ->columns(1)
                     ->schema([
-                        Textarea::make('comment')
-                            ->label(__('tasks.fields.comment_body'))
-                            ->placeholder(__('tasks.placeholders.comment_body'))
-                            ->helperText(fn (?Model $record): ?string => self::commentNoticeHelper($record))
-                            ->required()
-                            ->rows(4)
-                            ->maxLength(TaskService::COMMENT_TEXT_MAX),
+                        self::commentEditor(),
                     ]),
             ])
             ->visible(fn (?Model $record): bool => $record instanceof Task && ! $record->trashed())
             ->authorize(fn (?Model $record): bool => $record instanceof Task && self::can('comment', $record))
             ->action(function (Task $record, array $data): void {
                 self::attempt(function () use ($record, $data): void {
-                    app(TaskService::class)->comment($record, self::actor(), (string) ($data['comment'] ?? ''));
+                    $draft = CommentDraft::fromDocument($data['comment'] ?? null);
+
+                    app(TaskService::class)->comment($record, self::actor(), $draft->text, $draft->mentionedUserIds);
 
                     Notification::make()->title(__('tasks.notifications.comment_posted'))->success()->send();
                 });
             });
+    }
+
+    /**
+     * The comment box (D-17, D-20): a rich editor without a single formatting
+     * button or file upload — the comment stays plain text — whose one job is
+     * the "@" list of colleagues TaskService::mentionableUsers() allows: the
+     * first MENTION_RESULTS by name as soon as "@" is typed, then searched by
+     * name as the user types on. Its labels come from the same query, so a
+     * stale or forged id shows no name. The required and length rules judge
+     * the plain text CommentDraft makes of the document — the very text the
+     * service stores — not the document's own size.
+     */
+    private static function commentEditor(): RichEditor
+    {
+        return RichEditor::make('comment')
+            ->label(__('tasks.fields.comment_body'))
+            ->placeholder(__('tasks.placeholders.comment_body'))
+            ->hint(__('tasks.helpers.mention_hint'))
+            ->hintIcon(Heroicon::OutlinedAtSymbol)
+            ->helperText(fn (?Model $record): ?string => self::commentNoticeHelper($record))
+            ->json()
+            ->toolbarButtons([])
+            ->fileAttachments(false)
+            ->mentions([
+                MentionProvider::make('@')
+                    // Typing "@" alone lists the first colleagues by name (D-20); a letter more searches them all.
+                    ->items(static fn (): array => self::mentionableUsers()
+                        ->limit(self::MENTION_RESULTS)
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->getSearchResultsUsing(static fn (string $search): array => self::mentionableUsers()
+                        ->where('name', 'like', "%{$search}%")
+                        ->limit(self::MENTION_RESULTS)
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->getLabelsUsing(static fn (array $ids): array => self::mentionableUsers()
+                        ->whereKey(self::userIds($ids))
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->noSearchResultsMessage(__('tasks.empty.mention_results')),
+            ])
+            ->required()
+            ->mutateStateForValidationUsing(static fn (RichEditor $component, mixed $state): string => CommentDraft::fromDocument(self::commentDocument($component, $state))->text)
+            ->rules(['required', 'string', 'max:'.TaskService::COMMENT_TEXT_MAX]);
+    }
+
+    /**
+     * The colleagues the signed-in user may mention.
+     *
+     * @return Builder<User>
+     */
+    private static function mentionableUsers(): Builder
+    {
+        return app(TaskService::class)->mentionableUsers(self::actor());
+    }
+
+    /**
+     * The well-formed user ids among those the browser asked labels for;
+     * anything else it sent is ignored.
+     *
+     * @param  array<mixed>  $ids
+     * @return list<int>
+     */
+    private static function userIds(array $ids): array
+    {
+        $valid = [];
+
+        foreach ($ids as $id) {
+            if (is_int($id) || (is_string($id) && ctype_digit($id))) {
+                $valid[] = (int) $id;
+            }
+        }
+
+        return $valid;
+    }
+
+    /**
+     * The editor state as a TipTap document, read through the editor's own
+     * schema exactly as the field's state cast reads it for the action, so
+     * validation judges the same document the action receives. The browser
+     * always sends the document; a scripted request may send a string, which
+     * the editor reads as HTML — or as JSON, and a bare JSON scalar is no
+     * document at all.
+     *
+     * @return array<mixed>|null
+     */
+    private static function commentDocument(RichEditor $editor, mixed $state): ?array
+    {
+        if (is_string($state)) {
+            $decoded = json_decode($state, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && ! is_array($decoded)) {
+                return null;
+            }
+        } elseif (! is_array($state)) {
+            return null;
+        }
+
+        $document = $editor->getTipTapEditor()->setContent($state)->getDocument();
+
+        return is_array($document) ? $document : null;
     }
 
     public static function complete(): Action

@@ -35,7 +35,7 @@ final class NotificationPreferencesVisibilityTest extends TestCase
     use CreatesCrmFixtures;
     use RefreshDatabase;
 
-    private const TASK_EVENTS = ['task_reminder', 'task_overdue', 'task_completed', 'task_progress', 'task_comment'];
+    private const TASK_EVENTS = ['task_reminder', 'task_overdue', 'task_completed', 'task_progress', 'task_comment', 'task_mention'];
 
     private const SALES_EVENTS = ['deal_stage_changed', 'deal_closed', 'lead_converted', 'lead_stale'];
 

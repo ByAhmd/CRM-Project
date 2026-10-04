@@ -25,8 +25,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * The file carries the same columns the page shows, in the same order,
  * with the totals line last: labels as text, counts as integers, money as
- * numbers with two decimals, rates and averages with one — never the
- * locale-formatted strings, so a spreadsheet reads them as numbers. Text
+ * numbers with two decimals, rates and averages with one, durations as hours
+ * with one decimal under a heading that names the unit (D-21), an
+ * unmeasured duration as an empty cell — never the locale-formatted
+ * strings, so a spreadsheet reads them as numbers. Text
  * cells are protected against formula injection the way Filament's export
  * columns are. The file is written to the private disk and removed once it
  * has been streamed — in a `finally`, so an aborted transfer cleans up too,
@@ -100,7 +102,7 @@ final class ReportRowExporter
 
         $writer = $format === self::FORMAT_XLSX ? new XlsxWriter : new CsvWriter;
         $writer->openToFile($path);
-        $writer->addRow(Row::fromValues([self::text($labelHeading), ...array_map(self::text(...), array_values($columns))]));
+        $writer->addRow(Row::fromValues([self::text($labelHeading), ...array_map(self::text(...), self::headings($columns, $formats))]));
 
         foreach ($rows as $row) {
             $writer->addRow(Row::fromValues(self::cells($row, $columns, $formats)));
@@ -131,11 +133,33 @@ final class ReportRowExporter
                 ReportRow::FORMAT_COUNT => is_string($value) ? self::text($value) : (int) $value,
                 ReportRow::FORMAT_MONEY => is_string($value) ? self::text($value) : round((float) $value, 2),
                 ReportRow::FORMAT_PERCENT, ReportRow::FORMAT_DECIMAL => is_string($value) ? self::text($value) : round((float) $value, 1),
+                ReportRow::FORMAT_DURATION => is_string($value) ? self::text($value) : round((float) $value / 3600, 1),
                 default => self::text((string) $value),
             };
         }
 
         return $cells;
+    }
+
+    /**
+     * The column headings in column order; a duration's heading names the
+     * hours its cells are written in.
+     *
+     * @param  array<string, string>  $columns
+     * @param  array<string, string>  $formats
+     * @return list<string>
+     */
+    private static function headings(array $columns, array $formats): array
+    {
+        $headings = [];
+
+        foreach ($columns as $key => $heading) {
+            $headings[] = ($formats[$key] ?? ReportRow::FORMAT_TEXT) === ReportRow::FORMAT_DURATION
+                ? __('reports.labels.in_hours', ['column' => $heading])
+                : $heading;
+        }
+
+        return $headings;
     }
 
     /**

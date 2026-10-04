@@ -88,9 +88,11 @@ final class DemoUsersBuilder
     /**
      * A few channel choices that differ from the defaults, so the
      * preferences page shows stored rows. Mail stays off for every demo
-     * user, their addresses being undeliverable: the one event whose mail
-     * defaults on — an assignment (D-14) — is switched off for all of them,
-     * bell kept.
+     * user, their addresses being undeliverable: every event whose mail
+     * defaults on — an assignment (D-14), a task mention (D-20), the weekly
+     * summary (D-18), a failed backup (D-16) — is switched off for all of
+     * them, bell kept. The service drops the events a user is not offered
+     * (D-19), so only the rows each role can receive are written.
      */
     private function preferences(DemoContext $context): void
     {
@@ -101,8 +103,16 @@ final class DemoUsersBuilder
             'read_only' => [NotificationEvent::NoteMention],
         ];
 
+        $mailOff = [];
+
+        foreach (NotificationEvent::cases() as $event) {
+            if ($event->mailByDefault()) {
+                $mailOff[$event->value] = ['database' => true, 'mail' => false];
+            }
+        }
+
         foreach ($context->users as $key => $user) {
-            $matrix = [NotificationEvent::RecordAssigned->value => ['database' => true, 'mail' => false]];
+            $matrix = $mailOff;
 
             foreach ($choices[$key] ?? [] as $event) {
                 $matrix[$event->value] = ['database' => false, 'mail' => false];

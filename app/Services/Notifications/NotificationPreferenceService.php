@@ -19,7 +19,8 @@ use InvalidArgumentException;
  *
  * The matrix is the full picture: one entry per NotificationEvent, filled
  * with the enum defaults wherever the user has no row — bell on, mail off,
- * except RecordAssigned, whose mail defaults to on (opt-out, D-14). Only
+ * except the events whose mail defaults to on (opt-out): RecordAssigned
+ * (D-14), TaskMention (D-20), WeeklySummary (D-18), BackupFailed (D-16). Only
  * rows that differ from what is stored are written, and every change is
  * audited on the user with the entries that moved. channelsFor() is the
  * single answer every notification's via() relies on: nothing at all for an
@@ -118,7 +119,9 @@ final class NotificationPreferenceService
             NotificationEvent::TaskOverdue,
             NotificationEvent::TaskCompleted,
             NotificationEvent::TaskProgress,
-            NotificationEvent::TaskComment => [Permission::TaskViewAny],
+            NotificationEvent::TaskComment,
+            // Only task.view_any holders can be mentioned in a task comment (D-20).
+            NotificationEvent::TaskMention => [Permission::TaskViewAny],
             NotificationEvent::DealStageChanged,
             NotificationEvent::DealClosed => [Permission::DealViewAny],
             NotificationEvent::LeadConverted,

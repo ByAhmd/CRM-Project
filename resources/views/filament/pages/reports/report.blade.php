@@ -5,7 +5,10 @@
     use Filament\Support\View\ComponentAttributeBag as FilamentComponentAttributeBag;
     use Filament\Widgets\View\Components\ChartWidgetComponent;
 
-    $numeric = static fn (string $format): bool => $format !== ReportRow::FORMAT_TEXT;
+    // Figures sit in an LTR isolate; a duration is words in the reader's
+    // language («يومان و5 ساعات», D-21), so it is rendered like text.
+    $numeric = static fn (string $format): bool => $format !== ReportRow::FORMAT_TEXT && $format !== ReportRow::FORMAT_DURATION;
+    $cell = static fn (string $format, int|float|string $value): string => $format === ReportRow::FORMAT_DURATION ? BaseReportPage::format($format, $value) : (string) $value;
     $chartKey = md5(json_encode([$chart, $chartType, $chartOptions]));
 @endphp
 
@@ -149,7 +152,7 @@
                                             </td>
                                         @else
                                             <td class="px-3 py-2 text-start">
-                                                {{ $row->value($key) }}
+                                                {{ $cell($format, $row->value($key)) }}
                                             </td>
                                         @endif
                                     @endforeach
@@ -175,7 +178,7 @@
                                             </td>
                                         @else
                                             <td class="px-3 py-2 text-start">
-                                                {{ $totals->value($key) }}
+                                                {{ $cell($format, $totals->value($key)) }}
                                             </td>
                                         @endif
                                     @endforeach

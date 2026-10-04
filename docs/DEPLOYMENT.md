@@ -338,6 +338,7 @@ Asia/Riyadh). While the site is in maintenance mode (`php artisan down`) **no** 
 | `scheduler:heartbeat` (named callback) | every minute | Stores the current time under the cache key `scheduler.heartbeat` for 10 minutes; `app:preflight` warns when it is missing or older than 5 minutes. |
 | `tasks:send-reminders` | every five minutes; `withoutOverlapping(5)` | Task reminders whose `reminder_at` has passed; idempotent (`reminder_sent_at`). |
 | `tasks:notify-overdue` | every fifteen minutes; `withoutOverlapping(5)` | Overdue notices to assignees; idempotent (`overdue_notified_at`). |
+| `tasks:generate-routines` | hourly; `withoutOverlapping(30)` | Routine tasks (D-22): every active routine whose day has come in the organisation timezone creates one task per assignee who may still sign in and holds `task.view_any`, each announced like any assignment (bell and mail by default). Idempotent — the routine's `next_run_on` moves on in the same transaction — and days missed while the scheduler was stopped produce only the latest one, never a backlog (OPERATIONS.md, section 17). |
 | `leads:notify-stale` | daily at 07:00 | Tells the owner of each open lead quiet for `CRM_LEAD_STALE_DAYS` days, once (`stale_notified_at`). |
 | `RescoreLeads` (queued job) | daily at 03:00 | Queued; the next drain recomputes open lead scores in batches of 500 so activity-recency points expire (D-7). |
 | `attachments:prune-temporary` (named callback) | daily at 00:00 | Deletes abandoned uploads older than a day under `tmp/` on the attachments disk. |
@@ -633,10 +634,25 @@ fallback for the database.
 
 ## 9. Monitoring
 
-### 9.1 The uptime monitor (D-16)
+### 9.1 The uptime monitors (D-16, amended 2026-10-04)
 
-`.github/workflows/uptime.yml` is the external monitor. GitHub runs it every 15 minutes from `master` (and by hand:
-**Actions → Uptime → Run workflow**). It requests the site's health route `/up` and succeeds on the first `200`.
+Two external monitors request the site's health route `/up`. Both read the same signal, described first.
+
+**The primary alarm is a Better Stack Uptime monitor** (free plan: business use allowed, 3-minute checks, e-mail alerts
+on down **and** on recovery). UptimeRobot's free plan is not used: since October 2024 it is limited to personal,
+non-commercial sites. The account belongs to the owner; the monitor is set up once:
+
+1. Sign up at `betterstack.com` (Uptime) with the owner's address; that address receives the alerts.
+2. **Monitors → Create monitor**: *Alert us when* "URL becomes unavailable", URL = the site's full `/up` address
+   (`https`, no redirect), check frequency **3 minutes**, confirmation period about **3 minutes** (so a release's
+   maintenance window never alerts), *On-call escalation*: e-mail.
+3. Wait for the first green check. A test: `php artisan down` on the host for five minutes must produce one alert and
+   one recovery mail; `php artisan up` afterwards.
+
+**The backup alarm is GitHub.** `.github/workflows/uptime.yml` asks for a run every 15 minutes from `master` (and runs
+by hand: **Actions → Uptime → Run workflow**). GitHub treats scheduled runs as best-effort: in the first week of
+production they started only every **3–6 hours**, so this workflow is a slow second opinion that costs nothing, not
+the alarm. It succeeds on the first `200`.
 
 - **What `/up` checks.** Laravel's health route answers `200` when the application boots. In production the listener
   `App\Listeners\FailHealthCheckWithoutSchedulerHeartbeat` also makes it answer `500` when the scheduler heartbeat
@@ -665,8 +681,8 @@ fallback for the database.
   The next green run clears the state; GitHub sends no "recovered" mail.
 - **GitHub's 60-day rule.** In a public repository GitHub disables scheduled workflows after 60 days without
   repository activity (no push, for instance) and says so by e-mail. Re-enable it under **Actions → Uptime →
-  Enable workflow**. GitHub may also start a scheduled run a few minutes late under load; the monitor is a 15-minute
-  check, not a second-by-second one.
+  Enable workflow**. GitHub starts scheduled runs late, or skips them, under load — observed gaps were hours, not
+  minutes — which is why Better Stack, above, is the primary alarm.
 
 ### 9.2 Other checks
 

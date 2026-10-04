@@ -55,9 +55,9 @@ final class NotificationChannelsTest extends TestCase
         $this->assertCount(count(NotificationEvent::cases()), $matrix);
 
         foreach (NotificationEvent::cases() as $event) {
-            // Mail defaults to ON for RecordAssigned (D-14), the weekly summary (D-18) and a
-            // failed backup (D-16); every other event stays opt-in.
-            $mailByDefault = in_array($event, [NotificationEvent::RecordAssigned, NotificationEvent::WeeklySummary, NotificationEvent::BackupFailed], true);
+            // Mail defaults to ON for RecordAssigned (D-14), a mention in a task comment (D-20),
+            // the weekly summary (D-18) and a failed backup (D-16); every other event stays opt-in.
+            $mailByDefault = in_array($event, [NotificationEvent::RecordAssigned, NotificationEvent::TaskMention, NotificationEvent::WeeklySummary, NotificationEvent::BackupFailed], true);
 
             $this->assertSame(['database' => true, 'mail' => $mailByDefault], $matrix[$event->value], $event->value);
         }

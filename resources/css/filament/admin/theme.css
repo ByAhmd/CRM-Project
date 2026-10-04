@@ -253,6 +253,44 @@ html.dark {
 }
 
 /* ---------------------------------------------------------------------------
+ | Mentions (D-20)
+ |
+ | A colleague's "@Name" in a task comment (TaskInfolist): a quiet brand-tint
+ | pill, so it reads as a name and never as a status badge. The tint is the
+ | panel's own primary ramp mixed into the card, the text one ramp step from
+ | the edge of the theme — both pairs hold AA on their ground. Padding is
+ | logical, so the pill sits the same way in Arabic and English.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-mention-bg: color-mix(in oklab, var(--primary-500) 12%, var(--crm-card));
+    --crm-mention-text: var(--primary-800);
+}
+
+.dark {
+    --crm-mention-bg: color-mix(in oklab, var(--primary-400) 18%, var(--crm-card));
+    --crm-mention-text: var(--primary-200);
+}
+
+.crm-mention {
+    padding-inline: 0.25rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-mention-bg);
+    color: var(--crm-mention-text);
+    font-weight: 600;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+/* A mention reads in its name's own direction: in an Arabic comment a Latin
+   name stays "@Huda", not "Huda@" (the "@" is direction-neutral and would
+   otherwise take the paragraph's side). Same for the chip in the editor. */
+.crm-mention,
+.fi-fo-rich-editor span[data-type='mention'] {
+    unicode-bidi: plaintext;
+}
+
+/* ---------------------------------------------------------------------------
  | Calendar (D-12)
  |
  | FullCalendar injects its own base stylesheet from JS and paints from its

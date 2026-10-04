@@ -29,6 +29,11 @@ use Tests\TestCase;
  *   and overdue; a task cancelled on 4 Sep (neither completed nor open);
  * - rep B: T6 due 3 Sep completed 1 Sep (on time); T7 created in August
  *   due 30 Aug, open and overdue — not "still open" for September.
+ *
+ * Every task is assigned at its creation, 09:00 on 1 Sep for T1-T3 and T6,
+ * so the times to finish (D-21) are T1 8 days, T2 and T3 11 days each, T6
+ * none: rep A averages 10 days over 3 tasks, rep B 0, and the totals line
+ * 2 592 000 s over 4 tasks = 7 days 12 hours (not the mean of the means).
  */
 final class TaskPerformanceReportTest extends TestCase
 {
@@ -99,10 +104,10 @@ final class TaskPerformanceReportTest extends TestCase
 
         $this->assertNotNull($first);
         $this->assertSame([$this->repA->name, $this->repB->name], $rows->map(fn (ReportRow $row): string => $row->label)->all());
-        $this->assertSame(['completed' => 3, 'on_time' => 2, 'late' => 1, 'still_open' => 2, 'overdue_now' => 1, 'completion_rate' => 60.0], $first->values);
-        $this->assertSame(['completed' => 1, 'on_time' => 1, 'late' => 0, 'still_open' => 0, 'overdue_now' => 1, 'completion_rate' => 100.0], $rows->last()?->values);
+        $this->assertSame(['completed' => 3, 'on_time' => 2, 'late' => 1, 'still_open' => 2, 'overdue_now' => 1, 'completion_rate' => 60.0, 'avg_time_to_finish' => 864000, 'finish_seconds' => 2592000], $first->values);
+        $this->assertSame(['completed' => 1, 'on_time' => 1, 'late' => 0, 'still_open' => 0, 'overdue_now' => 1, 'completion_rate' => 100.0, 'avg_time_to_finish' => 0, 'finish_seconds' => 0], $rows->last()?->values);
         $this->assertSame(['assignee_id' => $this->repA->getKey()], $first->meta);
-        $this->assertSame(['completed' => 4, 'on_time' => 3, 'late' => 1, 'still_open' => 2, 'overdue_now' => 2, 'completion_rate' => 66.7], $this->report()->totals($rows)->values);
+        $this->assertSame(['completed' => 4, 'on_time' => 3, 'late' => 1, 'still_open' => 2, 'overdue_now' => 2, 'completion_rate' => 66.7, 'avg_time_to_finish' => 648000, 'finish_seconds' => 2592000], $this->report()->totals($rows)->values);
     }
 
     #[Test]
@@ -124,12 +129,12 @@ final class TaskPerformanceReportTest extends TestCase
     {
         $august = $this->report()->rows($this->admin, $this->filters(['from' => '2026-08-01', 'to' => '2026-08-31']));
 
-        $this->assertSame(['completed' => 0, 'on_time' => 0, 'late' => 0, 'still_open' => 0, 'overdue_now' => 1, 'completion_rate' => 0.0], $august->first()?->values);
-        $this->assertSame(['completed' => 0, 'on_time' => 0, 'late' => 0, 'still_open' => 1, 'overdue_now' => 1, 'completion_rate' => 0.0], $august->last()?->values);
+        $this->assertSame(['completed' => 0, 'on_time' => 0, 'late' => 0, 'still_open' => 0, 'overdue_now' => 1, 'completion_rate' => 0.0, 'avg_time_to_finish' => ReportRow::NOT_MEASURED, 'finish_seconds' => 0], $august->first()?->values);
+        $this->assertSame(['completed' => 0, 'on_time' => 0, 'late' => 0, 'still_open' => 1, 'overdue_now' => 1, 'completion_rate' => 0.0, 'avg_time_to_finish' => ReportRow::NOT_MEASURED, 'finish_seconds' => 0], $august->last()?->values);
 
         $firstWeek = $this->report()->rows($this->admin, $this->filters(['from' => '2026-09-01', 'to' => '2026-09-10']));
 
-        $this->assertSame(['completed' => 1, 'on_time' => 1, 'late' => 0, 'still_open' => 2, 'overdue_now' => 1, 'completion_rate' => 33.3], $firstWeek->first()?->values);
+        $this->assertSame(['completed' => 1, 'on_time' => 1, 'late' => 0, 'still_open' => 2, 'overdue_now' => 1, 'completion_rate' => 33.3, 'avg_time_to_finish' => 691200, 'finish_seconds' => 691200], $firstWeek->first()?->values);
     }
 
     #[Test]
@@ -160,6 +165,7 @@ final class TaskPerformanceReportTest extends TestCase
         $this->assertSame([1, 0], $chart['datasets'][2]['data']);
         $this->assertSame(array_keys($this->report()->columns()), array_keys($this->report()->formats()));
         $this->assertSame(ReportRow::FORMAT_PERCENT, $this->report()->formats()['completion_rate']);
+        $this->assertSame(ReportRow::FORMAT_DURATION, $this->report()->formats()['avg_time_to_finish']);
     }
 
     private function report(): TaskPerformanceReport

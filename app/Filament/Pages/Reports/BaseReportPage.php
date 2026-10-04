@@ -281,9 +281,17 @@ abstract class BaseReportPage extends Page
         ];
     }
 
-    /** Money for the current locale in the organisation currency (D-8), rates with one decimal, counts plain. */
+    /**
+     * Money for the current locale in the organisation currency (D-8), rates
+     * with one decimal, counts plain, durations in days and hours (D-21) —
+     * the empty marker when nothing was measured.
+     */
     public static function format(string $format, int|float|string $value): string
     {
+        if ($format === ReportRow::FORMAT_DURATION) {
+            return is_string($value) ? __('common.placeholders.empty') : self::duration((int) $value);
+        }
+
         if (is_string($value)) {
             return $value;
         }
@@ -296,6 +304,33 @@ abstract class BaseReportPage extends Page
             ReportRow::FORMAT_DECIMAL => (string) Number::format((float) $value, 1, locale: $locale),
             default => (string) Number::format((int) $value, locale: $locale),
         };
+    }
+
+    /**
+     * A span of seconds as whole days and hours in the reader's language —
+     * «يومان و5 ساعات», "2 days 5 hours". Anything under an hour reads "less
+     * than an hour"; from one hour on the span is rounded to the nearest
+     * hour, so the page agrees with the export's hours with one decimal
+     * (2.9 there is 3 hours here, never 2). A part that is zero is left out.
+     */
+    private static function duration(int $seconds): string
+    {
+        $hours = $seconds < 3600 ? 0 : (int) round($seconds / 3600);
+        $days = intdiv($hours, 24);
+        $hours %= 24;
+
+        if ($days === 0) {
+            return trans_choice('reports.durations.hours', $hours);
+        }
+
+        if ($hours === 0) {
+            return trans_choice('reports.durations.days', $days);
+        }
+
+        return __('reports.durations.days_and_hours', [
+            'days' => trans_choice('reports.durations.days', $days),
+            'hours' => trans_choice('reports.durations.hours', $hours),
+        ]);
     }
 
     /**
