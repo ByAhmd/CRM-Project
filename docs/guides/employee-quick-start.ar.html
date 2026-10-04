@@ -1,0 +1,258 @@
+<title>دليل الموظف السريع</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: a printable A4 sheet in the CRM's own identity («فيروز»): a header strip,
+   then a two-column grid of short sections; the task routine is the only numbered list. */
+:root {
+    --bg: #f2f7f8;
+    --sheet: #ffffff;
+    --ink: #10262c;
+    --muted: #4d6670;
+    --line: #d5e3e7;
+    --accent: #0e7490;
+    --accent-soft: #e3f2f6;
+    --chip-ink: #0b5a70;
+    --warn-soft: #fff6e5;
+    --warn-ink: #7a4b00;
+    --font: 'Tajawal', 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0d1619; --sheet: #141f23; --ink: #e4eef1; --muted: #9db3bb; --line: #26363c;
+        --accent: #38b2cf; --accent-soft: #16323a; --chip-ink: #9fe0ef; --warn-soft: #33270f; --warn-ink: #f5cf8a;
+        color-scheme: dark;
+    }
+}
+:root[data-theme="dark"] {
+    --bg: #0d1619; --sheet: #141f23; --ink: #e4eef1; --muted: #9db3bb; --line: #26363c;
+    --accent: #38b2cf; --accent-soft: #16323a; --chip-ink: #9fe0ef; --warn-soft: #33270f; --warn-ink: #f5cf8a;
+    color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.7;
+    padding-inline: 16px;
+    padding-block: 24px;
+}
+.sheet {
+    max-width: 920px;
+    margin-inline: auto;
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding: 22px 28px 18px;
+    border-bottom: 3px solid var(--accent);
+}
+h1 {
+    margin: 0;
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1.25;
+    text-wrap: balance;
+}
+.lede { margin: 4px 0 0; color: var(--muted); max-width: 52ch; }
+.stamp {
+    color: var(--muted);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+}
+section {
+    padding: 16px 28px 18px;
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+}
+.grid > section:nth-child(odd) { border-inline-end: 1px solid var(--line); }
+section.wide { grid-column: 1 / -1; }
+h2 {
+    margin: 0 0 6px;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+p { margin: 0 0 6px; }
+ul, ol { margin: 0; padding-inline-start: 1.25em; display: grid; gap: 4px; }
+ol.steps { list-style: none; padding: 0; counter-reset: step; gap: 8px; }
+ol.steps > li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 1.9rem minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+}
+ol.steps > li::before {
+    content: counter(step);
+    display: grid;
+    place-items: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--sheet);
+    font-weight: 800;
+}
+/* The app's own button and menu names, set like the buttons they are. */
+.ui {
+    display: inline-block;
+    padding: 0 0.45em;
+    border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--chip-ink);
+    font-weight: 700;
+    font-size: 0.92em;
+    line-height: 1.55;
+    white-space: nowrap;
+}
+.mention {
+    padding: 0 0.3em;
+    border-radius: 5px;
+    background: var(--accent-soft);
+    color: var(--chip-ink);
+    font-weight: 700;
+    unicode-bidi: plaintext;
+}
+.note {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+    font-size: 0.93rem;
+}
+.path { color: var(--muted); }
+footer {
+    padding: 12px 28px 16px;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+@media (max-width: 700px) {
+    header, section, footer { padding-inline: 18px; }
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .grid > section:nth-child(odd) { border-inline-end: 0; }
+    h1 { font-size: 1.55rem; }
+}
+@page { size: A4; margin: 10mm; }
+@media print {
+    body { background: #ffffff; padding: 0; font-size: 9.8pt; line-height: 1.5; }
+    .sheet { border: 0; border-radius: 0; max-width: none; }
+    header { padding: 0 0 8px; }
+    h1 { font-size: 1.7rem; }
+    section { padding: 7px 12px 8px; break-inside: avoid; }
+    ul { gap: 2px; }
+    ol.steps { gap: 5px; }
+    ol.steps > li { grid-template-columns: 1.6rem minmax(0, 1fr); }
+    ol.steps > li::before { width: 1.6rem; height: 1.6rem; }
+    .note { margin-top: 6px; padding: 6px 10px; }
+    footer { padding: 6px 12px 0; }
+}
+</style>
+
+<main class="sheet" dir="rtl" lang="ar">
+    <header>
+        <div>
+            <h1>دليل الموظف السريع</h1>
+            <p class="lede">كل ما تحتاجه لتستلم مهامك في نظام إدارة العملاء، وتبلّغ عن سير العمل فيها، وتتواصل مع زملائك عليها.</p>
+        </div>
+        <span class="stamp">الإصدار: أكتوبر 2026</span>
+    </header>
+
+    <div class="grid">
+        <section>
+            <h2>الدخول أول مرة</h2>
+            <ul>
+                <li>تصلك على بريدك رسالة «دعوة للانضمام». اضغط <span class="ui">تعيين كلمة المرور</span> قبل أن تنتهي صلاحية الرابط؛ إن انتهت فاطلب رابطاً جديداً من صفحة تسجيل الدخول.</li>
+                <li>كلمة المرور 12 حرفاً على الأقل، فيها حرف كبير وحرف صغير ورقم.</li>
+                <li>ادخل بعدها بالبريد وكلمة المرور. احفظ رابط النظام في المفضلة أو على الشاشة الرئيسية لهاتفك.</li>
+                <li>اللغة، والملف الشخصي، والتحقق بخطوتين (اختياري ومستحسن): من الدائرة التي تحمل أحرف اسمك أعلى الصفحة.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>أين أجد مهامي؟</h2>
+            <ul>
+                <li><span class="path">القائمة الجانبية ← الأنشطة ←</span> <span class="ui">المهام</span>، ثم تبويب <span class="ui">مهامي</span>.</li>
+                <li>تبويبا <span class="ui">مستحقة اليوم</span> و<span class="ui">متأخرة</span> يعرضان ما يحتاج انتباهك الآن.</li>
+                <li><span class="ui">لوحة المهام</span> تعرض مهام الفريق كله، مرتبة حسب المكلَّف.</li>
+                <li>اضغط عنوان أي مهمة لفتحها ورؤية تفاصيلها وسجل العمل والتعليقات عليها.</li>
+            </ul>
+        </section>
+
+        <section class="wide">
+            <h2>العمل على مهمة أُسندت إليك</h2>
+            <ol class="steps">
+                <li><div>عندما تبدأ العمل افتح المهمة واضغط <span class="ui">بدء</span>. يمكنك كتابة ملاحظة قصيرة عمّا ستفعله.</div></li>
+                <li><div>أثناء العمل اضغط <span class="ui">نشر تحديث</span> لتخبر من أسند إليك المهمة بما أنجزته أو بما يعيقك. يصله التحديث فوراً.</div></li>
+                <li><div>عند الانتهاء اضغط <span class="ui">إكمال</span>، ويُنبَّه من أسندها إليك. إن أكملتها بالخطأ فاضغط <span class="ui">إعادة فتح</span>.</div></li>
+            </ol>
+            <p class="note">المهمة التي يسندها إليك المدير تبقى له: لا تعدّل عنوانها أو موعدها ولا تحذفها، بل تبلّغ عن سير العمل فيها بالخطوات الثلاث أعلاه.</p>
+        </section>
+
+        <section>
+            <h2>التعليقات والإشارة إلى زميل</h2>
+            <ul>
+                <li>اضغط <span class="ui">تعليق</span> لسؤال أو رد أو ملاحظة. كل من يستطيع فتح المهمة يستطيع التعليق عليها.</li>
+                <li>اكتب <b>@</b> ثم اختر اسم الزميل من القائمة، مثل: <span class="mention">@سارة</span> راجعي العرض من فضلك.</li>
+                <li>يصل الزميلَ تنبيه، ويستطيع فتح المهمة وقراءة التعليقات والرد، دون أن يعدّلها.</li>
+                <li>التعليق لا يُعدَّل ولا يُحذف بعد نشره، فاكتبه بعناية.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>الملفات</h2>
+            <ul>
+                <li>في صفحة المهمة، من قسم <span class="ui">المرفقات</span>، اضغط <span class="ui">رفع ملف</span> لإرفاق صورة أو مستند.</li>
+                <li>يرى الملف كل من يستطيع فتح المهمة. إن رفعت ملفاً بالخطأ ولم يظهر لك زر الحذف، فاطلب حذفه ممن أسند إليك المهمة.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>التنبيهات</h2>
+            <ul>
+                <li>الجرس أعلى الصفحة يجمع تنبيهاتك: مهمة أُسندت إليك، إشارة إليك، تعليق جديد، تذكير، مهمة تجاوزت موعدها.</li>
+                <li>تصلك رسالة بريد عند إسناد مهمة إليك وعند الإشارة إليك.</li>
+                <li>لتغيير ذلك: <span class="path">القائمة الجانبية ← النظام ←</span> <span class="ui">تفضيلات الإشعارات</span>.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>المهام الدورية</h2>
+            <ul>
+                <li>الأعمال المتكررة، مثل تقرير أسبوعي أو جرد شهري، يعدّها المدير مرة واحدة، فتُنشأ لك تلقائياً في يومها وتصلك كأي مهمة مسندة.</li>
+                <li>تعامل معها بالخطوات نفسها: <span class="ui">بدء</span> ثم <span class="ui">نشر تحديث</span> ثم <span class="ui">إكمال</span>.</li>
+            </ul>
+        </section>
+
+        <section class="wide">
+            <h2>ثلاث عادات تجعل النظام يعمل</h2>
+            <ul>
+                <li>كل عمل يُسند ويُتابع في النظام، لا في الواتساب ولا شفهياً، حتى لا يضيع شيء.</li>
+                <li>إن طالت المهمة فانشر تحديثاً مرة في اليوم على الأقل.</li>
+                <li>إن عرفت أنك ستتأخر فانشر تحديثاً يشرح السبب قبل موعد الاستحقاق، لا بعده.</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer>لأي سؤال عن حسابك أو صلاحياتك تواصل مع مدير النظام.</footer>
+</main>

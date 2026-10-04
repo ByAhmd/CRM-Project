@@ -1,9 +1,13 @@
 name: Uptime
 
-# External monitor for the live site (decision D-16).
+# Backup external monitor for the live site (decision D-16, amended 2026-10-04).
 # Runbook: docs/DEPLOYMENT.md (section 9 describes this file).
 #
-# Every 15 minutes (and by hand: Actions > Uptime > Run workflow) this requests
+# The primary alarm is a Better Stack Uptime monitor on the same URL: GitHub
+# starts scheduled runs on a best-effort basis (hours apart in practice), so
+# this workflow is a slow second opinion, not the alarm.
+#
+# Asked for every 15 minutes (and by hand: Actions > Uptime > Run workflow), it requests
 # the site's health endpoint `/up`. In production `/up` answers 500 when the
 # scheduler heartbeat is missing or older than ten minutes
 # (App\Listeners\FailHealthCheckWithoutSchedulerHeartbeat), so one request
