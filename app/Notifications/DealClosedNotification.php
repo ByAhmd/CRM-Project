@@ -9,8 +9,9 @@ use App\Enums\NotificationEvent;
 use App\Filament\Resources\Deals\DealResource;
 use App\Models\Deal;
 use App\Models\User;
+use App\Support\Filament\PanelUrl;
 use App\Support\Notifications\NotificationChannels;
-use Filament\Actions\Action;
+use App\Support\Notifications\NotificationLink;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
@@ -55,17 +56,12 @@ final class DealClosedNotification extends Notification implements ShouldQueue
      */
     public function toDatabase(User $notifiable): array
     {
-        return $this->withLocale($this->localeFor($notifiable), function (): array {
+        return $this->withLocale($this->localeFor($notifiable), function () use ($notifiable): array {
             $notification = FilamentNotification::make()
                 ->title($this->title())
                 ->body($this->body())
                 ->icon($this->isWon() ? Heroicon::OutlinedTrophy : Heroicon::OutlinedXCircle)
-                ->actions([
-                    Action::make('open')
-                        ->label(__('notifications.common.open'))
-                        ->url($this->url())
-                        ->markAsRead(),
-                ]);
+                ->actions(NotificationLink::actions($this->linkFor($notifiable), __('notifications.common.open')));
 
             $this->isWon() ? $notification->success() : $notification->warning();
 
@@ -79,7 +75,7 @@ final class DealClosedNotification extends Notification implements ShouldQueue
             ->subject($this->title())
             ->greeting(__('notifications.common.greeting', ['name' => $notifiable->name]))
             ->line($this->body())
-            ->action(__('notifications.common.open'), $this->url()));
+            ->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('notifications.common.open'), $url)));
     }
 
     public function title(): string
@@ -99,6 +95,12 @@ final class DealClosedNotification extends Notification implements ShouldQueue
     public function url(): string
     {
         return DealResource::getUrl('view', ['record' => $this->deal]);
+    }
+
+    /** The deal's page, unless the recipient may not enter the Sales workspace (D-23). */
+    private function linkFor(User $notifiable): ?string
+    {
+        return PanelUrl::forReader($notifiable, DealResource::class, fn (): string => $this->url());
     }
 
     public function isWon(): bool

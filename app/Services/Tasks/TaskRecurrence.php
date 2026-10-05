@@ -21,10 +21,15 @@ use Illuminate\Support\Carbon;
  * task is a copy of the completed one — same title, kind, priority,
  * assignee, assigner, linked records and recurrence settings — pointing at
  * the first task of the series; its creation is audited by LogsActivity as
- * the causer TaskService has set.
+ * the causer TaskService has set. Its checklist is the completed task's,
+ * copied unticked and in order (D-25).
  */
 final class TaskRecurrence
 {
+    public function __construct(
+        private readonly TaskChecklist $checklist,
+    ) {}
+
     public function next(Task $completed): ?Task
     {
         $frequency = $completed->recurrence_frequency;
@@ -73,6 +78,8 @@ final class TaskRecurrence
         $next->assigned_by = $completed->assigned_by;
 
         $next->save();
+
+        $this->checklist->copyInto($next, TaskChecklist::bodies($completed));
 
         return $next;
     }

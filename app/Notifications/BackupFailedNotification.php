@@ -9,8 +9,9 @@ use App\Filament\Pages\System\Backups;
 use App\Models\User;
 use App\Services\Settings\SettingsRepository;
 use App\Services\System\BackupFailure;
+use App\Support\Filament\PanelUrl;
 use App\Support\Notifications\NotificationChannels;
-use Filament\Actions\Action;
+use App\Support\Notifications\NotificationLink;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
@@ -64,12 +65,7 @@ final class BackupFailedNotification extends Notification implements ShouldQueue
             ->body($this->body())
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->iconColor('danger')
-            ->actions([
-                Action::make('open')
-                    ->label(__('backups.notifications.open'))
-                    ->url(Backups::getUrl())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->linkFor($notifiable), __('backups.notifications.open')))
             ->getDatabaseMessage();
     }
 
@@ -81,7 +77,13 @@ final class BackupFailedNotification extends Notification implements ShouldQueue
             ->greeting(__('backups.notifications.greeting', ['name' => $notifiable->name]))
             ->line($this->body())
             ->line(__('backups.notifications.failed_mail_hint'))
-            ->action(__('backups.notifications.open'), Backups::getUrl());
+            ->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('backups.notifications.open'), $url));
+    }
+
+    /** The Backups page, unless the recipient may not enter the Administration workspace (D-23). */
+    private function linkFor(User $notifiable): ?string
+    {
+        return PanelUrl::forReader($notifiable, Backups::class, static fn (): string => Backups::getUrl());
     }
 
     private function body(): string

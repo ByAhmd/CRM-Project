@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Teams;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\Teams\Pages\CreateTeam;
 use App\Filament\Resources\Teams\Pages\EditTeam;
 use App\Filament\Resources\Teams\Pages\ListTeams;
@@ -24,6 +25,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class TeamResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = Team::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;

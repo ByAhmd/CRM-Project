@@ -6,14 +6,12 @@ namespace Tests\Feature\Access;
 
 use App\Enums\UserStatus;
 use App\Filament\Resources\Leads\LeadResource;
+use App\Http\Middleware\AuthenticateWorkspace;
 use App\Models\User;
 use Filament\Http\Middleware\Authenticate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
-use Livewire\Mechanisms\HandleRequests\HandleRequests;
 use PHPUnit\Framework\Attributes\Test;
-use Symfony\Component\HttpFoundation\Response;
 use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
@@ -48,6 +46,9 @@ final class OpenPageAfterStatusChangeTest extends TestCase
         $this->actingAs($this->salesRep())->get(LeadResource::getUrl('index'))->assertOk();
 
         $this->assertContains(Authenticate::class, Livewire::getPersistentMiddleware());
+        // Livewire matches by exact class name: the gate of the workspace
+        // panels (D-23) must be registered itself, its parent does not cover it.
+        $this->assertContains(AuthenticateWorkspace::class, Livewire::getPersistentMiddleware());
     }
 
     #[Test]
@@ -76,33 +77,8 @@ final class OpenPageAfterStatusChangeTest extends TestCase
         $this->livewireUpdate($snapshot)->assertForbidden();
     }
 
-    /**
-     * Loads the lead list as the user and returns the first Livewire snapshot
-     * the page rendered, exactly as the browser holds it.
-     */
     private function openLeadList(User $user): string
     {
-        $html = (string) $this->actingAs($user)->get(LeadResource::getUrl('index'))->assertOk()->getContent();
-
-        $this->assertSame(1, preg_match('/wire:snapshot="([^"]+)"/', $html, $match), 'The page rendered no Livewire snapshot.');
-
-        return html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5);
-    }
-
-    /**
-     * One update request from the open page. Livewire remembers, per request
-     * cycle, which routes it already ran persistent middleware for; a real
-     * browser request starts a fresh cycle, so the state is flushed first to
-     * make each call in this test behave like its own request.
-     *
-     * @return TestResponse<Response>
-     */
-    private function livewireUpdate(string $snapshot): TestResponse
-    {
-        Livewire::flushState();
-
-        return $this->withHeaders(['X-Livewire' => 'true'])->postJson(app(HandleRequests::class)->getUpdateUri(), [
-            'components' => [['snapshot' => $snapshot, 'updates' => [], 'calls' => []]],
-        ]);
+        return $this->firstLivewireSnapshot($user, LeadResource::getUrl('index'));
     }
 }

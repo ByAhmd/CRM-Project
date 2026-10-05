@@ -8,8 +8,8 @@ use App\Enums\NotificationEvent;
 use App\Models\Note;
 use App\Models\User;
 use App\Support\Notifications\NotificationChannels;
+use App\Support\Notifications\NotificationLink;
 use App\Support\RecordUrl;
-use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
@@ -55,12 +55,7 @@ final class NoteMentionNotification extends Notification implements ShouldQueue
             ->title($this->title())
             ->body($this->body())
             ->icon(Heroicon::OutlinedChatBubbleLeftEllipsis)
-            ->actions([
-                Action::make('open')
-                    ->label(__('notifications.common.open'))
-                    ->url($this->url())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->linkFor($notifiable), __('notifications.common.open')))
             ->getDatabaseMessage());
     }
 
@@ -70,7 +65,7 @@ final class NoteMentionNotification extends Notification implements ShouldQueue
             ->subject($this->title())
             ->greeting(__('notifications.common.greeting', ['name' => $notifiable->name]))
             ->line($this->body())
-            ->action(__('notifications.common.open'), $this->url()));
+            ->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('notifications.common.open'), $url)));
     }
 
     public function title(): string
@@ -87,7 +82,7 @@ final class NoteMentionNotification extends Notification implements ShouldQueue
         ]);
     }
 
-    /** The view page of the record the note was written on; the panel home when it is gone. */
+    /** The view page of the record the note was written on; the workspace screen when it is gone. */
     public function url(): string
     {
         $subject = $this->note->subjectRecord();
@@ -98,5 +93,16 @@ final class NoteMentionNotification extends Notification implements ShouldQueue
     private function localeFor(User $notifiable): string
     {
         return $this->locale ?? $notifiable->preferredLocale();
+    }
+
+    /**
+     * The noted record's page, unless the recipient may not enter its
+     * workspace (D-23); the workspace screen when the record is gone.
+     */
+    private function linkFor(User $notifiable): ?string
+    {
+        $subject = $this->note->subjectRecord();
+
+        return $subject === null ? RecordUrl::home() : RecordUrl::forReader($notifiable, $subject);
     }
 }

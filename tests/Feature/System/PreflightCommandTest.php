@@ -14,6 +14,7 @@ use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\User;
 use App\Support\System\PlatformRequirements;
+use Filament\Facades\Filament;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -442,10 +443,14 @@ final class PreflightCommandTest extends TestCase
         file_put_contents($views.DIRECTORY_SEPARATOR.'0123456789abcdef.php', '<?php // compiled');
         config()->set('view.compiled', $views);
 
+        // Every panel keeps its own component cache (D-23: the home panel and four workspaces).
         $filament = $this->scratchDirectory('filament');
         mkdir($filament.DIRECTORY_SEPARATOR.'panels');
-        file_put_contents($filament.DIRECTORY_SEPARATOR.'panels'.DIRECTORY_SEPARATOR.'admin.php', '<?php return [];');
         config()->set('filament.cache_path', $filament);
+
+        foreach (Filament::getPanels() as $panel) {
+            file_put_contents($panel->getComponentCachePath(), '<?php return [];');
+        }
 
         Cache::put(PreflightCommand::HEARTBEAT_KEY, now()->toIso8601String(), now()->addMinutes(10));
 

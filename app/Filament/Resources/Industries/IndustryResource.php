@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Industries;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\Industries\Pages\CreateIndustry;
 use App\Filament\Resources\Industries\Pages\EditIndustry;
 use App\Filament\Resources\Industries\Pages\ListIndustries;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class IndustryResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = Industry::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Pipelines;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\Pipelines\Pages\CreatePipeline;
 use App\Filament\Resources\Pipelines\Pages\EditPipeline;
 use App\Filament\Resources\Pipelines\Pages\ListPipelines;
@@ -25,6 +26,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class PipelineResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = Pipeline::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedViewColumns;

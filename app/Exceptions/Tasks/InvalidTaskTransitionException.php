@@ -7,7 +7,8 @@ namespace App\Exceptions\Tasks;
 use RuntimeException;
 
 /**
- * A task status change — or a comment — the service refuses (decisions A-10, D-17).
+ * A task status change — or a comment, or a checklist tick — the service
+ * refuses (decisions A-10, D-17, D-25).
  */
 final class InvalidTaskTransitionException extends RuntimeException
 {
@@ -40,5 +41,11 @@ final class InvalidTaskTransitionException extends RuntimeException
     public static function commentOnTrashed(): self
     {
         return new self(__('tasks.validation.comment_trashed'));
+    }
+
+    /** A completed, cancelled or deleted task's checklist is frozen (D-25). */
+    public static function checklistNotOpen(): self
+    {
+        return new self(__('tasks.validation.checklist_not_open'));
     }
 }

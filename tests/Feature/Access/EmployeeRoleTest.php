@@ -7,9 +7,11 @@ namespace Tests\Feature\Access;
 use App\Enums\CrmRole;
 use App\Enums\Permission;
 use App\Enums\TaskStatus;
+use App\Enums\WorkspacePanel;
 use App\Exceptions\Access\UnassignableUserException;
-use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\SalesDashboard;
 use App\Filament\Pages\TasksBoard;
+use App\Filament\Pages\TasksDashboard;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Resources\Tasks\Pages\CreateTask;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
@@ -79,7 +81,8 @@ final class EmployeeRoleTest extends TestCase
     #[Test]
     public function the_role_holds_exactly_its_task_and_attachment_permissions(): void
     {
-        $expected = ['attachment.create', 'attachment.download', 'task.create', 'task.delete', 'task.update', 'task.view_any'];
+        // D-23: plus the Tasks workspace, the only one the role enters.
+        $expected = ['attachment.create', 'attachment.download', 'task.create', 'task.delete', 'task.update', 'task.view_any', 'workspace.tasks'];
         $matrix = array_map(static fn (Permission $permission): string => $permission->value, RolePermissionMatrix::for(CrmRole::Employee));
         sort($matrix);
 
@@ -105,6 +108,7 @@ final class EmployeeRoleTest extends TestCase
             ->assertCanNotSeeTableRecords([$foreign]);
 
         $this->assertFalse($this->employee->can('view', $foreign));
+        $this->assertUrlInWorkspace(WorkspacePanel::Tasks, TaskResource::getUrl('view', ['record' => $foreign]));
         $this->actingAs($this->employee)->get(TaskResource::getUrl('view', ['record' => $foreign]))->assertNotFound();
 
         Livewire::actingAs($this->employee)
@@ -214,9 +218,11 @@ final class EmployeeRoleTest extends TestCase
     }
 
     #[Test]
-    public function the_dashboard_shows_the_task_widgets_and_none_of_the_sales_widgets_or_filters(): void
+    public function the_tasks_home_shows_the_task_widgets_and_the_sales_dashboard_stays_closed(): void
     {
-        $this->actingAs($this->employee)->get(Dashboard::getUrl())->assertOk();
+        // D-23: the employee enters the Tasks workspace only; its home carries the two task lists.
+        $this->actingAs($this->employee)->get(TasksDashboard::getUrl())->assertOk();
+        $this->actingAs($this->employee)->get(SalesDashboard::getUrl())->assertForbidden();
 
         foreach ([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class] as $widget) {
             $this->assertTrue($widget::canView(), "{$widget} hides from the employee");
@@ -226,16 +232,15 @@ final class EmployeeRoleTest extends TestCase
             $this->assertFalse($widget::canView(), "{$widget} shows to the employee");
         }
 
-        // The task lists run on fixed windows, so the period / owner / pipeline filters would change nothing.
+        // The filters live on the sales dashboard; the tasks home, on fixed windows, has none.
         $range = __('dashboard.helpers.range', ['days' => DashboardFilters::MAX_RANGE_DAYS]);
 
         Livewire::actingAs($this->employee)
-            ->test(Dashboard::class)
-            ->assertActionHidden('resetFilters')
+            ->test(TasksDashboard::class)
             ->assertDontSee($range);
 
         Livewire::actingAs($this->admin)
-            ->test(Dashboard::class)
+            ->test(SalesDashboard::class)
             ->assertActionVisible('resetFilters')
             ->assertSee($range);
     }
@@ -246,6 +251,7 @@ final class EmployeeRoleTest extends TestCase
         $lead = Lead::factory()->create(['owner_id' => $this->admin->getKey(), 'first_name' => 'Hidden', 'last_name' => 'Prospect']);
         $task = $this->handedOut(['lead_id' => $lead->getKey()]);
         $leadUrl = LeadResource::getUrl('view', ['record' => $lead]);
+        $this->assertUrlInWorkspace(WorkspacePanel::Sales, $leadUrl);
 
         $this->assertFalse($this->employee->can('view', $lead), 'precondition: the employee reads no lead');
 
@@ -271,8 +277,8 @@ final class EmployeeRoleTest extends TestCase
             ->test(ViewTask::class, ['record' => $task->getKey()])
             ->assertSeeHtml($leadUrl);
 
-        // The lead page itself does not even confirm the lead exists.
-        $this->actingAs($this->employee)->get($leadUrl)->assertNotFound();
+        // The lead page itself is closed: the employee does not even enter Sales (D-23).
+        $this->actingAs($this->employee)->get($leadUrl)->assertForbidden();
     }
 
     #[Test]

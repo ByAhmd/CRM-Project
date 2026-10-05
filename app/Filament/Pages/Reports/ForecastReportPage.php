@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  */
 final class ForecastReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/forecast';
+    protected static ?string $slug = 'forecast';
 
     protected static ?int $navigationSort = 80;
 

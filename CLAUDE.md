@@ -1,9 +1,9 @@
 # CRM — Project Constitution
 
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
-one admin panel. Engineering standard inherited from the Stockflow (ZonKSA) project and adapted; the
-authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-22 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
+a home panel plus four workspace panels (D-23). Engineering standard inherited from the Stockflow (ZonKSA)
+project and adapted; the authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
+`docs/DECISIONS.md` (D-1 … D-25 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -46,6 +46,16 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   Tables: `->defaultSort()`, `->recordActions()`,
   `->toolbarActions([BulkActionGroup::make([...->authorizeIndividualRecords(...)])])`, persisted
   filters/sort/search, translated empty states. `getEloquentQuery()` applies `ScopesQueriesToVisibleRecords`.
+- Panels (D-23): a home panel (`/app`: sign-in, password reset, profile + MFA, notification preferences, the
+  workspace screen) and four workspaces (`App\Enums\WorkspacePanel`: Sales `/sales`, Tasks `/tasks`, Reports
+  `/reports`, Administration `/admin`). Every resource, page and widget is listed in exactly one panel in
+  `App\Support\Filament\WorkspacePanelRegistry` (no discovery) and uses `BuildsUrlsInOwningPanel` /
+  `BuildsPageUrlsInOwningPanel`, so `getUrl()` points into its owning panel from anywhere (jobs, mails, other
+  panels). Shared panel configuration lives only in `Providers\Filament\Concerns\ConfiguresCrmPanel`. Entry is
+  `Services\Access\PanelAccess` (`workspace.*` keys; `User::canAccessPanel()` delegates; fail closed). A link into
+  another workspace goes through `Support\Filament\PanelUrl::forReader()` and renders as plain text when it returns
+  null — links never dead-end. A moved `/admin/...` address gets a row in `Support\Http\LegacyAdminRedirects`.
+  Non-panel routes that need the panel's look or auth carry `panel:app`.
 - Authorisation: policy per model using `Policies\Concerns\ChecksPermissions` (explicit `deleteAny`,
   `restoreAny`, `forceDeleteAny`; `forceDelete` = false); `App\Enums\Permission` keys; record scope through
   `Services\Access\RecordVisibilityResolver`; every custom action `->authorize()`d; every bulk action
@@ -59,7 +69,7 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   counted nouns use `trans_choice` (Arabic `{0}/{1}/{2}/[3,10]/[11,99]/[100,*]`, English `{1}/[2,*]`); Arabic text
   uses «من … إلى …», never arrows between values; audit labels for one model go in
   `activity.subject_attributes.<Model>.<key>`.
-- Theme: `resources/css/filament/admin/theme.css` only; tokens `--crm-*` in `:root` and `.dark`; Filament `--gray-*`
+- Theme: `resources/css/filament/admin/theme.css` only (all five panels and the landing page share it); tokens `--crm-*` in `:root` and `.dark`; Filament `--gray-*`
   overrides must be full colour values (e.g. `var(--crm-*)`), never bare RGB triplets; logical CSS
   properties; no `[dir='ltr']` exceptions; Latin-only values wrapped `dir="ltr"`. Motion («روح», A-9): every
   animation/transition sits behind `@media (prefers-reduced-motion: no-preference)`, 140–450 ms, translateY/scale
@@ -72,7 +82,11 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   default for every event except `RecordAssigned` (D-14), `TaskMention` (D-20), `WeeklySummary` (D-18) and
   `BackupFailed` (D-16), which are opt-out (`NotificationEvent::mailByDefault()`).
 - Tests: `#[Test]` attribute, snake_case sentence names, `RefreshDatabase` on `crm_testing`,
-  `Filament::setCurrentPanel('admin')` before `Livewire::test`, fixtures from `Tests\Concerns\CreatesCrmFixtures`
+  `$this->usePanel()` in `setUp()` before `Livewire::test` (it makes the home panel current and switches to each
+  mounted component's owning panel; code that reads the current panel directly — `getNavigation()`, panel walks —
+  sets it explicitly), QualityPass walkers walk every panel (`Filament::getPanels()`), multi-role HTTP walks use a
+  DataProvider per role (the current panel is a scoped binding that leaks across requests), fixtures from
+  `Tests\Concerns\CreatesCrmFixtures`
   (upload bytes from `Tests\Concerns\BuildsUploadBytes`; never copy a helper into a test class), lazy loading prevented
   for the whole suite,
   per-role authorisation matrices, negative visibility tests for every owned entity.
@@ -110,7 +124,12 @@ role (D-14) · Employee role for task-receiving staff (D-15) · weekly self-back
 task comments (D-17) · weekly summary e-mail (D-18) · preferences show only receivable events (D-19) ·
 @mentions in task comments pull a colleague into the task: read, files and comments, never edit (D-20) · the task
 report shows each employee's average time to finish, from `tasks.assigned_at` (D-21) · routine tasks: weekly or
-monthly templates, `task.assign` only, one task per assignee handed out hourly by `tasks:generate-routines` (D-22).
+monthly templates, `task.assign` only, one task per assignee handed out hourly by `tasks:generate-routines` (D-22) ·
+workspaces: home panel `/app` + Sales, Tasks, Reports and Administration panels entered by `workspace.*` keys, a
+workspace screen with locked cards after sign-in, owning-panel links shown only to readers who may enter, permanent
+redirects from the old `/admin/...` addresses (D-23) · a public bilingual landing page at `/`, truthful claims only,
+panels kept out of search engines (D-24) · task checklists: written with `update`, ticked with `progress` while
+open, completion with unticked items allowed with a warning, copied unticked by routines and recurrence (D-25).
 
 ## 6. QA checklist before any commit
 

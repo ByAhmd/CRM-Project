@@ -434,11 +434,12 @@ final class RoutineTaskResourceTest extends TestCase
     }
 
     #[Test]
-    public function the_resource_sits_in_the_activities_group_right_after_the_tasks_board(): void
+    public function the_resource_sits_in_the_tasks_group_right_after_the_tasks_board(): void
     {
         $this->actingAs($this->admin());
 
-        $this->assertSame(NavigationGroup::Activities, TaskTemplateResource::getNavigationGroup());
+        // D-23: the Tasks workspace groups its screens under «المهام».
+        $this->assertSame(NavigationGroup::Tasks, TaskTemplateResource::getNavigationGroup());
         $this->assertSame(26, TaskTemplateResource::getNavigationSort());
         $this->assertFalse(TaskTemplateResource::canGloballySearch());
     }

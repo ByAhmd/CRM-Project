@@ -72,6 +72,16 @@
      | through the sticky header.
      */
     --crm-table-header: color-mix(in oklab, var(--crm-text) 4%, var(--crm-card));
+
+    /*
+     | Accent text on plain (non-Filament) surfaces — the workspace screen,
+     | the switcher, the workspace homes (D-23). Filament's ramp variables
+     | (--color-700 …) only resolve inside fi-color-* elements, so these
+     | pages carry their own pair: the brand teal at 5.4:1 on the card and
+     | 4.9:1 on the page ground, and a soft tint that keeps it at 4.6:1.
+     */
+    --crm-accent-text: #0e7490;
+    --crm-accent-soft: color-mix(in oklab, var(--crm-accent-text) 10%, var(--crm-card));
 }
 
 .dark {
@@ -87,6 +97,9 @@
     --crm-sidebar-2: #103b47;
     --crm-sidebar-hover: #174b5b;
     --crm-on-sidebar: #d3e8ee;
+
+    /* 8.5:1 on the dark card, 7.2:1 on its soft tint. */
+    --crm-accent-text: #67c6d8;
 }
 
 /*
@@ -558,6 +571,283 @@ html.dark {
 }
 
 /* ---------------------------------------------------------------------------
+ | Workspace screen, switcher and workspace homes (decision D-23)
+ |
+ | The workspace screen shows all four workspaces as cards: one column on a
+ | phone, two from 40rem, four in a row from 80rem. An enterable card is one
+ | link; a locked card is drawn on the page ground with a dashed edge and a
+ | lock — never by lowering its opacity, which took the text below AA in the
+ | reference project — so every word on it keeps its measured contrast
+ | (description 7.7:1, state line 7.7:1, lock icon 4.6:1 in light; higher in
+ | dark). Plain elements, so only --crm-* tokens: Filament's ramp variables
+ | do not resolve here. Logical properties throughout, so both directions
+ | lay out alike; the motion for these lives in the guarded block below.
+ * ------------------------------------------------------------------------- */
+
+.crm-workspaces {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (min-width: 40rem) {
+    .crm-workspaces {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 80rem) {
+    .crm-workspaces {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.crm-workspaces-item {
+    display: flex;
+}
+
+.crm-workspace-card {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1rem;
+    min-block-size: 12rem;
+    padding: 1.25rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+    box-shadow: var(--shadow-crm);
+    color: var(--crm-text);
+    text-decoration: none;
+}
+
+a.crm-workspace-card:hover {
+    border-color: var(--crm-accent-text);
+}
+
+a.crm-workspace-card:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-workspace-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 3rem;
+    block-size: 3rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+}
+
+.crm-workspace-card-glyph {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+}
+
+.crm-workspace-card-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.crm-workspace-card-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.crm-workspace-card-description {
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+.crm-workspace-card-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.crm-workspace-card-enter {
+    display: inline-flex;
+    align-items: center;
+    padding-block: 0.375rem;
+    padding-inline: 0.875rem;
+    border-radius: 999px;
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.crm-workspace-card-locked {
+    border-style: dashed;
+    border-color: var(--crm-border-2);
+    background-color: var(--crm-bg);
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.crm-workspace-card-locked .crm-workspace-card-icon {
+    background-color: var(--crm-card);
+    color: var(--crm-muted);
+}
+
+.crm-workspace-card-locked .crm-workspace-card-title {
+    color: var(--crm-text-2);
+}
+
+.crm-workspace-card-locked-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.crm-workspace-card-lock {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    color: var(--crm-muted);
+}
+
+/* The top-bar switcher: the current workspace's icon and name, then a chevron. */
+.crm-workspace-switcher-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 2.25rem;
+    padding-inline: 0.625rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm-sm);
+    background-color: transparent;
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.crm-workspace-switcher-trigger:hover {
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+}
+
+.crm-workspace-switcher-trigger:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-workspace-switcher-icon {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+}
+
+.crm-workspace-switcher-chevron {
+    inline-size: 1rem;
+    block-size: 1rem;
+}
+
+/* A phone keeps the icon and the chevron; the name stays in the aria-label. */
+@media (max-width: 40rem) {
+    .crm-workspace-switcher-label {
+        display: none;
+    }
+}
+
+/* The workspace homes that list screens (Reports, Administration). */
+.crm-workspace-home-section + .crm-workspace-home-section {
+    margin-block-start: 1.5rem;
+}
+
+.crm-workspace-home-heading {
+    margin-block-end: 0.75rem;
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.crm-workspace-links {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (min-width: 40rem) {
+    .crm-workspace-links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 80rem) {
+    .crm-workspace-links {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.crm-workspace-link {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    block-size: 100%;
+    padding: 1rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+    color: var(--crm-text);
+    text-decoration: none;
+}
+
+.crm-workspace-link:hover {
+    border-color: var(--crm-accent-text);
+}
+
+.crm-workspace-link:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-workspace-link-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+}
+
+.crm-workspace-link-glyph {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+}
+
+.crm-workspace-link-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.crm-workspace-link-title {
+    font-weight: 700;
+}
+
+.crm-workspace-link-description {
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------------
  | Reduced motion
  |
  | Zero out decorative transitions (hover fades, sidebar collapse slides,
@@ -704,6 +994,39 @@ html.dark {
         box-shadow: 0 14px 34px -14px rgba(13, 60, 72, 0.35);
     }
 
+    /*
+     | The workspace screen (D-23): the four cards rise in one after another
+     | on arrival, and an enterable card lifts under the cursor. A locked
+     | card rises with the others but never lifts — it is not a target.
+     */
+    html:not(.crm-settled) .crm-workspace-card {
+        animation: crm-rise 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+    }
+
+    html:not(.crm-settled) .crm-workspaces-item:nth-child(2) .crm-workspace-card { animation-delay: 0.05s; }
+    html:not(.crm-settled) .crm-workspaces-item:nth-child(3) .crm-workspace-card { animation-delay: 0.1s; }
+    html:not(.crm-settled) .crm-workspaces-item:nth-child(4) .crm-workspace-card { animation-delay: 0.15s; }
+
+    a.crm-workspace-card,
+    .crm-workspace-link {
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    a.crm-workspace-card:hover,
+    .crm-workspace-link:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 34px -14px rgba(13, 60, 72, 0.35);
+    }
+
+    a.crm-workspace-card:active,
+    .crm-workspace-link:active {
+        transform: translateY(0) scale(0.98);
+    }
+
+    .crm-workspace-switcher-trigger {
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
     /* Overlays pop from their trigger instead of appearing. */
     .fi-dropdown-panel {
         transform-origin: top;
@@ -740,3 +1063,995 @@ html.dark {
         }
     }
 }
+
+/* ---------------------------------------------------------------------------
+ | Landing page (decision D-24) — landing:start
+ |
+ | The public page at the site root, in the «فيروز» identity: plain elements
+ | scoped under .crm-landing, so only --crm-* tokens and the panel's runtime
+ | --primary-* / --warning-* ramps (rendered on :root by Filament) are used —
+ | Filament's --color-* ramp variables do not resolve here. Logical properties
+ | throughout, so Arabic and English lay out alike with no direction override.
+ | Every pair holds WCAG AA in both themes: body text on --crm-text/-text-2,
+ | accents on --crm-accent-text (4.5:1+ light — 4.58 on the band, 4.68 on
+ | the soft tint, the tightest pairs, so a lighter tint has no headroom —
+ | 7.2:1+ dark), white on the
+ | 700 shade for the solid button. Everything is visible at rest — without
+ | JavaScript and without motion; the motion for this page sits in its own
+ | guarded block at the end of this section (LandingPageTest reads it).
+ | Phone first: one column down to 360 px, no horizontal scroll.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-landing-nav-bg: color-mix(in oklab, var(--crm-card) 90%, transparent);
+    --crm-landing-band: color-mix(in oklab, var(--crm-accent-text) 6%, var(--crm-bg));
+    --crm-landing-glow: color-mix(in oklab, var(--crm-accent-text) 16%, transparent);
+    --crm-landing-button: var(--primary-700);
+    --crm-landing-button-hover: var(--primary-800);
+    --crm-landing-badge-bg: color-mix(in oklab, var(--warning-500) 16%, var(--crm-card));
+    --crm-landing-badge-text: var(--warning-800);
+    --crm-landing-shadow: 0 30px 60px -30px rgba(13, 60, 72, 0.4);
+}
+
+.dark {
+    --crm-landing-band: color-mix(in oklab, var(--crm-accent-text) 7%, var(--crm-bg));
+    --crm-landing-glow: color-mix(in oklab, var(--crm-accent-text) 14%, transparent);
+    --crm-landing-badge-bg: color-mix(in oklab, var(--warning-400) 18%, var(--crm-card));
+    --crm-landing-badge-text: var(--warning-200);
+    --crm-landing-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.7);
+}
+
+.crm-landing {
+    min-block-size: 100dvh;
+    overflow-x: clip;
+    background-color: var(--crm-bg);
+    color: var(--crm-text);
+}
+
+.crm-landing [id] {
+    scroll-margin-block-start: 8rem;
+}
+
+@media (min-width: 56rem) {
+    .crm-landing [id] {
+        scroll-margin-block-start: 5rem;
+    }
+}
+
+.crm-landing-container {
+    inline-size: min(100%, 76rem);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 4vw, 2.5rem);
+}
+
+.crm-landing-main:focus {
+    outline: none;
+}
+
+.crm-landing a:focus-visible,
+.crm-landing button:focus-visible,
+.crm-landing summary:focus-visible,
+.crm-landing-skip:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 3px;
+}
+
+.crm-landing-sr-only,
+.crm-landing-skip:not(:focus) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+.crm-landing-skip:focus {
+    position: fixed;
+    inset-block-start: 0.75rem;
+    inset-inline-start: 0.75rem;
+    z-index: 60;
+    padding-block: 0.5rem;
+    padding-inline: 1rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-card);
+    color: var(--crm-text);
+    font-weight: 700;
+    box-shadow: var(--shadow-crm);
+}
+
+/* Buttons and the small top-bar tools. */
+.crm-landing-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-block-size: 2.875rem;
+    padding-block: 0.625rem;
+    padding-inline: 1.375rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+}
+
+.crm-landing-btn-primary {
+    background-color: var(--crm-landing-button);
+    color: var(--crm-on-accent);
+}
+
+.crm-landing-btn-primary:hover {
+    background-color: var(--crm-landing-button-hover);
+}
+
+.crm-landing-btn-ghost {
+    border-color: var(--crm-border-2);
+    background-color: var(--crm-card);
+    color: var(--crm-text);
+}
+
+.crm-landing-btn-ghost:hover {
+    border-color: var(--crm-accent-text);
+    color: var(--crm-accent-text);
+}
+
+.crm-landing-btn-compact {
+    min-block-size: 2.5rem;
+    padding-block: 0.5rem;
+    padding-inline: 1rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.crm-landing-language {
+    display: contents;
+}
+
+.crm-landing-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-block-size: 2.5rem;
+    min-inline-size: 2.5rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--crm-border);
+    border-radius: 999px;
+    background-color: var(--crm-card);
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.crm-landing-tool:hover {
+    border-color: var(--crm-accent-text);
+    color: var(--crm-accent-text);
+}
+
+.crm-landing-tool-square {
+    padding-inline: 0;
+}
+
+.crm-landing-tool-glyph {
+    display: inline-flex;
+}
+
+.crm-landing-tool-icon {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+}
+
+/* Top bar: brand and tools on the first row; on a phone the section links
+   take a second row, from 56rem they sit between brand and tools. */
+.crm-landing-nav {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 40;
+    border-block-end: 1px solid var(--crm-border);
+    background-color: var(--crm-landing-nav-bg);
+    backdrop-filter: blur(12px);
+}
+
+.crm-landing-nav-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        'brand tools'
+        'links links';
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding-block: 0.625rem;
+}
+
+@media (min-width: 56rem) {
+    .crm-landing-nav-inner {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas: 'brand links tools';
+        gap: 1.5rem;
+        padding-block: 0.75rem;
+    }
+}
+
+.crm-landing-brand {
+    grid-area: brand;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-inline-size: 0;
+    color: var(--crm-text);
+    font-size: 1.0625rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.crm-landing-brand-mark {
+    flex: none;
+    inline-size: 2rem;
+    block-size: 2rem;
+}
+
+.crm-landing-brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Below 26rem the name yields its room to the tools; it stays the link's
+   accessible name, visually hidden rather than removed. */
+@media (max-width: 26rem) {
+    .crm-landing-nav .crm-landing-brand-name {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+}
+
+.crm-landing-links {
+    grid-area: links;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem 1.25rem;
+}
+
+@media (min-width: 56rem) {
+    .crm-landing-links {
+        justify-content: flex-start;
+    }
+}
+
+.crm-landing-link {
+    padding-block: 0.25rem;
+    color: var(--crm-text-2);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.crm-landing-link:hover {
+    color: var(--crm-accent-text);
+}
+
+.crm-landing-tools {
+    grid-area: tools;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Hero: copy, then the illustrated preview; side by side from 64rem. */
+.crm-landing-hero {
+    position: relative;
+    padding-block: clamp(2.5rem, 7vw, 5.5rem) clamp(2.5rem, 6vw, 4.5rem);
+}
+
+.crm-landing-hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 2.5rem;
+}
+
+@media (min-width: 64rem) {
+    .crm-landing-hero-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 3.5rem;
+    }
+}
+
+.crm-landing-hero-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+}
+
+.crm-landing-eyebrow {
+    display: inline-flex;
+    padding-block: 0.3125rem;
+    padding-inline: 0.875rem;
+    border-radius: 999px;
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.crm-landing-hero-title {
+    font-size: clamp(2rem, 1.35rem + 3.2vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+}
+
+.crm-landing-hero-emphasis {
+    color: var(--crm-accent-text);
+}
+
+.crm-landing-hero-lead {
+    max-inline-size: 38rem;
+    color: var(--crm-text-2);
+    font-size: clamp(1rem, 0.95rem + 0.3vw, 1.1875rem);
+    line-height: 1.85;
+}
+
+.crm-landing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.crm-landing-hero-note {
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+}
+
+/* The preview: an illustration drawn from the CRM's own pieces, sample
+   content only; a soft glow sits behind it. */
+.crm-landing-preview {
+    position: relative;
+    margin: 0;
+    min-inline-size: 0;
+}
+
+.crm-landing-preview::before {
+    content: '';
+    position: absolute;
+    inset-block: -12%;
+    inset-inline: -8%;
+    z-index: 0;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--crm-landing-glow), transparent);
+    pointer-events: none;
+}
+
+.crm-landing-window {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    border: 1px solid var(--crm-border);
+    border-radius: 1rem;
+    background-color: var(--crm-card);
+    box-shadow: var(--crm-landing-shadow);
+    font-size: 0.875rem;
+}
+
+.crm-landing-window-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding-block: 0.625rem;
+    padding-inline: 0.875rem;
+    border-block-end: 1px solid var(--crm-border);
+    background-color: var(--crm-table-header);
+}
+
+.crm-landing-window-dot {
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    border-radius: 999px;
+    background-color: var(--crm-border-2);
+}
+
+.crm-landing-window-title {
+    margin-inline-start: 0.5rem;
+    color: var(--crm-text-2);
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.crm-landing-window-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.875rem;
+    padding: 0.875rem;
+}
+
+@media (min-width: 36rem) {
+    .crm-landing-window-body {
+        grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+        padding: 1rem;
+    }
+}
+
+.crm-landing-task,
+.crm-landing-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-inline-size: 0;
+    padding: 0.875rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+}
+
+.crm-landing-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    min-inline-size: 0;
+}
+
+.crm-landing-task-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.crm-landing-task-title {
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.crm-landing-badge {
+    flex: none;
+    padding-block: 0.125rem;
+    padding-inline: 0.5rem;
+    border-radius: 999px;
+    background-color: var(--crm-landing-badge-bg);
+    color: var(--crm-landing-badge-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.crm-landing-task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    color: var(--crm-text-2);
+    font-size: 0.8125rem;
+}
+
+.crm-landing-task-meta .crm-avatar,
+.crm-landing-comment .crm-avatar {
+    margin-inline-end: 0;
+}
+
+.crm-landing-task-due {
+    margin-inline-start: auto;
+}
+
+.crm-landing-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.crm-landing-checklist-head {
+    display: flex;
+    justify-content: space-between;
+    color: var(--crm-text-2);
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.crm-landing-progress {
+    display: block;
+    block-size: 0.375rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background-color: var(--crm-border);
+}
+
+.crm-landing-progress-fill {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background-color: var(--crm-accent-text);
+}
+
+.crm-landing-checklist-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-landing-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1.5;
+}
+
+.crm-landing-check-box {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: 1.5px solid var(--crm-border-2);
+    border-radius: 0.25rem;
+}
+
+.crm-landing-check-done .crm-landing-check-box {
+    border-color: var(--crm-accent-text);
+    background-color: var(--crm-accent-text);
+    color: var(--crm-card);
+}
+
+.crm-landing-check-done {
+    color: var(--crm-text-2);
+    text-decoration: line-through;
+}
+
+.crm-landing-check-glyph {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+}
+
+.crm-landing-comment {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.625rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-table-header);
+    line-height: 1.6;
+}
+
+.crm-landing-comment-body {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+}
+
+.crm-landing-comment-author {
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.crm-landing-mini-title {
+    color: var(--crm-text-2);
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.crm-landing-stages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-landing-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.crm-landing-stage-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+}
+
+.crm-landing-stage-bar {
+    display: block;
+    block-size: 0.5rem;
+    border-radius: 999px;
+    background-color: var(--crm-border);
+}
+
+.crm-landing-stage-fill {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background-color: var(--crm-landing-button);
+}
+
+.crm-landing-score {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.crm-landing-score-value {
+    color: var(--crm-accent-text);
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.crm-landing-preview-caption {
+    position: relative;
+    z-index: 1;
+    margin-block-start: 0.75rem;
+    color: var(--crm-text-2);
+    font-size: 0.8125rem;
+    text-align: center;
+}
+
+/* Facts strip: two per row on a phone, four from 48rem. */
+.crm-landing-facts {
+    border-block: 1px solid var(--crm-border);
+    background-color: var(--crm-card);
+}
+
+.crm-landing-facts-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem 1rem;
+    margin: 0;
+    padding-block: 2rem;
+}
+
+@media (min-width: 48rem) {
+    .crm-landing-facts-list {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.crm-landing-fact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    text-align: center;
+}
+
+.crm-landing-fact-value {
+    order: -1;
+    margin: 0;
+    color: var(--crm-accent-text);
+    font-size: clamp(2rem, 1.6rem + 1.6vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.crm-landing-fact-label {
+    font-weight: 700;
+}
+
+.crm-landing-fact-note {
+    margin: 0;
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+/* Sections. */
+.crm-landing-section {
+    padding-block: clamp(3rem, 8vw, 5.5rem);
+}
+
+.crm-landing-section-band {
+    border-block: 1px solid var(--crm-border);
+    background-color: var(--crm-landing-band);
+}
+
+.crm-landing-section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-inline-size: 44rem;
+    margin-block-end: 2.25rem;
+}
+
+.crm-landing-section-title {
+    font-size: clamp(1.625rem, 1.3rem + 1.4vw, 2.375rem);
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.crm-landing-section-lead {
+    color: var(--crm-text-2);
+    font-size: 1.0625rem;
+    line-height: 1.8;
+}
+
+/* Capabilities: one column, two from 48rem. */
+.crm-landing-capabilities {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (min-width: 48rem) {
+    .crm-landing-capabilities {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.crm-landing-capability {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+    box-shadow: var(--shadow-crm);
+}
+
+.crm-landing-capability-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 3rem;
+    block-size: 3rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+}
+
+.crm-landing-capability-glyph {
+    inline-size: 1.625rem;
+    block-size: 1.625rem;
+}
+
+.crm-landing-capability-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+
+.crm-landing-capability-body {
+    color: var(--crm-text-2);
+    line-height: 1.7;
+}
+
+.crm-landing-points {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-landing-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    line-height: 1.65;
+}
+
+.crm-landing-point-icon {
+    flex: none;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-block-start: 0.125rem;
+    color: var(--crm-accent-text);
+}
+
+/* The workspace cards reuse the workspace screen's styles; here they inform
+   rather than link, so they are a little shorter. */
+.crm-landing .crm-workspace-card {
+    min-block-size: 0;
+}
+
+/* FAQ. */
+.crm-landing-faq {
+    max-inline-size: 52rem;
+}
+
+.crm-landing-faq-list {
+    border-block-start: 1px solid var(--crm-border);
+}
+
+.crm-landing-faq-item {
+    border-block-end: 1px solid var(--crm-border);
+}
+
+.crm-landing-faq-question {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 1.125rem;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.6;
+    list-style: none;
+    cursor: pointer;
+}
+
+.crm-landing-faq-question::-webkit-details-marker {
+    display: none;
+}
+
+.crm-landing-faq-question:hover {
+    color: var(--crm-accent-text);
+}
+
+.crm-landing-faq-chevron {
+    flex: none;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    color: var(--crm-text-2);
+}
+
+.crm-landing-faq-item[open] .crm-landing-faq-chevron {
+    transform: scaleY(-1);
+}
+
+.crm-landing-faq-answer {
+    padding-block-end: 1.25rem;
+    color: var(--crm-text-2);
+    line-height: 1.85;
+}
+
+/* Closing call to action. */
+.crm-landing-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding-block: clamp(2rem, 6vw, 3.5rem);
+    padding-inline: clamp(1.25rem, 5vw, 3rem);
+    border: 1px solid var(--crm-border);
+    border-radius: 1.25rem;
+    background-color: var(--crm-landing-band);
+    text-align: center;
+}
+
+.crm-landing-cta-title {
+    font-size: clamp(1.5rem, 1.25rem + 1.2vw, 2.125rem);
+    font-weight: 800;
+}
+
+.crm-landing-cta-body {
+    max-inline-size: 36rem;
+    color: var(--crm-text-2);
+    line-height: 1.8;
+}
+
+/* Footer. */
+.crm-landing-footer {
+    border-block-start: 1px solid var(--crm-border);
+    background-color: var(--crm-card);
+}
+
+.crm-landing-footer-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    padding-block: 2rem;
+}
+
+@media (min-width: 48rem) {
+    .crm-landing-footer-inner {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+}
+
+.crm-landing-footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.crm-landing-footer-tagline {
+    color: var(--crm-text-2);
+    font-size: 0.9375rem;
+}
+
+.crm-landing-footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
+.crm-landing-copyright {
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+}
+
+@media (min-width: 48rem) {
+    .crm-landing-copyright {
+        grid-column: 1 / -1;
+    }
+}
+
+/*
+ | Landing motion (A-9): the hero copy and the preview rise in on arrival
+ | (the shared crm-rise keyframes, scoped to html:not(.crm-settled) like
+ | every entrance), buttons, tools and capability cards answer the hand, the
+ | FAQ chevron flips, and in-page links scroll smoothly. 140-450 ms,
+ | translateY/scale only; a reduced-motion reader gets none of it.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    html:has(.crm-landing) {
+        scroll-behavior: smooth;
+    }
+
+    html:not(.crm-settled) .crm-landing-hero-copy {
+        animation: crm-rise 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+    }
+
+    html:not(.crm-settled) .crm-landing-preview {
+        animation: crm-rise 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) 0.12s backwards;
+    }
+
+    .crm-landing-btn {
+        transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.2s ease;
+    }
+
+    .crm-landing-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .crm-landing-btn:active {
+        transform: scale(0.97);
+    }
+
+    .crm-landing-btn-primary:hover {
+        box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--primary-700) 60%, transparent);
+    }
+
+    .crm-landing-tool {
+        transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .crm-landing-tool:active {
+        transform: scale(0.94);
+    }
+
+    .crm-landing-link {
+        transition: color 0.15s ease;
+    }
+
+    .crm-landing-capability {
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .crm-landing-capability:hover {
+        transform: translateY(-3px);
+        border-color: var(--crm-border-2);
+        box-shadow: 0 14px 34px -14px rgba(13, 60, 72, 0.35);
+    }
+
+    .crm-landing-faq-question {
+        transition: color 0.15s ease;
+    }
+
+    .crm-landing-faq-chevron {
+        transition: transform 0.2s ease;
+    }
+}
+
+/* landing:end */

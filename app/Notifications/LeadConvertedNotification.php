@@ -8,8 +8,9 @@ use App\Enums\NotificationEvent;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Models\Lead;
 use App\Models\User;
+use App\Support\Filament\PanelUrl;
 use App\Support\Notifications\NotificationChannels;
-use Filament\Actions\Action;
+use App\Support\Notifications\NotificationLink;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
@@ -58,12 +59,7 @@ final class LeadConvertedNotification extends Notification implements ShouldQueu
             ->body(implode(' ', [$this->body(), ...$this->details()]))
             ->icon(Heroicon::OutlinedArrowPathRoundedSquare)
             ->success()
-            ->actions([
-                Action::make('open')
-                    ->label(__('notifications.common.open'))
-                    ->url($this->url())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->linkFor($notifiable), __('notifications.common.open')))
             ->getDatabaseMessage());
     }
 
@@ -79,7 +75,7 @@ final class LeadConvertedNotification extends Notification implements ShouldQueu
                 $mail->line($detail);
             }
 
-            return $mail->action(__('notifications.common.open'), $this->url());
+            return $mail->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('notifications.common.open'), $url));
         });
     }
 
@@ -126,5 +122,11 @@ final class LeadConvertedNotification extends Notification implements ShouldQueu
     private function localeFor(User $notifiable): string
     {
         return $this->locale ?? $notifiable->preferredLocale();
+    }
+
+    /** The lead's page, unless the recipient may not enter the Sales workspace (D-23). */
+    private function linkFor(User $notifiable): ?string
+    {
+        return PanelUrl::forReader($notifiable, LeadResource::class, fn (): string => $this->url());
     }
 }

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\KeepOutOfSearchEngines;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\TrustProxies;
 use Illuminate\Foundation\Application;
@@ -17,16 +18,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Guests hitting an authenticated route land on the panel's login page,
-        // not Laravel's default `login` route name (which does not exist here).
-        $middleware->redirectGuestsTo(fn (): string => route('filament.admin.auth.login'));
+        // Guests hitting an authenticated route land on the one sign-in page,
+        // the home panel's (D-23), not Laravel's default `login` route name
+        // (which does not exist here).
+        $middleware->redirectGuestsTo(fn (): string => route('filament.app.auth.login'));
 
         // The trusted proxy list is read from config('crm.trusted_proxies') on every
         // request, so it survives config:cache (the framework middleware would need
         // it fixed at boot through trustProxies(at: ...)).
         $middleware->replace(FrameworkTrustProxies::class, TrustProxies::class);
 
-        $middleware->web(append: [SecurityHeaders::class]);
+        $middleware->web(append: [SecurityHeaders::class, KeepOutOfSearchEngines::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

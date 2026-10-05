@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  */
 final class SourcePerformanceReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/sources';
+    protected static ?string $slug = 'sources';
 
     protected static ?int $navigationSort = 60;
 

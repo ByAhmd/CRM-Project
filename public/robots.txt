@@ -1,2 +1,7 @@
+# The landing page (/) is the only page meant for search engines (D-24).
+# Every other response carries "X-Robots-Tag: noindex, nofollow"
+# (App\Http\Middleware\KeepOutOfSearchEngines). Crawlers are let in on
+# purpose: an address they may not fetch can still be listed from the links
+# pointing at it, and they would never see its noindex.
 User-agent: *
-Disallow:
+Allow: /

@@ -197,7 +197,44 @@ final class ActivityLogPresenter
             return (string) $value;
         }
 
+        $changes = $this->fromToPairs($value);
+
+        if ($changes !== null) {
+            return implode(__('activity.details.list_separator'), array_map(
+                static fn (array $change): string => __('activity.details.from_to', ['old' => $change['from'], 'new' => $change['to']]),
+                $changes,
+            ));
+        }
+
         return (string) json_encode($value, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * A list of renames ({from, to} each — the checklist items renamed on a
+     * task, D-25) read back as pairs, whatever order the JSON column stored
+     * the keys in; null for any other shape. Rendered through
+     * activity.details.from_to («من … إلى …»), never as raw JSON with code
+     * words in it.
+     *
+     * @return list<array{from: string, to: string}>|null
+     */
+    private function fromToPairs(mixed $value): ?array
+    {
+        if (! is_array($value) || $value === [] || ! array_is_list($value)) {
+            return null;
+        }
+
+        $pairs = [];
+
+        foreach ($value as $entry) {
+            if (! is_array($entry) || count($entry) !== 2 || ! is_scalar($entry['from'] ?? null) || ! is_scalar($entry['to'] ?? null)) {
+                return null;
+            }
+
+            $pairs[] = ['from' => (string) $entry['from'], 'to' => (string) $entry['to']];
+        }
+
+        return $pairs;
     }
 
     /**

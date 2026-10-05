@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\LeadStatuses;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\LeadStatuses\Pages\CreateLeadStatus;
 use App\Filament\Resources\LeadStatuses\Pages\EditLeadStatus;
 use App\Filament\Resources\LeadStatuses\Pages\ListLeadStatuses;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class LeadStatusResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = LeadStatus::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQueueList;

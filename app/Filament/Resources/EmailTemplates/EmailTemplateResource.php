@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\EmailTemplates;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\EmailTemplates\Pages\CreateEmailTemplate;
 use App\Filament\Resources\EmailTemplates\Pages\EditEmailTemplate;
 use App\Filament\Resources\EmailTemplates\Pages\ListEmailTemplates;
@@ -24,6 +25,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class EmailTemplateResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = EmailTemplate::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedEnvelopeOpen;

@@ -8,6 +8,7 @@ use App\Enums\DealStatus;
 use App\Enums\NavigationGroup;
 use App\Enums\StageKind;
 use App\Exceptions\Deals\InvalidDealTransitionException;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\DealActions;
 use App\Models\Deal;
@@ -38,6 +39,8 @@ use Livewire\Attributes\Locked;
  */
 final class DealBoard extends Page
 {
+    use BuildsPageUrlsInOwningPanel;
+
     public const CARDS_PER_PAGE = 25;
 
     /** "Load more" stops here: one column never renders more than MAX_PAGES × CARDS_PER_PAGE cards. */

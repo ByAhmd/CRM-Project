@@ -62,7 +62,12 @@ final class BackupsPageTest extends TestCase
                 ->assertStatus($role === CrmRole::SuperAdmin ? 200 : 403);
         }
 
+        // The page needs `roles.manage`; the Administration workspace that serves it needs its own key (D-23).
         $this->actingAs($this->userWithPermissions(null, [Permission::RolesManage]))
+            ->get(Backups::getUrl())
+            ->assertForbidden();
+
+        $this->actingAs($this->userWithPermissions(null, [Permission::RolesManage, Permission::WorkspaceAdmin]))
             ->get(Backups::getUrl())
             ->assertOk();
     }
@@ -222,7 +227,7 @@ final class BackupsPageTest extends TestCase
     {
         $id = $this->makeBackupSet($this->backups, now()->subDay());
 
-        $this->get(route('backups.download', ['backup' => $id, 'file' => 'database']))->assertRedirect(route('filament.admin.auth.login'));
+        $this->get(route('backups.download', ['backup' => $id, 'file' => 'database']))->assertRedirect(route('filament.app.auth.login'));
 
         $superAdmin = $this->superAdmin();
         mkdir($this->backups.DIRECTORY_SEPARATOR.'20260101-000000');

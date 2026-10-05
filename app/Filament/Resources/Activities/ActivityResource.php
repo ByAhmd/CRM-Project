@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Activities;
 
 use App\Enums\NavigationGroup;
 use App\Enums\VisibilityLevel;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Activities\Pages\CreateActivity;
@@ -24,6 +25,7 @@ use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Support\Filament\PanelUrl;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -45,6 +47,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class ActivityResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Activity::class;
@@ -112,7 +115,9 @@ final class ActivityResource extends Resource
     }
 
     /**
-     * The view page of a linked record, when the actor may open it.
+     * The view page of a linked record, when the actor may open it and may
+     * enter the Sales workspace that owns it (D-23) — tasks link here from
+     * the Tasks workspace, where an employee holds no Sales access.
      */
     public static function urlForSubject(Model $record): ?string
     {
@@ -122,13 +127,17 @@ final class ActivityResource extends Resource
             return null;
         }
 
-        return match ($record::class) {
-            Lead::class => LeadResource::getUrl('view', ['record' => $record]),
-            Contact::class => ContactResource::getUrl('view', ['record' => $record]),
-            Account::class => AccountResource::getUrl('view', ['record' => $record]),
-            Deal::class => DealResource::getUrl('view', ['record' => $record]),
+        $resource = match ($record::class) {
+            Lead::class => LeadResource::class,
+            Contact::class => ContactResource::class,
+            Account::class => AccountResource::class,
+            Deal::class => DealResource::class,
             default => null,
         };
+
+        return $resource === null
+            ? null
+            : PanelUrl::forReader($user, $resource, static fn (): string => $resource::getUrl('view', ['record' => $record]));
     }
 
     /**

@@ -7,6 +7,7 @@ return [
     'sales' => 'Sales',
     'contacts' => 'Contacts',
     'activities' => 'Activities',
+    'tasks' => 'Tasks',
     'reports' => 'Reports',
     'settings' => 'Settings',
     'system' => 'System',

@@ -6,6 +6,7 @@ declare(strict_types=1);
 return [
 
     'groups' => [
+        'workspace' => 'مساحات العمل',
         'lead' => 'العملاء المحتملون',
         'contact' => 'جهات الاتصال',
         'account' => 'الحسابات (الشركات والعملاء)',
@@ -28,6 +29,11 @@ return [
     ],
 
     'verbs' => [
+        // The four workspace keys (D-23): the workspace a role may enter.
+        'sales' => 'المبيعات',
+        'tasks' => 'المهام',
+        'reports' => 'التقارير',
+        'admin' => 'الإدارة',
         'view_any' => 'عرض سجلاته',
         'view_team' => 'عرض سجلات فريقه',
         'view_all' => 'عرض كل السجلات',

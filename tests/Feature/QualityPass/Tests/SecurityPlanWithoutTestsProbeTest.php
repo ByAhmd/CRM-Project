@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\QualityPass\Tests;
 
+use App\Enums\WorkspacePanel;
 use App\Filament\Exports\LeadExporter;
 use App\Filament\Imports\LeadImporter;
 use App\Filament\Support\ImportExportActions;
@@ -62,11 +63,25 @@ final class SecurityPlanWithoutTestsProbeTest extends TestCase
     #[Test]
     public function multi_factor_authentication_is_offered_to_everyone_and_required_of_no_one(): void
     {
-        $panel = Filament::getPanel('admin');
+        // D-23: the home panel is the one sign-in host and hosts the profile
+        // where MFA is set up; every panel that signs anyone in must offer it,
+        // and no panel may require it.
+        $signInPanels = [];
 
-        $this->assertTrue($panel->hasMultiFactorAuthentication(), 'D-11: MFA providers are wired');
-        $this->assertCount(2, $panel->getMultiFactorAuthenticationProviders());
-        $this->assertFalse($panel->isMultiFactorAuthenticationRequired(), 'D-11: MFA is optional');
+        foreach (Filament::getPanels() as $panel) {
+            $this->assertFalse($panel->isMultiFactorAuthenticationRequired(), "D-11: MFA is optional (panel {$panel->getId()})");
+
+            if (! $panel->hasLogin()) {
+                continue;
+            }
+
+            $signInPanels[] = $panel->getId();
+            $this->assertTrue($panel->hasMultiFactorAuthentication(), "D-11: MFA providers are wired (panel {$panel->getId()})");
+            $this->assertCount(2, $panel->getMultiFactorAuthenticationProviders());
+            $this->assertTrue($panel->hasProfile(), "D-11: MFA is managed from the profile (panel {$panel->getId()})");
+        }
+
+        $this->assertSame([WorkspacePanel::HOME], $signInPanels);
     }
 
     #[Test]

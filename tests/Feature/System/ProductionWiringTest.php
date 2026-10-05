@@ -55,7 +55,7 @@ final class ProductionWiringTest extends TestCase
     #[Test]
     public function every_response_carries_the_security_headers(): void
     {
-        $response = $this->get('/admin/login');
+        $response = $this->get('/app/login');
 
         $response->assertOk();
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
@@ -66,11 +66,14 @@ final class ProductionWiringTest extends TestCase
     #[Test]
     public function there_is_no_registration_route_and_the_password_reset_is_throttled(): void
     {
-        $this->assertFalse(Route::has('filament.admin.auth.register'));
-        $this->assertTrue(Route::has('filament.admin.auth.password-reset.request'));
-        $this->assertTrue(Route::has('filament.admin.auth.profile'));
+        // D-23: the home panel hosts the only sign-in, reset and profile; no panel registers anyone.
+        foreach (array_keys(Filament::getPanels()) as $panel) {
+            $this->assertFalse(Route::has("filament.{$panel}.auth.register"), "{$panel} offers registration");
+            $this->assertSame($panel === 'app', Route::has("filament.{$panel}.auth.password-reset.request"), "{$panel} password reset");
+            $this->assertSame($panel === 'app', Route::has("filament.{$panel}.auth.profile"), "{$panel} profile");
+        }
 
-        $this->get('/admin/register')->assertNotFound();
+        $this->get('/app/register')->assertNotFound();
     }
 
     #[Test]
@@ -100,7 +103,8 @@ final class ProductionWiringTest extends TestCase
     #[Test]
     public function multi_factor_authentication_is_offered_to_everyone_and_required_of_no_one(): void
     {
-        $panel = Filament::getPanel('admin');
+        // The profile, where MFA is managed, lives in the home panel every user enters (D-23).
+        $panel = Filament::getPanel('app');
 
         $this->assertTrue($panel->hasMultiFactorAuthentication(), 'D-11: MFA providers are wired');
         $this->assertCount(2, $panel->getMultiFactorAuthenticationProviders());

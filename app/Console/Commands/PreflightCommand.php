@@ -457,11 +457,22 @@ final class PreflightCommand extends Command
         return $compiled !== '' && is_dir($compiled) && (glob(rtrim($compiled, '/\\').DIRECTORY_SEPARATOR.'*.php') ?: []) !== [];
     }
 
-    /** The admin panel's component cache exists (`php artisan filament:optimize`). */
+    /**
+     * Every panel's component cache exists (`php artisan filament:optimize`):
+     * the home panel and the four workspaces (D-23) each keep their own, and
+     * one missing cache leaves that panel discovering its components on every
+     * request.
+     */
     private function filamentComponentsAreCached(): bool
     {
         try {
-            return is_file(Filament::getPanel('admin')->getComponentCachePath());
+            foreach (Filament::getPanels() as $panel) {
+                if (! is_file($panel->getComponentCachePath())) {
+                    return false;
+                }
+            }
+
+            return Filament::getPanels() !== [];
         } catch (Throwable) {
             return false;
         }

@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  */
 final class PipelineReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/pipeline';
+    protected static ?string $slug = 'pipeline';
 
     protected static ?int $navigationSort = 30;
 

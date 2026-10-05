@@ -28,9 +28,10 @@ use Illuminate\Support\Facades\DB;
  * open tasks (nulls last, capped at TASKS_PER_ASSIGNEE) plus how many more it
  * holds; the whole board never renders more than MAX_TASKS cards and says so
  * when the cap cut it. The top-N-per-assignee read is one window-function
- * query (MySQL 8), so the cost never grows per card, and the subject
+ * query (MySQL 8), so the cost never grows per card, the subject
  * relations are eager-loaded because the page's `view` policy checks walk
- * them. Only non-deleted tasks appear.
+ * them, and each card's checklist progress (D-25) is counted in the same
+ * query. Only non-deleted tasks appear.
  *
  * The header stats fold "today" and "this week" in the organisation timezone
  * in PHP (A-19): the bounds are computed here and the SQL compares only the
@@ -178,10 +179,14 @@ final class TaskBoardFeed
             ->where('bucket_position', '<=', self::TASKS_PER_ASSIGNEE)
             ->select('id');
 
-        $tasks = Task::query()
-            ->joinSub($heads, 'ranked', 'ranked.id', '=', 'tasks.id')
-            ->with(['deal', 'lead', 'contact', 'account'])
-            ->select('tasks.*')
+        // The checklist counts (D-25) come after the select: a select() after
+        // withCount() would drop them.
+        $tasks = TaskChecklist::withCounts(
+            Task::query()
+                ->joinSub($heads, 'ranked', 'ranked.id', '=', 'tasks.id')
+                ->with(['deal', 'lead', 'contact', 'account'])
+                ->select('tasks.*'),
+        )
             ->orderByRaw('`tasks`.`due_at` IS NULL')
             ->orderBy('tasks.due_at')
             ->orderBy('tasks.id')

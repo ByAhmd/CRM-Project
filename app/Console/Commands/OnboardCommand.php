@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Enums\CrmRole;
 use App\Enums\UserStatus;
+use App\Enums\WorkspacePanel;
 use App\Models\User;
 use App\Services\Access\RoleService;
 use Database\Seeders\DatabaseSeeder;
@@ -101,7 +102,7 @@ final class OnboardCommand extends Command
         });
 
         $this->components->info("Super administrator created: {$user->email}");
-        $this->components->info('Sign in at /admin');
+        $this->components->info('Sign in at /'.WorkspacePanel::HOME.'/login');
 
         return self::SUCCESS;
     }

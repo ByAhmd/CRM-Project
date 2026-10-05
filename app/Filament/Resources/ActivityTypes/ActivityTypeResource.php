@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\ActivityTypes;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\ActivityTypes\Pages\CreateActivityType;
 use App\Filament\Resources\ActivityTypes\Pages\EditActivityType;
 use App\Filament\Resources\ActivityTypes\Pages\ListActivityTypes;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class ActivityTypeResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = ActivityType::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;

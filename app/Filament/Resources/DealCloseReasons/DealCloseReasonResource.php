@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\DealCloseReasons;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\DealCloseReasons\Pages\CreateDealCloseReason;
 use App\Filament\Resources\DealCloseReasons\Pages\EditDealCloseReason;
 use App\Filament\Resources\DealCloseReasons\Pages\ListDealCloseReasons;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class DealCloseReasonResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = DealCloseReason::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCheckCircle;

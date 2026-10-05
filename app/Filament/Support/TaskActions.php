@@ -7,15 +7,20 @@ namespace App\Filament\Support;
 use App\Enums\TaskStatus;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Models\Task;
+use App\Models\TaskChecklistItem;
 use App\Models\User;
 use App\Services\Tasks\CommentDraft;
+use App\Services\Tasks\TaskChecklist;
 use App\Services\Tasks\TaskService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\RichEditor\MentionProvider;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,7 +34,8 @@ use Illuminate\Validation\ValidationException;
  * view page and the relation managers: start and post update (the
  * assignee's progress reports, D-14 amendment 2026-09-28), comment (anyone
  * who may view the task, D-17, mentioning colleagues with "@", D-20),
- * complete (with an optional note), cancel,
+ * checklist (ticking the task's steps, D-25), complete (with an optional
+ * note, and a warning when checklist items are left unticked), cancel,
  * reopen and the bulk complete.
  *
  * Each action authorises through the policy verb and delegates to
@@ -250,6 +256,57 @@ final class TaskActions
         return is_array($document) ? $document : null;
     }
 
+    /**
+     * Ticks the checklist of an open task (D-25): one box per item, the
+     * ticked ones checked. Whoever may report on the task may tick — the
+     * handed-out assignee included, a mentioned participant never — and only
+     * the items whose box changed since the dialog opened are written, so two
+     * people ticking different items at once do not undo each other.
+     */
+    public static function checklist(): Action
+    {
+        return Action::make('checklist')
+            ->label(__('tasks.actions.checklist'))
+            ->icon(Heroicon::OutlinedListBullet)
+            ->color('gray')
+            ->modalHeading(__('tasks.actions.checklist_heading'))
+            ->modalSubmitActionLabel(__('tasks.actions.checklist_submit'))
+            ->fillForm(static function (?Model $record): array {
+                $done = $record instanceof Task ? self::doneItemIds($record) : [];
+
+                return ['done' => $done, 'shown_done' => $done];
+            })
+            ->schema([
+                Section::make(__('tasks.sections.checklist'))
+                    ->columns(1)
+                    ->schema([
+                        CheckboxList::make('done')
+                            ->label(__('tasks.fields.checklist_done_items'))
+                            ->helperText(__('tasks.helpers.checklist_tick'))
+                            ->options(static fn (?Model $record): array => $record instanceof Task ? self::itemOptions($record) : []),
+
+                        Hidden::make('shown_done'),
+                    ]),
+            ])
+            ->visible(fn (?Model $record): bool => $record instanceof Task && $record->isOpen() && ! $record->trashed() && TaskChecklist::counts($record)['total'] > 0)
+            ->authorize(fn (?Model $record): bool => $record instanceof Task && self::can('tickChecklist', $record))
+            ->action(function (Task $record, array $data): void {
+                self::attempt(function () use ($record, $data): void {
+                    $done = self::idList($data['done'] ?? []);
+                    $shown = self::idList($data['shown_done'] ?? []);
+
+                    app(TaskService::class)->tickChecklist(
+                        $record,
+                        self::actor(),
+                        array_values(array_diff($done, $shown)),
+                        array_values(array_diff($shown, $done)),
+                    );
+
+                    Notification::make()->title(__('tasks.notifications.checklist_saved'))->success()->send();
+                });
+            });
+    }
+
     public static function complete(): Action
     {
         return Action::make('complete')
@@ -259,6 +316,13 @@ final class TaskActions
             ->modalHeading(__('tasks.actions.complete_heading'))
             ->modalSubmitActionLabel(__('tasks.actions.complete_submit'))
             ->schema([
+                // Completing with unticked items is allowed, with a warning (D-25).
+                Callout::make(static fn (?Model $record): ?string => $record instanceof Task ? self::openItemsWarning($record) : null)
+                    ->key('checklistWarning')
+                    ->description(__('tasks.helpers.checklist_complete_anyway'))
+                    ->warning()
+                    ->visible(static fn (?Model $record): bool => $record instanceof Task && self::openItemsWarning($record) !== null),
+
                 Section::make(__('tasks.sections.notes'))
                     ->columns(1)
                     ->schema([
@@ -322,7 +386,8 @@ final class TaskActions
     /**
      * Completes every selected open task the actor may complete; closed and
      * trashed ones are skipped rather than refused, so a mixed selection
-     * still finishes.
+     * still finishes. When the open tasks of the selection carry unticked
+     * checklist items, the dialog says how many (D-25).
      */
     public static function completeBulk(): BulkAction
     {
@@ -331,6 +396,7 @@ final class TaskActions
             ->icon(Heroicon::OutlinedCheckCircle)
             ->color('success')
             ->requiresConfirmation()
+            ->modalDescription(static fn (mixed $records): ?string => is_iterable($records) ? self::openItemsWarningAcross($records) : null)
             ->modalHeading(__('tasks.actions.complete_heading'))
             ->modalSubmitActionLabel(__('tasks.actions.complete_submit'))
             ->authorizeIndividualRecords('complete')
@@ -356,6 +422,91 @@ final class TaskActions
     private static function can(string $ability, Task $task): bool
     {
         return auth()->user()?->can($ability, $task) ?? false;
+    }
+
+    /**
+     * "2 of 5 checklist items are not done" for the Complete dialog, or null
+     * when every item is ticked or there is no checklist. The plural form
+     * follows the checklist's size, which the counted noun agrees with.
+     */
+    private static function openItemsWarning(Task $task): ?string
+    {
+        ['done' => $done, 'total' => $total] = TaskChecklist::counts($task);
+        $open = $total - $done;
+
+        if ($open <= 0) {
+            return null;
+        }
+
+        return trans_choice('tasks.confirmations.checklist_open', $total, ['count' => $open, 'total' => $total]);
+    }
+
+    /**
+     * The bulk Complete dialog's warning over the open tasks of the
+     * selection, followed by the note that completing is still allowed; null
+     * when none of them has an unticked item.
+     *
+     * @param  iterable<mixed>  $records
+     */
+    private static function openItemsWarningAcross(iterable $records): ?string
+    {
+        $ids = [];
+
+        foreach ($records as $record) {
+            if ($record instanceof Task && $record->isOpen() && ! $record->trashed()) {
+                $ids[] = (int) $record->getKey();
+            }
+        }
+
+        ['open' => $open, 'total' => $total] = TaskChecklist::openAcross($ids);
+
+        if ($open <= 0) {
+            return null;
+        }
+
+        return trans_choice('tasks.confirmations.checklist_open_bulk', $total, ['count' => $open, 'total' => $total])
+            .' '.__('tasks.helpers.checklist_complete_anyway');
+    }
+
+    /**
+     * The task's checklist items as the tick dialog lists them: id => text,
+     * in order. One query; the text is plain and escaped by the field.
+     *
+     * @return array<int, string>
+     */
+    private static function itemOptions(Task $task): array
+    {
+        return collect(TaskChecklist::formState($task))
+            ->mapWithKeys(static fn (array $item): array => [$item['id'] => $item['body']])
+            ->all();
+    }
+
+    /**
+     * The ids of the task's ticked items.
+     *
+     * @return list<int>
+     */
+    private static function doneItemIds(Task $task): array
+    {
+        return TaskChecklistItem::query()
+            ->where('task_id', $task->getKey())
+            ->whereNotNull('completed_at')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The well-formed ids among those a form state holds.
+     *
+     * @return list<int>
+     */
+    private static function idList(mixed $values): array
+    {
+        return is_array($values) ? self::userIds($values) : [];
     }
 
     /**

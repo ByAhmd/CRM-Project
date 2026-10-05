@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\CustomFields;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\CustomFields\Pages\CreateCustomField;
 use App\Filament\Resources\CustomFields\Pages\EditCustomField;
 use App\Filament\Resources\CustomFields\Pages\ListCustomFields;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class CustomFieldResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = CustomField::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedAdjustmentsHorizontal;

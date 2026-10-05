@@ -15,6 +15,7 @@ return [
         'details' => 'Routine task',
         'schedule' => 'Schedule',
         'assignees' => 'Assignees',
+        'checklist' => 'Checklist',
     ],
 
     'fields' => [
@@ -31,12 +32,14 @@ return [
         'schedule' => 'Schedule',
         'next_run_on' => 'Next run',
         'assigned_by' => 'Assigned by',
+        'checklist_item' => 'Item',
     ],
 
     'placeholders' => [
         'title' => 'What has to be done each time, in one line',
         'description' => 'Any detail the assignees need each time',
         'paused' => 'Paused',
+        'checklist_item' => 'One step of the work, in one line',
     ],
 
     'helpers' => [
@@ -46,6 +49,7 @@ return [
         'due_time' => 'Organisation time.',
         'due_in_days' => '0 = due on the scheduled day itself.',
         'assignees' => 'The tasks are handed out in the name of whoever last saved this routine.',
+        'checklist' => 'Optional: the steps every task of this routine carries. Each task gets its own copy, unticked.',
     ],
 
     'options' => [
@@ -88,6 +92,7 @@ return [
         'resume' => 'Resume',
         'resume_heading' => 'Resume the routine task',
         'resume_submit' => 'Resume',
+        'add_checklist_item' => 'Add an item',
     ],
 
     'confirmations' => [

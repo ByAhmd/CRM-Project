@@ -6,7 +6,10 @@ quality-pass migrations dated 2026-09-14 (section 6) and checked against `inform
 under *Engine-aware migrations* below. The schema contract is pinned by `tests/Feature/Database/SchemaContractTest.php`
 and the `tests/Feature/QualityPass/Schema` probes. Later owner decisions amend it in place: task updates and comments
 (D-14 amendment, D-17), and the migrations dated 2026-10-04 — `task_update_mentions` and the `task_mention` preference
-event (D-20), `tasks.assigned_at` (D-21), `task_templates`, `task_template_user` and `tasks.template_id` (D-22).
+event (D-20), `tasks.assigned_at` (D-21), `task_templates`, `task_template_user` and `tasks.template_id` (D-22) —
+and the migrations dated 2026-10-05: `task_checklist_items` and `task_template_checklist_items` (D-25), plus the data
+migration `2026_10_05_100001_grant_workspace_permissions_to_existing_roles` (D-23), which changes no table: it adds the
+four `workspace.*` rows to `permissions` and grants them to the existing roles (docs/PERMISSIONS.md, *Workspaces*).
 
 ## Conventions
 
@@ -322,6 +325,31 @@ service as one `settings.lookup_updated` entry.
 timestamps. Written by `RoutineTaskService` (sync), one task per row on each scheduled day. Migration
 `2026_10_04_300002`.
 
+### `task_checklist_items` (task checklists — D-25)
+
+| Column | Type | Notes |
+|---|---|---|
+| `task_id` | FK→tasks CASCADE | owned child (tasks are only soft-deleted, so a checklist survives a delete and a restore); leads I `task_checklist_items_task_id_position_index` (`task_id`,`position`) |
+| `body` | VARCHAR(255) | one line, trimmed, inner whitespace collapsed |
+| `position` | SMALLINT UNSIGNED | default 0; the order, 0-based |
+| `completed_at` | DATETIME N | when the item was ticked; NULL = not done |
+| `completed_by` | FK→users N SET NULL | I `task_checklist_items_completed_by_index`; who ticked it |
+| `created_at`/`updated_at` | TIMESTAMP N | |
+
+At most 50 rows per task. Written by `TaskService` only (through `TaskChecklist`): the structure (add, rename,
+reorder, remove) by an edit that submits `checklist` — the task's row locked, only that task's rows touched, kept rows
+keep their ticks — and the ticks by `tickChecklist` on an open task; `completed_at`/`completed_by` are workflow-guarded
+on the model. Not `LogsActivity`: changes are recorded on the task as `task.checklist_changed` / `task.checklist_ticked`.
+Migration `2026_10_05_500001`.
+
+### `task_template_checklist_items` (routine checklists — D-25)
+
+`task_template_id` FK→task_templates CASCADE (leads I `task_template_checklist_items_template_position_index` with
+`position`), `body` VARCHAR(255), `position` SMALLINT UNSIGNED, timestamps. No ticks: copied, unticked and in order,
+into every task the routine creates. Replaced by `RoutineTaskService` on a save that submits `checklist` and recorded
+on the routine (`settings.lookup_updated`: `checklist_added`, `checklist_removed`, `checklist_reordered`). Migration
+`2026_10_05_500002`.
+
 ### `notes`
 
 `body` TEXT (rich JSON if RichEditor), `author_id` FK→users N SET NULL (I), `lead_id`/`contact_id`/`account_id`/`deal_id` FK N SET NULL (I each; ≥1 required),
@@ -353,7 +381,8 @@ timestamps. Written by `RoutineTaskService` (sync), one task per row on each sch
 - Pipeline `hasMany` stages, deals.
 - Activity/Task/Note `belongsTo` lead/contact/account/deal (nullable), owner/assignee/author; morph attachments.
 - Task `hasMany` updates (`task_updates`, newest first), `belongsTo` assigner (`assigned_by`), `belongsTo` template (`template_id`, D-22); TaskUpdate `belongsTo` task, author, `hasMany` mentions (`task_update_mentions`, D-20).
-- TaskTemplate `belongsToMany` assignees (`task_template_user`), `belongsTo` assigner (`assigned_by`, soft-deleted users included), `hasMany` tasks.
+- TaskTemplate `belongsToMany` assignees (`task_template_user`), `belongsTo` assigner (`assigned_by`, soft-deleted users included), `hasMany` tasks, `hasMany` checklistItems (`task_template_checklist_items`, in order, D-25).
+- Task `hasMany` checklistItems (`task_checklist_items`, in order, D-25); TaskChecklistItem `belongsTo` task, completer (`completed_by`, soft-deleted users included).
 - Custom field values `morphTo` entity, `belongsTo` field.
 
 ## 6. Data integrity rules enforced outside the schema (services + observers + tests)
@@ -371,7 +400,8 @@ Step-13 amendments (migrations dated 2026-09-15, from the EXPLAIN evidence on vo
 - Activities, tasks, notes must reference at least one of lead/contact/account/deal.
 - Attachments: MIME allowlist (`pdf, doc, docx, xls, xlsx, csv, txt, png, jpg, jpeg, webp`) checked on the server-sniffed type, max size from `config('crm.attachments.max_kb')`, files parked under `tmp/{user id}/` until the form is submitted (pruned daily), soft delete keeps the file, force delete removes it, downloads go through the panel's authentication middleware and the subject's `view` policy; uploads are refused on soft-deleted subjects.
 - Tasks: `status`, `completed_at`, `reminder_sent_at`, `overdue_notified_at` are written only by `TaskService` / `TaskReminderService`; editing `reminder_at` or moving `due_at` later re-arms the corresponding stamp; completing a recurring task creates the next occurrence in the same series until `recurrence_ends_at`; reassignment goes through `RecordAssignmentService`. Starting (Pending → In progress), posting a progress update, completing and reopening each append a `task_updates` row inside the same transaction (D-14 amendment, 2026-09-28); a comment appends a `kind = comment` row (no status) on an open or closed task, never on a soft-deleted one (D-17), plus one `task_update_mentions` row per mentionable colleague it mentions (active `task.view_any` holders other than the author; other ids are dropped) in the same transaction (D-20). `assigned_at` follows `assignee_id` on every Eloquent save (`TaskAssignmentStampObserver`, D-21); no code path changes `assignee_id` through the query builder or `saveQuietly`, and users are only soft-deleted, so the observer sees every change.
-- Routine tasks (D-22): `RoutineTaskService` is the only writer of `task_templates` and `task_template_user`; every save checks the assignees against the saver's assignment reach; the hourly pass locks each due routine, re-checks it, creates one task per assignee who may sign in and holds `task.view_any` (with `assigned_by` and `template_id` force-filled) for the latest matching day only, and advances `next_run_on` / `last_run_on` in the same transaction.
+- Routine tasks (D-22): `RoutineTaskService` is the only writer of `task_templates` and `task_template_user`; every save checks the assignees against the saver's assignment reach; the hourly pass locks each due routine, re-checks it, creates one task per assignee who may sign in and holds `task.view_any` (with `assigned_by` and `template_id` force-filled) for the latest matching day only, and advances `next_run_on` / `last_run_on` in the same transaction. Each task gets the routine's checklist, unticked (D-25).
+- Task checklists (D-25): written only through `TaskService`; an edit without the `checklist` key keeps the checklist, so every fill path of the task form (edit page, relation-manager modal, calendar modal) loads the stored items; a completed, cancelled or deleted task's checklist is frozen (structure changes refused, no ticks) and reopening keeps the ticks; completing with unticked items is allowed and the `task.completed` entry carries `checklist_open`/`checklist_total`; the next occurrence of a repeating task copies the checklist unticked; the list, board and export read the counts with `withCount` on their own queries (`TaskChecklist::withCounts`), never on `TaskResource::getEloquentQuery()`; a tick counts as progress for the weekly summary's stalled rule (D-18).
 - Notes: body trimmed and capped at 5000 characters in the service; a note on a contact or deal is listed on the account only when the reader may read that contact or deal.
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).

@@ -81,6 +81,15 @@ return [
     'locale' => env('APP_LOCALE', 'ar'),
 
     /*
+    | The language a visitor who has chosen none is served (D-5). `locale`
+    | above is overwritten at runtime by every language switch
+    | (App::setLocale() writes it back into the configuration); this value
+    | never is, so code that needs the default — the landing page's own
+    | address per language (D-24) — reads it here.
+    */
+    'default_locale' => env('APP_LOCALE', 'ar'),
+
+    /*
     |--------------------------------------------------------------------------
     | Supported Locales
     |--------------------------------------------------------------------------

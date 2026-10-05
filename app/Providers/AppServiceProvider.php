@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Filament\Auth\Http\Responses\LoginResponse;
+use App\Filament\Auth\Http\Responses\LogoutResponse;
 use App\Listeners\RecordAuthActivity;
 use App\Models\ActivityLog;
 use App\Models\CustomField;
@@ -12,13 +14,21 @@ use App\Policies\ExportPolicy;
 use App\Policies\ImportPolicy;
 use App\Services\CustomFields\CustomFieldRegistry;
 use App\Services\Leads\LeadScoringService;
+use App\Services\Settings\SettingsRepository;
+use App\Support\Landing\LandingPageChrome;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\Exports\Models\Export as FilamentExport;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import as FilamentImport;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse as LoginResponseContract;
+use Filament\Auth\Http\Responses\Contracts\LogoutResponse as LogoutResponseContract;
 use Filament\Forms\Components\FileUpload;
+use Filament\Support\Facades\FilamentTimezone;
+use Filament\Support\Facades\FilamentView;
 use Filament\Tables\Table;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -54,6 +64,8 @@ final class AppServiceProvider extends ServiceProvider
         $this->registerAuditing();
         $this->configureLanguageSwitch();
         $this->configureFilamentDefaults();
+        $this->configurePanels();
+        $this->configureLandingPage();
     }
 
     /**
@@ -141,6 +153,42 @@ final class AppServiceProvider extends ServiceProvider
                     return (string) (request()->cookie('filament_language_switch_locale') ?? config('app.locale'));
                 });
         });
+    }
+
+    /**
+     * What every panel shares beyond its own provider (D-23).
+     *
+     * - Sign-in lands on the workspace screen, or on the page the user was
+     *   following when it lies in a panel they may enter; sign-out leads to
+     *   the one sign-in page. Bound here, in boot(), because Filament binds
+     *   its own responses while its package registers, after register().
+     * - Every Filament date-time column, entry and picker renders (and a
+     *   picker reads its input) in the organisation timezone from General
+     *   Settings, the same zone the calendar and the reports use; values stay
+     *   stored in app.timezone. The closure is resolved on use, so a changed
+     *   setting takes effect on the next render and nothing touches the
+     *   database at boot. Set once here for all five panels.
+     */
+    private function configurePanels(): void
+    {
+        $this->app->bind(LoginResponseContract::class, LoginResponse::class);
+        $this->app->bind(LogoutResponseContract::class, LogoutResponse::class);
+
+        FilamentTimezone::set(static fn (): string => app(SettingsRepository::class)->timezone());
+    }
+
+    /**
+     * The landing page's own head tags (D-24): the meta description, Open
+     * Graph, the canonical address. Scoped to the landing's chrome, so they
+     * render on the landing page only and never inside a panel.
+     */
+    private function configureLandingPage(): void
+    {
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::HEAD_END,
+            static fn (): View => view('landing.partials.meta'),
+            scopes: LandingPageChrome::class,
+        );
     }
 
     /** Conventions every table and upload inherits without repeating them per resource. */

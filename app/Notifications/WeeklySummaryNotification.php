@@ -14,9 +14,10 @@ use App\Services\Tasks\WeeklySummaryAssignee;
 use App\Services\Tasks\WeeklySummaryHealth;
 use App\Services\Tasks\WeeklySummaryReport;
 use App\Services\Tasks\WeeklySummaryTask;
+use App\Support\Filament\PanelUrl;
 use App\Support\Notifications\NotificationChannels;
+use App\Support\Notifications\NotificationLink;
 use Carbon\CarbonImmutable;
-use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
@@ -35,7 +36,9 @@ use Illuminate\Support\Number;
  *
  * `health` is present only in a super admin's copy. A listed task links to
  * its page only when it is in `readableTaskIds`, the tasks the recipient's
- * TaskPolicy lets them open; the others are named without a link.
+ * TaskPolicy lets them open; the others are named without a link. Every
+ * link — the board, a task, the Backups page — is also left out for a
+ * recipient who may not enter the workspace that owns it (D-23).
  *
  * The bell is written at once (the `database` channel runs on the sync
  * connection) while the mail leaves through the queue the scheduler drains
@@ -86,12 +89,7 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
             ])))
             ->icon(Heroicon::OutlinedChartBar)
             ->iconColor('info')
-            ->actions([
-                Action::make('open')
-                    ->label(__('weekly_summary.notifications.open'))
-                    ->url(TasksBoard::getUrl())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->boardUrlFor($notifiable), __('weekly_summary.notifications.open')))
             ->getDatabaseMessage();
     }
 
@@ -108,7 +106,7 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
                     __('weekly_summary.fields.stalled') => $this->report->stalledTotal,
                     __('weekly_summary.fields.handed_out') => $this->report->handedOut,
                 ],
-                'boardUrl' => TasksBoard::getUrl(),
+                'boardUrl' => $this->boardUrlFor($notifiable),
                 'assignees' => array_map(static fn (WeeklySummaryAssignee $row): array => [
                     'name' => $row->name ?? __('weekly_summary.fields.unassigned'),
                     'open' => $row->open,
@@ -123,6 +121,7 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
                         'heading' => __('weekly_summary.sections.overdue'),
                         'empty' => __('weekly_summary.empty.overdue'),
                         'lines' => array_map(fn (WeeklySummaryTask $task): array => $this->line(
+                            $notifiable,
                             $task,
                             __('weekly_summary.mail.overdue_detail', [
                                 'date' => $this->date($task->since),
@@ -135,6 +134,7 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
                         'heading' => __('weekly_summary.sections.stalled'),
                         'empty' => __('weekly_summary.empty.stalled'),
                         'lines' => array_map(fn (WeeklySummaryTask $task): array => $this->line(
+                            $notifiable,
                             $task,
                             __('weekly_summary.mail.stalled_detail', [
                                 'date' => $this->date($task->since),
@@ -144,7 +144,7 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
                         'more' => $this->more($this->report->stalledMore()),
                     ],
                 ],
-                'health' => $this->health === null ? null : $this->healthLines($this->health),
+                'health' => $this->health === null ? null : $this->healthLines($notifiable, $this->health),
             ]);
     }
 
@@ -165,15 +165,21 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
         return $count > 0 ? trans_choice('weekly_summary.mail.tasks_more', $count) : null;
     }
 
+    /** The tasks board, unless the recipient may not enter the Tasks workspace (D-23). */
+    private function boardUrlFor(User $notifiable): ?string
+    {
+        return PanelUrl::forReader($notifiable, TasksBoard::class, static fn (): string => TasksBoard::getUrl());
+    }
+
     /**
      * @return array{title: string, url: ?string, assignee: string, detail: string}
      */
-    private function line(WeeklySummaryTask $task, string $detail): array
+    private function line(User $notifiable, WeeklySummaryTask $task, string $detail): array
     {
         return [
             'title' => $task->title,
             'url' => in_array($task->id, $this->readableTaskIds, true)
-                ? TaskResource::getUrl('view', ['record' => $task->id])
+                ? PanelUrl::forReader($notifiable, TaskResource::class, static fn (): string => TaskResource::getUrl('view', ['record' => $task->id]))
                 : null,
             'assignee' => $task->assigneeName ?? __('weekly_summary.fields.unassigned'),
             'detail' => $detail,
@@ -181,9 +187,9 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
     }
 
     /**
-     * @return array{backup: string, backup_problem: ?string, rows: array<string, string>, url: string}
+     * @return array{backup: string, backup_problem: ?string, rows: array<string, string>, url: ?string}
      */
-    private function healthLines(WeeklySummaryHealth $health): array
+    private function healthLines(User $notifiable, WeeklySummaryHealth $health): array
     {
         $latest = $health->latestBackup;
         $timezone = $this->report->to->getTimezone();
@@ -217,7 +223,7 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
                     ? (string) $health->loggedErrors
                     : __('weekly_summary.mail.at_least', ['count' => $health->loggedErrors]),
             ],
-            'url' => Backups::getUrl(),
+            'url' => PanelUrl::forReader($notifiable, Backups::class, static fn (): string => Backups::getUrl()),
         ];
     }
 

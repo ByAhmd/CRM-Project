@@ -92,7 +92,7 @@ final class RoutineTaskPolicyTest extends TestCase
     #[Test]
     public function a_custom_role_granted_task_assign_manages_routines(): void
     {
-        $dispatcher = $this->userInCustomRole([Permission::TaskViewAny, Permission::TaskAssign]);
+        $dispatcher = $this->userInCustomRole([Permission::WorkspaceTasks, Permission::TaskViewAny, Permission::TaskAssign]);
         $routine = TaskTemplate::factory()->create();
 
         foreach (self::ABILITIES as $ability) {

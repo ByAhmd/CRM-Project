@@ -88,7 +88,15 @@ use Spatie\Activitylog\CauserResolver;
  *   a task write;
  * - the reminder and overdue stamps are re-armed when the dates they belong
  *   to move (a reminder moved after it was sent is sent again) and when a
- *   task is reopened; a deleted task has no transitions until it is restored.
+ *   task is reopened; a deleted task has no transitions until it is restored;
+ * - a task may carry a checklist (D-25, rules in TaskChecklist): a create or
+ *   an edit that submits `checklist` writes it — with the task's row locked,
+ *   touching only that task's items — and an edit that leaves the key out
+ *   keeps it; once the task is completed, cancelled or deleted the checklist
+ *   is frozen, and reopening keeps its ticks. Ticking (tickChecklist) is a
+ *   report on an open task, audited but never notified; completing with
+ *   unticked items is allowed, and the completion's ledger entry and the
+ *   assigner's notice carry how many were left.
  *
  * Reassignment is RecordAssignmentService's job (audit + notification), so
  * the `assign` verb is not duplicated here: an edit that changes the
@@ -109,6 +117,7 @@ final class TaskService
         private readonly RecordAssignmentService $assignment,
         private readonly CauserResolver $causers,
         private readonly RecordVisibilityResolver $resolver,
+        private readonly TaskChecklist $checklist,
     ) {}
 
     /**
@@ -118,8 +127,9 @@ final class TaskService
     {
         $attributes = $this->attributes($data, null, $actor);
         $this->assertAssignableOnCreate($attributes['assignee_id'], $actor);
+        $checklist = array_key_exists('checklist', $data) ? TaskChecklist::normalise($data['checklist']) : [];
 
-        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($attributes, $actor): Task {
+        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($attributes, $actor, $checklist): Task {
             $task = new Task([
                 ...$attributes,
                 'status' => TaskStatus::Pending,
@@ -135,6 +145,10 @@ final class TaskService
             }
 
             $task->save();
+
+            // A new task has no items yet, so every submitted one is created
+            // (an id the browser sent names nothing of this task).
+            $this->recordChecklistChange($task, $actor, $this->checklist->sync($task, $checklist));
 
             $assignee = $task->assignee;
 
@@ -166,11 +180,26 @@ final class TaskService
         $reassigned = $newAssigneeId !== ($task->assignee_id === null ? null : (int) $task->assignee_id);
         unset($attributes['assignee_id']);
 
-        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($task, $attributes, $reassigned, $newAssigneeId, $actor): Task {
+        // Absent means unchanged, like every other key; present — even
+        // empty — means "this is the checklist now" (D-25).
+        $checklist = array_key_exists('checklist', $data) ? TaskChecklist::normalise($data['checklist']) : null;
+
+        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($task, $attributes, $reassigned, $newAssigneeId, $actor, $checklist): Task {
+            // The row lock orders this edit with a concurrent tick or
+            // completion, so the checklist sync below judges the items and the
+            // status as they stand, and nobody's tick is lost to the sync.
+            $current = Task::query()->withTrashed()->whereKey($task->getKey())->lockForUpdate()->firstOrFail();
+
             $this->saveRearming($task, $attributes);
 
             if ($reassigned) {
                 $this->assignment->assign($task, $newAssigneeId === null ? null : User::query()->findOrFail($newAssigneeId), $actor);
+            }
+
+            if ($checklist !== null) {
+                $frozen = $current->trashed() || ! $current->isOpen();
+
+                $this->recordChecklistChange($task, $actor, $this->checklist->sync($task, $checklist, $frozen));
             }
 
             return $task;
@@ -315,6 +344,11 @@ final class TaskService
 
                 $completedAt = now();
 
+                // Completing with unticked items is allowed (D-25); the count
+                // left open is part of the record and of the assigner's notice.
+                ['done' => $done, 'total' => $total] = TaskChecklist::counts($current);
+                $open = $total - $done;
+
                 Task::withoutWorkflowGuard(static function () use ($current, $completedAt): void {
                     $current->status = TaskStatus::Completed;
                     $current->completed_at = $completedAt;
@@ -327,6 +361,8 @@ final class TaskService
                     'note' => $note === '' ? null : $note,
                     'assignee_id' => $current->assignee_id,
                     'assignee_name' => $current->assignee?->name,
+                    'checklist_open' => $total > 0 ? $open : null,
+                    'checklist_total' => $total > 0 ? $total : null,
                 ], static fn (mixed $value): bool => $value !== null));
 
                 // The progress log keeps the completion too; completion has
@@ -348,7 +384,7 @@ final class TaskService
 
                 $this->recurrence->next($current);
 
-                $this->notifyAssignerOfCompletion($current, $actor);
+                $this->notifyAssignerOfCompletion($current, $actor, $open, $total);
             });
         });
 
@@ -392,7 +428,8 @@ final class TaskService
                 $previous = $current->status;
 
                 // A reopened task is due and remindable again, so both
-                // notification stamps are re-armed with the status.
+                // notification stamps are re-armed with the status. Its
+                // checklist keeps its ticks (D-25): the work done stays done.
                 Task::withoutWorkflowGuard(static function () use ($current): void {
                     $current->status = TaskStatus::Pending;
                     $current->completed_at = null;
@@ -411,6 +448,73 @@ final class TaskService
         });
 
         return $task->refresh();
+    }
+
+    /**
+     * Ticks and unticks checklist items of an open task (D-25): a report on
+     * the work, so the policy asks `tickChecklist` (whoever may report on the
+     * task). The task's row is locked, a closed or deleted task is refused,
+     * only the task's own items are touched, each tick keeps who made it and
+     * when, and the ledger gets one entry naming what changed with the
+     * progress after it. Nobody is notified.
+     *
+     * @param  list<int>  $check
+     * @param  list<int>  $uncheck
+     */
+    public function tickChecklist(Task $task, User $actor, array $check, array $uncheck = []): Task
+    {
+        $check = self::ids($check);
+        $uncheck = self::ids($uncheck);
+
+        $this->asCauser($actor, function () use ($task, $actor, $check, $uncheck): void {
+            DB::transaction(function () use ($task, $actor, $check, $uncheck): void {
+                $current = $this->lock($task, checklist: true);
+
+                if (! $current->isOpen()) {
+                    throw InvalidTaskTransitionException::checklistNotOpen();
+                }
+
+                $changes = $this->checklist->tick($current, $actor, $check, $uncheck);
+
+                if ($changes['checked'] === [] && $changes['unchecked'] === []) {
+                    return;
+                }
+
+                ['done' => $done, 'total' => $total] = TaskChecklist::counts($current);
+
+                $this->audit->record(ActivityLogEvent::TaskChecklistTicked, $current, $actor, array_filter([
+                    'subject_label' => $current->title,
+                    'checklist_checked' => $changes['checked'],
+                    'checklist_unchecked' => $changes['unchecked'],
+                    'checklist_done' => $done,
+                    'checklist_total' => $total,
+                ], static fn (mixed $value): bool => $value !== []));
+            });
+        });
+
+        return $task->refresh();
+    }
+
+    /**
+     * Writes a checklist structure change to the ledger on the task (D-25),
+     * when there is one: the items added, removed and renamed, and whether
+     * the kept ones were reordered.
+     *
+     * @param  array{added: list<string>, removed: list<string>, renamed: list<array{from: string, to: string}>, reordered: bool}  $changes
+     */
+    private function recordChecklistChange(Task $task, User $actor, array $changes): void
+    {
+        if ($changes['added'] === [] && $changes['removed'] === [] && $changes['renamed'] === [] && ! $changes['reordered']) {
+            return;
+        }
+
+        $this->audit->record(ActivityLogEvent::TaskChecklistChanged, $task, $actor, array_filter([
+            'subject_label' => $task->title,
+            'checklist_added' => $changes['added'],
+            'checklist_removed' => $changes['removed'],
+            'checklist_renamed' => $changes['renamed'],
+            'checklist_reordered' => $changes['reordered'] ? true : null,
+        ], static fn (mixed $value): bool => $value !== [] && $value !== null));
     }
 
     /**
@@ -474,7 +578,7 @@ final class TaskService
      * recipient rule is reportRecipient()'s; the message leaves once the
      * completion has committed.
      */
-    private function notifyAssignerOfCompletion(Task $task, User $actor): void
+    private function notifyAssignerOfCompletion(Task $task, User $actor, int $checklistOpen, int $checklistTotal): void
     {
         $recipient = $this->reportRecipient($task, $actor);
 
@@ -482,8 +586,8 @@ final class TaskService
             return;
         }
 
-        DB::afterCommit(static function () use ($recipient, $task, $actor): void {
-            $recipient->notify((new TaskCompletedNotification($task, $actor))->locale($recipient->preferredLocale()));
+        DB::afterCommit(static function () use ($recipient, $task, $actor, $checklistOpen, $checklistTotal): void {
+            $recipient->notify((new TaskCompletedNotification($task, $actor, $checklistOpen, $checklistTotal))->locale($recipient->preferredLocale()));
         });
     }
 
@@ -771,13 +875,17 @@ final class TaskService
      * both spawn the next occurrence. A deleted task has no transitions — and
      * takes no comments — until it is restored.
      */
-    private function lock(Task $task, bool $commenting = false): Task
+    private function lock(Task $task, bool $commenting = false, bool $checklist = false): Task
     {
         /** @var Task $current */
         $current = Task::query()->withTrashed()->whereKey($task->getKey())->lockForUpdate()->firstOrFail();
 
         if ($current->trashed()) {
-            throw $commenting ? InvalidTaskTransitionException::commentOnTrashed() : InvalidTaskTransitionException::trashed();
+            throw match (true) {
+                $commenting => InvalidTaskTransitionException::commentOnTrashed(),
+                $checklist => InvalidTaskTransitionException::checklistNotOpen(),
+                default => InvalidTaskTransitionException::trashed(),
+            };
         }
 
         return $current;
@@ -902,6 +1010,26 @@ final class TaskService
         }
 
         return null;
+    }
+
+    /**
+     * The well-formed, positive ids among those a form or a request sent,
+     * each once; anything else is dropped.
+     *
+     * @param  array<mixed>  $values
+     * @return list<int>
+     */
+    private static function ids(array $values): array
+    {
+        $ids = [];
+
+        foreach ($values as $value) {
+            if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+                $ids[] = (int) $value;
+            }
+        }
+
+        return array_values(array_unique(array_filter($ids, static fn (int $id): bool => $id > 0)));
     }
 
     private static function id(mixed $value): ?int

@@ -26,6 +26,11 @@ use App\Enums\Permission;
  * to super admins and admins (D-6); everyone else sees it follow the deals.
  * The employee (D-15) is the one seeded role outside the sales pipeline: it
  * works its own tasks and holds no commercial key, so no export either.
+ *
+ * Workspaces (D-23): super_admin and admin enter all four; sales_manager,
+ * sales_rep, support and read_only enter Sales, Tasks and Reports; the
+ * employee enters Tasks only. Administration stays with the two
+ * administrator roles.
  */
 final class RolePermissionMatrix
 {
@@ -72,6 +77,8 @@ final class RolePermissionMatrix
     private static function salesManager(): array
     {
         return [
+            Permission::WorkspaceSales, Permission::WorkspaceTasks, Permission::WorkspaceReports,
+
             Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadCreate, Permission::LeadUpdate,
             Permission::LeadDelete, Permission::LeadRestore, Permission::LeadAssign, Permission::LeadChangeStatus,
             Permission::LeadConvert, Permission::LeadExport, Permission::LeadImport,
@@ -112,6 +119,8 @@ final class RolePermissionMatrix
     private static function salesRep(): array
     {
         return [
+            Permission::WorkspaceSales, Permission::WorkspaceTasks, Permission::WorkspaceReports,
+
             Permission::LeadViewAny, Permission::LeadCreate, Permission::LeadUpdate, Permission::LeadChangeStatus,
             Permission::LeadConvert, Permission::LeadExport,
 
@@ -145,6 +154,8 @@ final class RolePermissionMatrix
     private static function support(): array
     {
         return [
+            Permission::WorkspaceSales, Permission::WorkspaceTasks, Permission::WorkspaceReports,
+
             Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadViewAll, Permission::LeadExport,
             Permission::ContactViewAny, Permission::ContactViewTeam, Permission::ContactViewAll, Permission::ContactExport,
             Permission::AccountViewAny, Permission::AccountViewTeam, Permission::AccountViewAll, Permission::AccountExport,
@@ -171,6 +182,8 @@ final class RolePermissionMatrix
     private static function readOnly(): array
     {
         return [
+            Permission::WorkspaceSales, Permission::WorkspaceTasks, Permission::WorkspaceReports,
+
             Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadViewAll, Permission::LeadExport,
             Permission::ContactViewAny, Permission::ContactViewTeam, Permission::ContactViewAll, Permission::ContactExport,
             Permission::AccountViewAny, Permission::AccountViewTeam, Permission::AccountViewAll, Permission::AccountExport,
@@ -198,6 +211,7 @@ final class RolePermissionMatrix
     private static function employee(): array
     {
         return [
+            Permission::WorkspaceTasks,
             Permission::TaskViewAny, Permission::TaskCreate, Permission::TaskUpdate, Permission::TaskDelete,
             Permission::AttachmentCreate, Permission::AttachmentDownload,
         ];

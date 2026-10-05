@@ -44,6 +44,9 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Commenting (D-17) follows `view`: whoever may open a task may comment on
  * it, whatever their part in it, until the task is deleted.
+ *
+ * The checklist (D-25) splits the same way: writing it is `update`, ticking
+ * it is `tickChecklist` — `progress` on an open task.
  */
 final class TaskPolicy
 {
@@ -113,6 +116,18 @@ final class TaskPolicy
     public function complete(User $user, ?Task $task = null): bool
     {
         return $this->progress($user, $task);
+    }
+
+    /**
+     * Ticking and unticking the checklist (D-25): a report on the work, so
+     * `progress` — the handed-out assignee included, a mentioned participant
+     * never — and only while the task is open: a completed, cancelled or
+     * deleted task's checklist is frozen. Writing the checklist (add, rename,
+     * reorder, remove) is part of the details and follows `update`.
+     */
+    public function tickChecklist(User $user, ?Task $task = null): bool
+    {
+        return ($task === null || $task->isOpen()) && $this->progress($user, $task);
     }
 
     /**

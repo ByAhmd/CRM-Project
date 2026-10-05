@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Accounts;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Accounts\Pages\CreateAccount;
 use App\Filament\Resources\Accounts\Pages\EditAccount;
@@ -34,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class AccountResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Account::class;

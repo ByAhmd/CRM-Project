@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\QualityPass\Usability;
 
+use App\Support\Filament\WorkspacePanelRegistry;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -32,19 +34,28 @@ final class MotionLayerTest extends TestCase
     {
         $this->seedAccess();
 
-        $html = $this->actingAs($this->superAdmin())->get('/admin')->getContent() ?: '';
+        $superAdmin = $this->superAdmin();
+        $html = '';
 
-        $this->assertStringContainsString(
-            'fi-wi-stats-overview-stat-value:not([data-crm-counted])',
-            $html,
-            'the motion partial no longer rides the panel pages - the BODY_END render hook was dropped',
-        );
+        // D-23: every panel registers the hook — the home panel and each of
+        // the four workspaces — so each panel's home is fetched and checked.
+        foreach (Filament::getPanels() as $panel) {
+            $html = $this->actingAs($superAdmin)->get(url($panel->getPath()))->assertOk()->getContent() ?: '';
 
-        $this->assertStringContainsString(
-            'prefers-reduced-motion: reduce',
-            $html,
-            'the count-up lost its reduced-motion bail-out',
-        );
+            $this->assertStringContainsString(
+                'fi-wi-stats-overview-stat-value:not([data-crm-counted])',
+                $html,
+                "the motion partial no longer rides the {$panel->getId()} panel's pages - the BODY_END render hook was dropped",
+            );
+
+            $this->assertStringContainsString(
+                'prefers-reduced-motion: reduce',
+                $html,
+                "the count-up lost its reduced-motion bail-out on the {$panel->getId()} panel",
+            );
+        }
+
+        $this->assertEqualsCanonicalizing(WorkspacePanelRegistry::panelIds(), array_keys(Filament::getPanels()), 'sanity: the home panel and the four workspaces are walked');
 
         // Entrances play on ARRIVAL only: the settle switch turns every
         // entrance rule off after the first choreography, so Livewire

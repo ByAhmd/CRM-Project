@@ -65,8 +65,12 @@ use Throwable;
  *   routine still runs), linked to the routine, audited with the assigner as
  *   the causer, and announced to its assignee exactly as any assignment
  *   (RecordAssignmentService::announce(): bell + mail, after commit);
+ * - a routine may carry a checklist (D-25, rules in TaskChecklist): a save
+ *   that submits `checklist` replaces it and records what changed on the
+ *   routine, one that leaves the key out keeps it; every task the routine
+ *   creates gets its own copy, unticked and in order;
  * - deleting a routine never deletes its tasks (the foreign key clears their
- *   link).
+ *   link) nor their checklists.
  */
 final class RoutineTaskService
 {
@@ -91,6 +95,7 @@ final class RoutineTaskService
         private readonly RecordAssignmentService $assignment,
         private readonly SettingsRepository $settings,
         private readonly CauserResolver $causers,
+        private readonly TaskChecklist $checklist,
     ) {}
 
     /**
@@ -109,7 +114,12 @@ final class RoutineTaskService
         $attributes = $this->attributes($data, $template);
         $assigneeIds = $this->assigneeIds($data, $template, $actor);
 
-        return $this->asCauser($actor, fn (): TaskTemplate => DB::transaction(function () use ($template, $attributes, $assigneeIds, $actor): TaskTemplate {
+        // Absent means unchanged on an edit and empty on a create (D-25).
+        $checklist = array_key_exists('checklist', $data)
+            ? array_map(static fn (array $item): string => $item['body'], TaskChecklist::normalise($data['checklist']))
+            : null;
+
+        return $this->asCauser($actor, fn (): TaskTemplate => DB::transaction(function () use ($template, $attributes, $assigneeIds, $actor, $checklist): TaskTemplate {
             // A save by someone other than the stored assigner takes the
             // routine over: its tasks are handed out in the saver's name from
             // now on, which the ledger records even when nothing else changed.
@@ -135,6 +145,10 @@ final class RoutineTaskService
             $template->save();
 
             $this->syncAssignees($template, $assigneeIds, $actor, $takenOver, $previousAssignerId);
+
+            if ($checklist !== null) {
+                $this->syncChecklist($template, $checklist, $actor);
+            }
 
             return $template;
         }));
@@ -326,8 +340,9 @@ final class RoutineTaskService
         }
 
         $dueAt = $this->dueAt($template, $day);
+        $checklist = TaskChecklist::templateBodies($template);
 
-        return $this->asCauser($assigner, function () use ($template, $assignees, $assigner, $dueAt): int {
+        return $this->asCauser($assigner, function () use ($template, $assignees, $assigner, $dueAt, $checklist): int {
             foreach ($assignees as $assignee) {
                 $task = new Task([
                     'title' => $template->title,
@@ -360,6 +375,9 @@ final class RoutineTaskService
                 ]);
 
                 $task->save();
+
+                // Each task works through its own copy of the steps (D-25).
+                $this->checklist->copyInto($task, $checklist);
 
                 // Bell + mail as for any assignment (D-14), after commit. With
                 // no assigner left at all there is nobody to name as sender.
@@ -435,6 +453,30 @@ final class RoutineTaskService
             'previous_assigner' => $takenOver && $previousAssignerId !== null
                 ? User::withTrashed()->whereKey($previousAssignerId)->value('name')
                 : null,
+        ], static fn (mixed $value): bool => $value !== [] && $value !== null));
+    }
+
+    /**
+     * Replaces the routine's checklist (D-25) and writes the change to the
+     * ledger — the attribute diff LogsActivity records does not see the child
+     * rows: the lines added and removed, or that the same lines were
+     * reordered.
+     *
+     * @param  list<string>  $bodies
+     */
+    private function syncChecklist(TaskTemplate $template, array $bodies, User $actor): void
+    {
+        $changes = $this->checklist->replaceTemplate($template, $bodies);
+
+        if ($changes['added'] === [] && $changes['removed'] === [] && ! $changes['reordered']) {
+            return;
+        }
+
+        $this->audit->record(ActivityLogEvent::LookupUpdated, $template, $actor, array_filter([
+            'subject_label' => $template->title,
+            'checklist_added' => $changes['added'],
+            'checklist_removed' => $changes['removed'],
+            'checklist_reordered' => $changes['reordered'] ? true : null,
         ], static fn (mixed $value): bool => $value !== [] && $value !== null));
     }
 

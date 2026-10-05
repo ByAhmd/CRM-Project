@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TaskTemplates;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\TaskTemplates\Pages\CreateTaskTemplate;
 use App\Filament\Resources\TaskTemplates\Pages\EditTaskTemplate;
 use App\Filament\Resources\TaskTemplates\Pages\ListTaskTemplates;
@@ -28,6 +29,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class TaskTemplateResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = TaskTemplate::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPathRoundedSquare;
@@ -42,7 +45,7 @@ final class TaskTemplateResource extends Resource
 
     public static function getNavigationGroup(): NavigationGroup
     {
-        return NavigationGroup::Activities;
+        return NavigationGroup::Tasks;
     }
 
     public static function getNavigationLabel(): string

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\ActivityLogs;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\ActivityLogs\Pages\ListActivityLogs;
 use App\Filament\Resources\ActivityLogs\Tables\ActivityLogsTable;
 use App\Models\ActivityLog;
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class ActivityLogResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = ActivityLog::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;

@@ -18,9 +18,19 @@ namespace App\Enums;
  *   view_any  — the user's own records
  *   view_team — records owned by members of the user's team
  *   view_all  — every record
+ *
+ * The four `workspace.*` keys (D-23) decide which workspaces a role may
+ * enter at all; inside a workspace every page keeps its own permission and
+ * record scope. They are declared first so the Roles screen shows them first.
  */
 enum Permission: string
 {
+    // Workspaces (D-23)
+    case WorkspaceSales = 'workspace.sales';
+    case WorkspaceTasks = 'workspace.tasks';
+    case WorkspaceReports = 'workspace.reports';
+    case WorkspaceAdmin = 'workspace.admin';
+
     // Leads
     case LeadViewAny = 'lead.view_any';
     case LeadViewTeam = 'lead.view_team';
@@ -154,6 +164,16 @@ enum Permission: string
     public static function values(): array
     {
         return array_map(static fn (self $case): string => $case->value, self::cases());
+    }
+
+    /**
+     * The four workspace keys (D-23), in workspace order.
+     *
+     * @return list<self>
+     */
+    public static function workspaces(): array
+    {
+        return [self::WorkspaceSales, self::WorkspaceTasks, self::WorkspaceReports, self::WorkspaceAdmin];
     }
 
     /**

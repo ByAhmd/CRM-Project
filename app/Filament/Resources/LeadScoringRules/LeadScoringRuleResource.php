@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\LeadScoringRules;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\LeadScoringRules\Pages\CreateLeadScoringRule;
 use App\Filament\Resources\LeadScoringRules\Pages\EditLeadScoringRule;
 use App\Filament\Resources\LeadScoringRules\Pages\ListLeadScoringRules;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class LeadScoringRuleResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = LeadScoringRule::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;

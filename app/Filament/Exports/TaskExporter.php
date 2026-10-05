@@ -6,10 +6,12 @@ namespace App\Filament\Exports;
 
 use App\Filament\Support\ImportExportActions;
 use App\Models\Task;
+use App\Services\Tasks\TaskChecklist;
 use Carbon\CarbonInterface;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -18,8 +20,9 @@ use Illuminate\Database\Eloquent\Model;
  * Exports the rows of the table query it is launched from — already inside
  * the actor's visible scope — with enums as labels in the actor's locale,
  * the assignee by name, the linked records by their labels, dates as
- * Y-m-d H:i. All text cells are protected against spreadsheet formula
- * injection.
+ * Y-m-d H:i, the checklist progress as "done of total" (D-25) — in words,
+ * since a spreadsheet opening the CSV turns a bare 2/3 into a date. All
+ * text cells are protected against spreadsheet formula injection.
  */
 final class TaskExporter extends Exporter
 {
@@ -76,11 +79,41 @@ final class TaskExporter extends Exporter
                 ->label(__('exports.columns.task.recurrence_frequency'))
                 ->formatStateUsing(fn (mixed $state): ?string => ImportExportActions::enumLabel($state))
                 ->preventFormulaInjection(),
+            ExportColumn::make('checklist')
+                ->label(__('exports.columns.task.checklist'))
+                ->state(fn (Task $record): ?string => self::checklistProgress($record)),
             ExportColumn::make('description')->label(__('exports.columns.task.description'))->preventFormulaInjection(),
             ExportColumn::make('created_at')
                 ->label(__('exports.columns.task.created_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
         ];
+    }
+
+    /**
+     * "2 of 3" — empty for a task without a checklist.
+     */
+    private static function checklistProgress(Task $record): ?string
+    {
+        ['done' => $done, 'total' => $total] = TaskChecklist::counts($record);
+
+        return $total === 0 ? null : __('exports.values.checklist_progress', ['done' => $done, 'total' => $total]);
+    }
+
+    /**
+     * The checklist progress (D-25) is counted with the chunk instead of
+     * once per row.
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    public static function modifyQuery(Builder $query): Builder
+    {
+        return $query->withCount([
+            'checklistItems as '.TaskChecklist::TOTAL_ALIAS,
+            'checklistItems as '.TaskChecklist::DONE_ALIAS => static fn (Builder $items): Builder => $items->whereNotNull('completed_at'),
+        ]);
     }
 
     /**

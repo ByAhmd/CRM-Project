@@ -31,6 +31,7 @@ return [
         'thread' => 'Progress and comments',
         'comment' => 'Comment',
         'audit' => 'History',
+        'checklist' => 'Checklist',
     ],
 
     'fields' => [
@@ -68,6 +69,15 @@ return [
         'created_by' => 'Created by',
         'created_at' => 'Created',
         'updated_at' => 'Last updated',
+        'checklist' => 'Checklist',
+        'checklist_item' => 'Item',
+        'checklist_progress' => ':done/:total',
+        'checklist_done_items' => 'Done',
+        'checklist_item_done' => 'Done',
+        'checklist_item_open' => 'Not done yet',
+        'checklist_ticked' => 'Ticked by :name, :date',
+        'checklist_ticked_at' => 'Ticked :date',
+        'checklist_ticked_by' => 'Ticked by',
     ],
 
     'placeholders' => [
@@ -76,6 +86,7 @@ return [
         'start_note' => 'How you plan to go about it, if worth saying',
         'update_body' => 'Where the work stands, what was done, what is blocking it',
         'comment_body' => 'A question, an answer or a remark for the people on this task',
+        'checklist_item' => 'One step of the work, in one line',
     ],
 
     'helpers' => [
@@ -83,11 +94,15 @@ return [
         'recurrence' => 'When a repeating task is completed, the next occurrence is scheduled automatically.',
         'ends_at_after_starts_at' => 'The end must not come before the start.',
         'status_readonly' => 'Use the "Start", "Complete", "Cancel" and "Reopen" actions to change the status.',
-        'handed_out' => 'This task was assigned to you: report on it with "Start", "Post update" and "Complete"; its details stay with whoever assigned it.',
+        'handed_out' => 'This task was assigned to you: report on it with "Start", "Post update", "Checklist" and "Complete"; its details and its checklist items stay with whoever assigned it.',
         'update_notifies' => 'Whoever assigned the task is notified.',
         'comment_notifies' => 'The people taking part in this task are notified.',
         'mention_hint' => 'Type @ to mention a colleague',
         'related' => 'Optional: link the task to a lead, a contact, an account or a deal.',
+        'checklist' => 'Optional: break the work into steps. Whoever reports on the task ticks them off as the work goes.',
+        'checklist_frozen' => 'The task is closed, so its checklist no longer changes.',
+        'checklist_tick' => 'Tick the steps that are done; untick a step that is not.',
+        'checklist_complete_anyway' => 'You can still complete the task: the number left open is recorded and the assigner is told.',
     ],
 
     'filters' => [
@@ -124,6 +139,15 @@ return [
         'add_submit' => 'Add task',
         'edit' => 'Edit task',
         'view' => 'View task',
+        'checklist' => 'Checklist',
+        'checklist_heading' => 'Tick off the checklist',
+        'checklist_submit' => 'Save',
+        'add_checklist_item' => 'Add an item',
+    ],
+
+    'confirmations' => [
+        'checklist_open' => '{1} The only checklist item is not done.|[2,*] Not done: :count of :total checklist items.',
+        'checklist_open_bulk' => '{1} The only checklist item on the selected tasks is not done.|[2,*] Not done: :count of the :total checklist items on the selected tasks.',
     ],
 
     'notifications' => [
@@ -153,6 +177,8 @@ return [
         'comment_body' => ':by commented on ":task": :comment',
         'mention_title' => ':by mentioned you on ":task"',
         'mention_body' => ':by mentioned you in a comment on ":task": :comment',
+        'completed_checklist_open' => '{1} Its only checklist item was not done.|[2,*] Not done: :count of its :total checklist items.',
+        'checklist_saved' => 'Checklist updated',
     ],
 
     'validation' => [
@@ -167,6 +193,11 @@ return [
         'not_closed' => 'Only a completed or cancelled task can be reopened.',
         'ends_before_starts' => 'The end must not come before the start.',
         'trashed' => 'A deleted task cannot change status; restore it first.',
+        'checklist_invalid' => 'The checklist must be a list of items.',
+        'checklist_item_too_long' => 'A checklist item may be at most :max characters.',
+        'checklist_too_many' => 'A checklist may hold at most :max items.',
+        'checklist_frozen' => 'The task is completed, cancelled or deleted, so its checklist can no longer change.',
+        'checklist_not_open' => 'Only the checklist of a pending or in-progress task can be ticked.',
     ],
 
     'empty' => [

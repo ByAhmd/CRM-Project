@@ -235,7 +235,7 @@ The value is read from configuration on every request, so it keeps working after
 **Check it on the host** (after the caches are built, section 3.11):
 
 ```bash
-curl -sI https://crm.example.com/admin/login | grep -i strict-transport-security
+curl -sI https://crm.example.com/app/login | grep -i strict-transport-security
 ```
 
 The header is sent only when PHP sees the request as https. If the command prints nothing while the site is served over
@@ -295,7 +295,8 @@ the process list:
 - Never `--password=...` on a shared shell; if it happened, run `history -d <n>` for that line (or clear the history)
   and change the password after signing in.
 
-Sign in at `https://crm.example.com/admin`. The owner then enables MFA on their own account (optional for everybody,
+Sign in at `https://crm.example.com/app/login` (the one sign-in page of every workspace, D-23); the workspace screen
+opens. The owner then enables MFA on their own account (optional for everybody,
 D-11) and invites the team once SMTP works.
 
 ### 3.10 The cron line
@@ -359,6 +360,11 @@ php artisan optimize               # config, events, routes, views, blade icons 
                                    # registers with the framework's optimize command
 php artisan filament:optimize      # Filament component and icon caches; repeated explicitly, as preflight's hint says
 ```
+
+Since D-23 the CRM runs five Filament panels (`app`, `sales`, `tasks`, `reports`, `admin`), and each keeps its own
+component cache at `bootstrap/cache/filament/panels/<id>.php`. `filament:optimize` (through
+`filament:cache-components`) writes the cache of every registered panel in one run, so no step is added per panel;
+`app:preflight` warns in production when any one of the five files is missing.
 
 Rebuild the caches after **every** change to `.env` and after every release: a cached configuration ignores `.env`
 until `php artisan config:cache` (part of `optimize`) runs again. `php artisan optimize:clear` removes them all — and
@@ -453,7 +459,7 @@ of section 3.10.
 6. Cron line (3.10).
 7. `php artisan optimize`, `php artisan filament:optimize` (3.11).
 8. `php artisan app:preflight` exits 0 (3.12). Two minutes later it shows no heartbeat warning.
-9. Open `https://crm.example.com/up` (200) and sign in at `/admin`.
+9. Open `https://crm.example.com/up` (200), then `https://crm.example.com/` (the landing page) and sign in at `/app/login`.
 
 ---
 
@@ -496,6 +502,42 @@ new release → switch `current` atomically → `php artisan up` → keep the fi
 
 After `current` changes, PHP's realpath cache can keep serving files of the previous release for up to
 `realpath_cache_ttl` seconds (PHP's default is 120); the release is fully live after that.
+
+### 4.3 The workspace release (D-23, D-24, D-25)
+
+The release that splits the CRM into workspaces needs no step of its own — the ordinary sequence of 4.1 or 4.2 covers
+it — but it changes the site's addresses, so check them once after it is live (a go-live row records the result).
+
+| Address | Serves |
+|---|---|
+| `/` | The public landing page (D-24); before this release a redirect to the sign-in page. |
+| `/app` | The home panel: `/app/login`, `/app/password-reset/...`, `/app/profile`, `/app/notification-preferences`, and the workspace screen at `/app`. |
+| `/sales/...` | Leads, deals, the deal board, contacts, accounts, products, activities, email templates, import and export history; the sales dashboard at `/sales`. |
+| `/tasks/...` | Tasks, the tasks board, routine tasks, the calendar; the tasks home at `/tasks`. |
+| `/reports/...` | The nine reports at `/reports/<report>`; the reports home at `/reports`. |
+| `/admin/...` | Administration only: users, roles, teams, settings, lookups, pipelines, custom fields, scoring rules, audit log, backups; its home at `/admin`. |
+
+- **Redirects.** Every pre-release `/admin/<path>` of a page that moved answers **301** to its new address with the
+  rest of the path and the query string kept (`App\Support\Http\LegacyAdminRedirects`), so stored notifications,
+  sent e-mails and bookmarks keep working; check one, e.g.
+  `curl -sI https://crm.example.com/admin/leads?tab=open | grep -i '^location'` prints `.../sales/leads?tab=open`.
+  The redirects are ordinary routes, so they live in the route cache that `optimize` builds — nothing to configure on
+  the host, and no `.htaccess` change.
+- **Permissions.** The migration `2026_10_05_100001_grant_workspace_permissions_to_existing_roles` runs in
+  `migrate --force`, before `db:seed`, and grants the four `workspace.*` keys to the existing roles; the seed then
+  finds the rows present. Without it every user would sign in to a screen of locked cards. Two checklist tables
+  (`task_checklist_items`, `task_template_checklist_items`, D-25) are created in the same step.
+- **Search engines.** Every response except the landing page carries `X-Robots-Tag: noindex, nofollow`
+  (`KeepOutOfSearchEngines`); `public/robots.txt` allows everything so crawlers can read that header (a disallowed
+  address can still be listed). Under fallback 2 of section 3.5 copy the new file into `<web root>` with the rest of
+  `public/`. The landing page carries its own title, description, Open Graph tags and hreflang alternates (`/` for
+  Arabic, `/?locale=en` for English).
+- **Caches.** `optimize` and `filament:optimize` as always (section 3.11) — the five panel caches are written by the
+  one command; `app:preflight` names a missing one.
+- **Check after `up`:** `/` answers 200 in Arabic, `/app/login` shows the sign-in page, a sign-in lands on the
+  workspace screen with the right cards for the role, an old `/admin/tasks` bookmark lands on `/tasks/tasks`, and
+  `curl -I https://<domain>/app/login` shows `X-Robots-Tag: noindex, nofollow` while `curl -I https://<domain>/`
+  does not.
 
 ---
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\WorkspacePanel;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -36,7 +37,7 @@ final class UserInvitationNotification extends Notification
 
     public function toMail(User $notifiable): MailMessage
     {
-        $url = Filament::getPanel('admin')->getResetPasswordUrl($this->token, $notifiable);
+        $url = Filament::getPanel(WorkspacePanel::HOME)->getResetPasswordUrl($this->token, $notifiable);
 
         $minutes = (int) config('auth.passwords.users.expire', 60);
 

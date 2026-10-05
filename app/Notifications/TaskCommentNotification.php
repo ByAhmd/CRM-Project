@@ -9,8 +9,9 @@ use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
 use App\Models\TaskUpdate;
 use App\Models\User;
+use App\Support\Filament\PanelUrl;
 use App\Support\Notifications\NotificationChannels;
-use Filament\Actions\Action;
+use App\Support\Notifications\NotificationLink;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Bus\Queueable;
@@ -77,12 +78,7 @@ final class TaskCommentNotification extends Notification implements ShouldQueue
             ->body(e($this->body()))
             ->icon(Heroicon::OutlinedChatBubbleLeftRight)
             ->iconColor('info')
-            ->actions([
-                Action::make('open')
-                    ->label(__('tasks.notifications.open'))
-                    ->url($this->url())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->linkFor($notifiable), __('tasks.notifications.open')))
             ->getDatabaseMessage();
     }
 
@@ -92,7 +88,7 @@ final class TaskCommentNotification extends Notification implements ShouldQueue
             ->subject($this->title())
             ->greeting(__('tasks.notifications.greeting', ['name' => $notifiable->name]))
             ->line($this->body())
-            ->action(__('tasks.notifications.open'), $this->url());
+            ->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('tasks.notifications.open'), $url));
     }
 
     private function title(): string
@@ -112,5 +108,11 @@ final class TaskCommentNotification extends Notification implements ShouldQueue
     private function url(): string
     {
         return TaskResource::getUrl('view', ['record' => $this->task]);
+    }
+
+    /** The task's page, unless the recipient may not enter the Tasks workspace (D-23). */
+    private function linkFor(User $notifiable): ?string
+    {
+        return PanelUrl::forReader($notifiable, TaskResource::class, fn (): string => $this->url());
     }
 }

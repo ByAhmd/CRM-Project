@@ -162,6 +162,8 @@ final class DemoDataBuilder
         $ids['tasks'] = $this->pluck('tasks', 'created_by', $users);
         // The progress log the demo's starts and completions wrote (D-14 amendment, 2026-09-28).
         $ids['task_updates'] = $this->pluck('task_updates', 'task_id', $ids['tasks']);
+        // The checklist the handed-out demo task carries (D-25).
+        $ids['task_checklist_items'] = $this->pluck('task_checklist_items', 'task_id', $ids['tasks']);
         $ids['notes'] = $this->pluck('notes', 'author_id', $users);
         $ids['notification_preferences'] = $this->pluck('notification_preferences', 'user_id', $users);
 

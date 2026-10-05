@@ -11,6 +11,7 @@ use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\TaskActions;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Tasks\TaskChecklist;
 use App\Services\Tasks\TaskService;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
@@ -92,10 +93,10 @@ abstract class BaseTasksRelationManager extends RelationManager
                     ->modalSubmitActionLabel(__('tasks.actions.add_submit'))
                     ->createAnother(false)
                     ->authorize(fn (): bool => $this->actor()->can('create', Task::class))
-                    ->using(fn (array $data): Task => app(TaskService::class)->create(
+                    ->using(fn (array $data): Task => TaskForm::saving(fn (): Task => app(TaskService::class)->create(
                         [...$data, static::$subjectForeignKey => $this->getOwnerRecord()->getKey()],
                         $this->actor(),
-                    ))
+                    )))
                     ->successNotificationTitle(__('tasks.notifications.added')),
             ])
             // One three-dot menu per row instead of a wall of links; every
@@ -110,16 +111,19 @@ abstract class BaseTasksRelationManager extends RelationManager
                         ->modalHeading(__('tasks.actions.edit'))
                         ->hidden(fn (Task $record): bool => $record->trashed())
                         ->authorize(fn (Task $record): bool => $this->actor()->can('update', $record))
-                        ->mutateRecordDataUsing(function (array $data): array {
+                        ->mutateRecordDataUsing(function (Task $record, array $data): array {
                             $data['owner_id'] = $data['assignee_id'] ?? null;
+                            // Loaded with the form, or the save would wipe the checklist (D-25).
+                            $data['checklist'] = TaskChecklist::formState($record);
 
                             return $data;
                         })
-                        ->using(fn (Task $record, array $data): Task => app(TaskService::class)->update($record, $data, $this->actor()))
+                        ->using(fn (Task $record, array $data): Task => TaskForm::saving(fn (): Task => app(TaskService::class)->update($record, $data, $this->actor())))
                         ->successNotificationTitle(__('tasks.notifications.updated')),
 
                     TaskActions::start(),
                     TaskActions::postUpdate(),
+                    TaskActions::checklist(),
                     TaskActions::comment(),
                     TaskActions::complete(),
                     TaskActions::cancel(),

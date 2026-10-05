@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
  */
 final class SalesPerformanceReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/sales';
+    protected static ?string $slug = 'sales';
 
     protected static ?int $navigationSort = 40;
 

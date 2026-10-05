@@ -6,6 +6,7 @@ namespace App\Filament\Pages\System;
 
 use App\Enums\NavigationGroup;
 use App\Enums\Permission;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Models\User;
 use App\Services\Settings\SettingsRepository;
 use App\Services\System\BackupService;
@@ -32,6 +33,7 @@ use Illuminate\Support\Number;
  */
 final class Backups extends Page implements HasTable
 {
+    use BuildsPageUrlsInOwningPanel;
     use InteractsWithTable;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArchiveBox;

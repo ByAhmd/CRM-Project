@@ -7,6 +7,7 @@ return [
     'sales' => 'المبيعات',
     'contacts' => 'جهات الاتصال',
     'activities' => 'الأنشطة',
+    'tasks' => 'المهام',
     'reports' => 'التقارير',
     'settings' => 'الإعدادات',
     'system' => 'النظام',

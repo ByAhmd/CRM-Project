@@ -8,9 +8,9 @@ use App\Contracts\OwnedRecord;
 use App\Enums\NotificationEvent;
 use App\Models\User;
 use App\Support\Notifications\NotificationChannels;
+use App\Support\Notifications\NotificationLink;
 use App\Support\RecordLabel;
 use App\Support\RecordUrl;
-use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -67,12 +67,7 @@ final class RecordAssignedNotification extends Notification implements ShouldQue
             ->title($this->title())
             ->body($this->body())
             ->icon('heroicon-o-user-plus')
-            ->actions([
-                Action::make('open')
-                    ->label(__('assignment.notifications.open'))
-                    ->url($this->url())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->linkFor($notifiable), __('assignment.notifications.open')))
             ->getDatabaseMessage();
     }
 
@@ -82,7 +77,7 @@ final class RecordAssignedNotification extends Notification implements ShouldQue
             ->subject($this->title())
             ->greeting(__('assignment.notifications.greeting', ['name' => $notifiable->name]))
             ->line($this->body())
-            ->action(__('assignment.notifications.open'), $this->url());
+            ->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('assignment.notifications.open'), $url));
     }
 
     private function title(): string
@@ -109,8 +104,9 @@ final class RecordAssignedNotification extends Notification implements ShouldQue
         return RecordLabel::of($this->record);
     }
 
-    private function url(): string
+    /** The record's page, unless the recipient may not enter the workspace that owns it (D-23). */
+    private function linkFor(User $notifiable): ?string
     {
-        return RecordUrl::view($this->record);
+        return RecordUrl::forReader($notifiable, $this->record);
     }
 }

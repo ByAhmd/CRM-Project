@@ -107,6 +107,10 @@ final class ArabicWordingTest extends TestCase
             'exports.notifications.completed',
             'custom_fields.validation.delete_has_values',
             'lead_scoring_rules.fields.within_days_value',
+            // D-25: the unticked checklist items of a completion.
+            'tasks.confirmations.checklist_open',
+            'tasks.confirmations.checklist_open_bulk',
+            'tasks.notifications.completed_checklist_open',
         ];
         $keysByLocale = [
             'ar' => [

@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  */
 final class ActivityReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/activities';
+    protected static ?string $slug = 'activities';
 
     protected static ?int $navigationSort = 50;
 

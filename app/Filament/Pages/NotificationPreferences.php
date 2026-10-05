@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use App\Enums\NavigationGroup;
 use App\Enums\NotificationEvent;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Models\User;
 use App\Services\Notifications\NotificationPreferenceService;
 use App\Support\Notifications\NotificationChannels;
@@ -39,6 +40,8 @@ use Filament\Support\Icons\Heroicon;
  */
 final class NotificationPreferences extends Page
 {
+    use BuildsPageUrlsInOwningPanel;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBellAlert;
 
     protected static ?int $navigationSort = 90;

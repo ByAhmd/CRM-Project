@@ -36,9 +36,11 @@
 </table>
 </div>
 
+@if ($boardUrl !== null)
 <x-mail::button :url="$boardUrl">
 {{ __('weekly_summary.mail.open_board') }}
 </x-mail::button>
+@endif
 
 <div dir="{{ $crmDirection }}" style="{{ $crmHeading }}">{{ __('weekly_summary.sections.assignees') }}</div>
 
@@ -97,9 +99,11 @@
 
 <div dir="{{ $crmDirection }}" style="{{ $crmMuted }}">{{ __('weekly_summary.mail.health_hint') }}</div>
 
+@if ($health['url'] !== null)
 <x-mail::button :url="$health['url']">
 {{ __('backups.notifications.open') }}
 </x-mail::button>
+@endif
 
 @endif
 <div dir="{{ $crmDirection }}" style="{{ $crmMuted }}">{{ __('weekly_summary.mail.preferences_hint') }}</div>

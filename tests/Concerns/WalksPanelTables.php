@@ -25,7 +25,7 @@ use Throwable;
 trait WalksPanelTables
 {
     /**
-     * Every table of the panel as $actor sees it: the listing of each
+     * Every table of every panel as $actor sees it: the listing of each
      * registered resource and each relation manager those resources declare.
      *
      * @return array<string, Table>
@@ -38,7 +38,7 @@ trait WalksPanelTables
         // the tests read afterwards all consult the authenticated user.
         $this->actingAs($actor);
 
-        foreach (Filament::getPanel('admin')->getResources() as $resource) {
+        foreach ($this->walkedResources() as $resource) {
             $relations = $resource::getRelations();
 
             if ($relations === []) {
@@ -84,7 +84,7 @@ trait WalksPanelTables
 
         $tables = [];
 
-        foreach (Filament::getPanel('admin')->getResources() as $resource) {
+        foreach ($this->walkedResources() as $resource) {
             $registration = $resource::getPages()['index'] ?? null;
 
             if (! $registration instanceof PageRegistration) {
@@ -105,6 +105,29 @@ trait WalksPanelTables
         }
 
         return $tables;
+    }
+
+    /**
+     * Every resource of every registered panel (D-23 split the single admin
+     * panel into the home panel and four workspaces), each once. Walking one
+     * panel would let the tables of the others drop out of the probes
+     * silently; the union keeps the sanity counts measured over the whole
+     * application. Livewire::test() switches to each component's owning panel
+     * through usePanel()'s hooks.
+     *
+     * @return list<class-string<resource>>
+     */
+    private function walkedResources(): array
+    {
+        $resources = [];
+
+        foreach (Filament::getPanels() as $panel) {
+            foreach ($panel->getResources() as $resource) {
+                $resources[$resource] = $resource;
+            }
+        }
+
+        return array_values($resources);
     }
 
     /**

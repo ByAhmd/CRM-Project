@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Exports;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Exports\AccountExporter;
 use App\Filament\Exports\ActivityExporter;
 use App\Filament\Exports\ContactExporter;
@@ -31,6 +32,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class ExportResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     public const STATUS_PROCESSING = 'processing';
 
     public const STATUS_COMPLETED = 'completed';

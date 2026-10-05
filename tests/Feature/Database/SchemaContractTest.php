@@ -169,6 +169,10 @@ final class SchemaContractTest extends TestCase
             'task_update_mentions.task_update_id' => ['task_update_mentions.task_update_id', 'task_updates', 'CASCADE'],
             'task_update_mentions.task_id' => ['task_update_mentions.task_id', 'tasks', 'CASCADE'],
             'task_template_user.task_template_id' => ['task_template_user.task_template_id', 'task_templates', 'CASCADE'],
+            'task_checklist_items.task_id' => ['task_checklist_items.task_id', 'tasks', 'CASCADE'],
+            'task_template_checklist_items.task_template_id' => ['task_template_checklist_items.task_template_id', 'task_templates', 'CASCADE'],
+            // A tick keeps its moment when the account that made it goes (D-25).
+            'task_checklist_items.completed_by' => ['task_checklist_items.completed_by', 'users', 'SET NULL'],
             'taggables.tag_id' => ['taggables.tag_id', 'tags', 'CASCADE'],
             'custom_field_values.custom_field_id' => ['custom_field_values.custom_field_id', 'custom_fields', 'CASCADE'],
             // Optional links survive the removal of what they point at.
@@ -310,6 +314,7 @@ final class SchemaContractTest extends TestCase
             'custom_field_values' => ['value_datetime'],
             'task_updates' => ['created_at'],
             'task_update_mentions' => ['created_at'],
+            'task_checklist_items' => ['completed_at'],
         ];
 
         $wrong = [];

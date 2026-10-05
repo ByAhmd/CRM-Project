@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Imports;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Imports\AccountImporter;
 use App\Filament\Imports\ContactImporter;
 use App\Filament\Imports\DealImporter;
@@ -31,6 +32,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class ImportResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     public const STATUS_PROCESSING = 'processing';
 
     public const STATUS_COMPLETED = 'completed';

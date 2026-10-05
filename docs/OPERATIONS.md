@@ -2,14 +2,20 @@
 
 Day-2 operations of a running installation. Installing and releasing are in [DEPLOYMENT.md](DEPLOYMENT.md); who may do
 what is in [PERMISSIONS.md](PERMISSIONS.md). Panel locations are given by their English labels (*group → item*); the
-Arabic interface has the same structure. Commands run from the application directory (release folders:
+Arabic interface has the same structure. Since D-23 every location lies in one workspace, entered from the workspace
+screen (`/app`) or the switcher in the top bar: **Administration** (`/admin`) holds the *System* and *Settings* items
+(users, roles, teams, audit log, backups, general settings, lookups, pipelines, custom fields, lead-scoring rules);
+**Sales** (`/sales`) the sales records, *Sales → Products*, *Settings → Email templates* and *System → Imports /
+Exports*; **Tasks** (`/tasks`) tasks, routine tasks, the tasks board and the calendar; **Reports** (`/reports`) the
+nine reports. The profile (two-step verification) and *Notification preferences* are in the user menu (the round
+avatar at the top) of every panel. Commands run from the application directory (release folders:
 `DEPLOY_PATH/current`) with the host's PHP 8.3 binary. After any change to `.env`, rebuild the caches:
 `php artisan optimize` and `php artisan filament:optimize` — a cached configuration ignores `.env` until then.
 
 Contents: 1 Users · 2 Roles, permissions and teams · 3 Audit ledger · 4 Deleted records · 5 Imports and exports ·
 6 Attachments and disk growth · 7 Queue and failed jobs · 8 Scheduler · 9 Currency and timezone · 10 Lookups,
 custom fields and email templates · 11 Notification preferences · 12 Demo data · 13 Command reference ·
-14 Common preflight failures · 15 Backups · 16 Weekly summary · 17 Routine tasks · 18 Task mentions and the task
+14 Common preflight failures · 15 Backups · 16 Weekly summary · 17 Routine tasks · 18 Task mentions, checklists and the task
 report.
 
 ---
@@ -50,6 +56,32 @@ and why. Keeping two active super admins avoids the situation.
   Until the seed runs, `app:preflight` fails with "The permissions table has N rows; the catalogue … has M".
 - Record scope follows `{entity}.view_any` (own), `{entity}.view_team` (team) and `{entity}.view_all` (all).
 - *Settings → Teams* (`teams.manage`): one team per user, an optional manager; team scope follows the team membership.
+
+### 2.1 Workspaces (D-23)
+
+- **Granting a workspace.** *System → Roles and permissions*, edit the role: the first section, *Workspaces*
+  («مساحات العمل»), has one switch per workspace — Sales, Tasks, Reports, Administration (`workspace.sales`,
+  `workspace.tasks`, `workspace.reports`, `workspace.admin`). The change is audited like any permission change and
+  applies on the user's next request: a page they still have open in a workspace just taken away is refused on its
+  next click.
+- **A workspace opens the door, not the pages.** Inside a workspace every page keeps its own permission and record
+  scope. Give a role both the workspace and the page permissions it needs (for example `workspace.sales` and
+  `lead.view_any`); a workspace without any of its page permissions shows an empty sidebar, and page permissions
+  without the workspace show a locked card.
+- **What users see.** After sign-in every user lands on the workspace screen («لوحة التحكم · اختر مساحة العمل»):
+  four cards in a fixed order, *Enter* on the ones their role holds, the others locked («غير متاح لحسابك»). A user who
+  followed a link (an e-mail, a notification, a bookmark) to a page they may open lands on that page instead. The
+  brand at the top of every page leads back to the workspace screen; the switcher in the top bar lists the
+  workspaces the user may enter. A link into a workspace the reader may not enter is never shown: notifications and
+  mails keep their text without the *Open* button, and record links appear as plain text.
+- **Defaults and the first release.** The seeded roles hold: super_admin and admin all four; sales_manager,
+  sales_rep, support and read_only Sales, Tasks and Reports; employee Tasks only. Custom roles that existed before the
+  release were granted by what they already held (PERMISSIONS.md, *Workspaces*); check each custom role once after
+  the release.
+- **Old addresses.** Every `/admin/...` address of a page that moved (sales records, tasks, the boards, the calendar,
+  the reports, sign-in, profile, notification preferences) answers a permanent redirect to its new address, so old
+  bookmarks, e-mails and stored notifications keep working. The bare `/admin` is now the Administration home; a user
+  without that workspace is sent to the workspace screen.
 
 ## 3. Audit ledger
 
@@ -187,7 +219,7 @@ All under *Settings* and bilingual: every name has an Arabic and an English valu
 
 ## 11. Notification preferences
 
-*System → Notification preferences*, per user, for themselves: one bell and one e-mail switch per event, in
+*User menu → Notification preferences* (the home panel, `/app/notification-preferences`), per user, for themselves: one bell and one e-mail switch per event, in
 sections — **records** (assigned to me), **tasks** (reminder, overdue, progress update, comment, mentioned in a
 comment, completed), **deals**
 (stage changed, closed), **leads** (converted, stale), **notes** (mentions), **summaries** (the weekly task summary,
@@ -264,7 +296,7 @@ php artisan app:demo-data --fresh --allow-orphans # remove the demo users even w
 | `php artisan queue:failed` / `queue:retry` / `queue:forget` | Failed jobs (section 7). |
 | `php artisan db:seed --force` | Recreate missing reference rows and permission keys; never overwrites edits. |
 | `php artisan down --with-secret` / `php artisan up` | Maintenance mode (DEPLOYMENT.md, section 4). |
-| `php artisan optimize` / `filament:optimize` / `optimize:clear` | Caches (DEPLOYMENT.md, section 3.11). |
+| `php artisan optimize` / `filament:optimize` / `optimize:clear` | Caches (DEPLOYMENT.md, section 3.11); `filament:optimize` writes the component cache of all five panels. |
 
 ## 14. Common preflight failures
 
@@ -338,7 +370,7 @@ with that permission receives it too). Each copy is written in the recipient's l
   is read (newest first), and a larger log is reported as "at least *n*".
 - **Delivery.** The bell entry is written at once and links to the tasks board; the e-mail follows through the next
   queue drain when a real mailer is configured (DEPLOYMENT.md, section 3.6). Mail is on by default for this event.
-- **Switching it off.** Each recipient chooses under *System → Notification preferences*, event *The weekly task
+- **Switching it off.** Each recipient chooses under *User menu → Notification preferences*, event *The weekly task
   summary*: bell, mail, or neither (section 11). Users without `task.assign` are never sent it and are not offered
   the choice (D-19). To stop it for everyone, remove the entry from `routes/console.php` in a release.
 - **Timing.** Dates in the summary are in the organisation timezone (*Settings*); the schedule itself runs in
@@ -347,7 +379,7 @@ with that permission receives it too). Each copy is written in the recipient's l
 
 ## 17. Routine tasks
 
-*Activities → Routine tasks* (D-22) is where the people who hand out work — holders of `task.assign`, super admins and
+*Tasks → Routine tasks* (Tasks workspace, D-22) is where the people who hand out work — holders of `task.assign`, super admins and
 admins among the seeded roles — set recurring work up once. A routine has a title, a description, a priority, a
 schedule (**weekly** on a day Sunday … Saturday, or **monthly** on a day 1–28, so every month has it), the time the
 tasks are due (organisation time, 17:00 unless changed), how many days after the scheduled day they are due (0–30;
@@ -391,7 +423,7 @@ a day twice. To check what is due first, sort the routine list by *Next run*.
 | One assignee got no task | Is their account active? Does their role still hold `task.view_any`? | Re-enable the account or restore the permission; the next scheduled day includes them again. |
 | Tasks are due at an unexpected hour | The due time is organisation time (*Settings → General settings → Timezone*). | Correct the due time on the routine. |
 
-## 18. Task mentions and the task report
+## 18. Task mentions, checklists and the task report
 
 - **Mentions (D-20).** Typing `@` in a task's comment box lists colleagues — every active user holding `task.view_any`
   except the author, whatever their team. A mentioned colleague becomes a participant: they may open the task, read
@@ -409,3 +441,13 @@ a day twice. To check what is due first, sort the routine list by *Next run*.
   the mean is rounded to the nearest hour); the export writes hours with one decimal. Tasks assigned before the
   feature shipped count from their creation (the backfill), as do tasks with no assignee — so a task that was
   reassigned before then is measured from its creation, not from the reassignment.
+- **Checklists (D-25).** A task may carry up to 50 one-line items, written in the task form by whoever may edit the
+  task (the assigner, administrators, the creator of their own task — never the handed-out assignee) and ticked with
+  *Checklist* on the task page, the task list row menu or a record's task rows by whoever may report progress (the
+  assignee included) while the task is open. Each tick records who and when; the task page shows them, and the task
+  list and the tasks board show done / total, the export «2 من 3» / "2 of 3". Completing with unticked items is allowed: the dialog warns
+  with the count, the ledger records it and the assigner's completion notice says how many were left. A completed,
+  cancelled or deleted task's checklist is frozen; reopening keeps the ticks. A routine's checklist is copied
+  unticked into every task it hands out, and a repeating task copies its checklist unticked into the next
+  occurrence. Ticks are audited (*Task checklist ticked*), never notified; a tick counts as progress for the weekly
+  summary's "stalled" rule.

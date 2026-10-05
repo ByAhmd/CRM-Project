@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  */
 final class ConversionFunnelReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/funnel';
+    protected static ?string $slug = 'funnel';
 
     protected static ?int $navigationSort = 20;
 

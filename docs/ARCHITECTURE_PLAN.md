@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-22 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-25 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -74,11 +74,13 @@ comparison in [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md).
 
 ## 2. Product scope
 
-A single-organisation (D-2) sales CRM operated from one Filament admin panel.
+A single-organisation (D-2) sales CRM operated from five Filament panels since D-23 (2026-10-05): a home panel at
+`/app` (sign-in, profile, notification preferences and the workspace screen) and the Sales, Tasks, Reports and
+Administration workspaces, each entered by its own permission; the site root `/` is a public landing page (D-24).
 
 | # | Module | Delivered capability |
 |---|---|---|
-| 1 | Dashboard | Permission-aware KPIs (leads by status, new/qualified/converted, open deals, weighted pipeline, won/lost, conversion rate, revenue won by month, my tasks today/overdue, upcoming follow-ups, stale deals, activity counts), date/owner/pipeline filters, charts |
+| 1 | Dashboard | Permission-aware KPIs (leads by status, new/qualified/converted, open deals, weighted pipeline, won/lost, conversion rate, revenue won by month, my tasks today/overdue, upcoming follow-ups, stale deals, activity counts), date/owner/pipeline filters, charts. Since D-23 the sales KPIs and charts are the Sales workspace home (`SalesDashboard`, with the filters) and the two task lists the Tasks workspace home (`TasksDashboard`) |
 | 2 | Leads | CRUD, status (configurable), source (configurable), owner, priority, score, qualification (status kind + qualified_at/by + history + notes), duplicate detection on email/phone, tags, notes, activities, tasks, attachments, timeline, bulk assign/status/tag/delete, import/export, conversion to Account + Contact + Deal |
 | 3 | Lead sources / statuses | Configurable bilingual lookup tables with ordering, colours and behavioural `kind` |
 | 4 | Contacts | CRUD, account link, job title, department, emails/phones, preferred locale, social link, owner, tags, notes, activities, tasks, attachments, timeline, related deals, duplicate detection, merge |
@@ -86,7 +88,7 @@ A single-organisation (D-2) sales CRM operated from one Filament admin panel.
 | 6 | Deals (Opportunities) | CRUD, account, contacts (with roles), owner, pipeline, stage, probability (stage default + override), amount computed from product line items in SAR (D-8), expected close date, source, product line items (D-8), forecast category, status open/won/lost, win/loss reason (configurable), competitors, stage history, activities, tasks, attachments, timeline, kanban board |
 | 7 | Pipelines & stages | Configurable pipelines, ordered stages, probability, kind (open/won/lost), default stage, default pipeline, active flag |
 | 8 | Activities | Calls, meetings, emails (logged), other; configurable activity types; owner, links to lead/contact/account/deal, occurred_at, duration, outcome, attachments, timeline |
-| 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views |
+| 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views, progress log and comments with @mentions (D-14, D-17, D-20), routine tasks (D-22), checklists with who ticked each item and done / total progress (D-25) |
 | 10 | Calendar | Month/week/day views of tasks, meetings and follow-ups with create/edit from the calendar |
 | 11 | Notes | Authored, timestamped, attached to lead/contact/account/deal, pinning, edit history (audit ledger) |
 | 12 | Timeline | Chronological, per record: activities, notes, tasks, stage/status changes, ownership changes, attachments, conversion, audit events |
@@ -104,6 +106,8 @@ A single-organisation (D-2) sales CRM operated from one Filament admin panel.
 | 24 | Settings | Lead statuses, sources, industries, pipelines/stages, activity types, close reasons, competitors, tags, custom fields, teams, general settings, notification preferences, user preferences (locale, theme) |
 | 25 | Admin | Users (invite flow), roles, permissions, settings, audit, reports, import/export history |
 | 26 | Platform | Arabic + English, RTL + LTR, light + dark + system, responsive, tests, static analysis, docs, CI/CD |
+| 27 | Workspaces (D-23) | Home panel + four workspace panels, `workspace.*` permission keys, workspace screen with locked cards, top-bar switcher, owning-panel links shown only to readers who may enter, permanent redirects from the old `/admin/...` addresses |
+| 28 | Landing page (D-24) | Public bilingual product page at `/`: hero with an HTML product preview, facts read from the code, capabilities, the four workspaces, FAQ; every claim pinned to shipped code by a test |
 
 Out of scope for v1 (would need a separate decision and, mostly, a paid service): mailbox
 synchronisation, WhatsApp/SMS, telephony, AI features, public web-to-lead forms, quotes/invoices,
@@ -115,9 +119,15 @@ multi-currency.
 
 ### 3.1 Application architecture
 
-- **Laravel 13, single Filament 5 panel** at `/admin` (`AdminPanelProvider`). No multi-panel layer,
-  no workspace launcher. Resources and pages are discovered (`discoverResources`/`discoverPages`)
-  with a structural test guaranteeing every discovered resource has a policy and permission keys.
+- **Laravel 13, five Filament 5 panels** (D-23, superseding A-2): the home panel `app` (`HomePanelProvider`, the
+  default panel: sign-in, password reset, profile + MFA, notification preferences, the workspace screen) and the
+  workspaces `sales`, `tasks`, `reports` and `admin` (`SalesPanelProvider`, `TasksPanelProvider`,
+  `ReportsPanelProvider`, `AdminPanelProvider`), one per `App\Enums\WorkspacePanel` case. Nothing is discovered:
+  `App\Support\Filament\WorkspacePanelRegistry` lists each panel's resources, pages and widgets, so a screen belongs
+  to exactly one panel; every provider builds its panel through the one trait
+  `Providers\Filament\Concerns\ConfiguresCrmPanel` (theme, colours, font, security headers, motion hook, switcher,
+  notifications, SPA, navigation groups, user menu, `strictAuthorization()`), so no panel can drift. Structural
+  tests walk every panel (`Filament::getPanels()`): every registered resource has a policy and permission keys.
 - **Layers** (the Stockflow layering, kept): Filament Resources/Pages/Widgets (presentation only) →
   Policies (authorisation) → Services (business logic, transactions) → Models/Observers → Database.
   No business logic in Filament classes or controllers. Services are `final`, constructor-injected,
@@ -190,18 +200,21 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   exporters, widgets and statistics services. Filters never widen scope.
 - Filament enforcement: resource `can*` methods (policy-backed), `->authorize()` on actions,
   `authorizeIndividualRecords()` on every bulk action, `Page::canAccess()`, `Widget::canView()`,
-  `Importer`/`Exporter` policies. `->strictAuthorization()` on the panel.
+  `Importer`/`Exporter` policies. `->strictAuthorization()` on every panel.
 - Authentication: Filament login (rate-limited), invitation-only user creation (password set through a
-  signed reset link, status `pending → active`), status gating in `canAccessPanel()`, profile page,
+  signed reset link, status `pending → active`), status and workspace gating in `canAccessPanel()` (delegating to
+  `Services\Access\PanelAccess`, D-23), profile page in the home panel,
   MFA available to all users and optional (D-11), password policy per D-11, no self-registration, no API.
 
 ### 3.4 UI architecture
 
-- One Filament panel; navigation groups from `App\Enums\NavigationGroup` (Sales, Contacts, Activities,
-  Reports, Settings, System) with closure labels so the sidebar re-translates on locale switch.
+- Five panels (section 3.4.1); navigation groups from `App\Enums\NavigationGroup` (Sales, Contacts, Activities,
+  Tasks, Reports, Settings, System) with closure labels so the sidebar re-translates on locale switch; every panel
+  declares every group and Filament renders only the groups its items use.
 - Standard pages per resource; record 360 views (`ViewLead`, `ViewAccount`, `ViewDeal`) with tabs:
   overview, timeline, activities, tasks, notes, attachments, related records.
-- Custom pages: `Dashboard` (Filament dashboard with filters form), `DealBoard` (kanban),
+- Custom pages: `Workspaces` (the workspace screen, home panel), `SalesDashboard` (Filament dashboard with filters
+  form), `TasksDashboard`, `ReportsHome`, `AdminHome` (the workspace homes), `DealBoard` (kanban),
   `Calendar`, `TasksBoard` (the shared, organisation-wide tasks board, D-14; in-progress cards carry a status
   badge), `Reports/*`, `Settings/General`. `ViewTask` shows the task's progress log (D-14 amendment,
   2026-09-28) and offers the assignee start / post update / complete; a handed-out task's edit, cancel and
@@ -212,16 +225,81 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   `@Name` plus the mentioned ids; the same comment action serves the task page, the task list row menu and the
   relation managers' task rows (`TaskActions::comment()`). The thread escapes each body before it marks the
   mentioned names (`.crm-mention`).
-- Routine tasks (D-22): *Activities → Routine tasks* is an ordinary resource (`TaskTemplates/`: list, create and
+- Routine tasks (D-22): *Tasks → Routine tasks* (Tasks workspace) is an ordinary resource (`TaskTemplates/`: list, create and
   edit pages; pause, resume and delete on the row menu and the edit page; bulk delete), gated by `task.assign`
   through `TaskTemplatePolicy`; the form, list and actions only call `RoutineTaskService`.
+- Checklists (D-25): the task form carries a plain repeater (hidden id + one-line body, at most 50 items), disabled
+  on a closed or deleted task; every fill path (the edit page, the relation managers' edit action, the calendar
+  modal) loads the stored items through `TaskChecklist::formState()`, so a save never wipes them, and
+  `TaskForm::saving()` turns the service's refusal into a notice that keeps the form open. Ticking is its own
+  action (`TaskActions::checklist()`: a checkbox list that writes only the boxes changed since the dialog opened)
+  on the task page, the list row menu and the relation managers. The task page shows done / total and who ticked
+  each item and when; the task list (`checklist_progress`, counts through `TaskChecklist::withCounts()` in the
+  table's own query, never in `getEloquentQuery()`) and the tasks-board card show done / total; the exporter writes
+  it in words («2 من 3» / "2 of 3", `exports.values.checklist_progress`) so a spreadsheet cannot read it as a date. The
+  Complete dialog and the bulk complete warn with the count of unticked items. The routine form carries its own
+  repeater.
 - Tables: `defaultSort` on every table (guard test), persisted filters/sort/search in session,
   column manager, list tabs, query-builder filter on the main lists, empty states translated.
 - Light/dark/system: `->darkMode()->themeSwitcher()->defaultThemeMode(ThemeMode::System)`; one Tailwind 4
   theme file with `:root` tokens redefined under `.dark`; every custom page/widget uses Filament
   components so dark mode is inherited; charts read colours from CSS variables.
 - Responsive: Filament layouts; custom kanban and calendar tested at mobile widths.
-- Navigation: SPA mode with hover prefetching (A-26) — pages swap in place; the calendar keeps a full load.
+- Navigation: SPA mode with hover prefetching (A-26) — pages swap in place; the calendar and every crossing into
+  another panel keep a full load.
+
+### 3.4.1 Panels, workspaces and links (D-23)
+
+- **Entry.** `User::canAccessPanel()` delegates to `Services\Access\PanelAccess`: the home panel admits every
+  active user (D-11); a workspace admits an active user holding its key (`workspace.sales`, `workspace.tasks`,
+  `workspace.reports`, `workspace.admin`); any other panel id is refused (fail closed). The workspaces have no
+  sign-in page of their own: `App\Http\Middleware\AuthenticateWorkspace` (registered as Livewire-persistent
+  middleware, matched by exact class name) sends a guest to the home panel's sign-in with the intended address
+  kept and answers 403 to a user without the key — except the bare `/admin`, the pre-D-23 dashboard address, which
+  sends such a user to the sales dashboard with the query string kept when they may enter Sales, else to the
+  workspace screen (`LegacyAdminRedirects::formerDashboard()`, a temporary redirect), and the workspace's sign-out,
+  which needs only a signed-in user — and runs again on every Livewire update request.
+- **After sign-in** `App\Filament\Auth\Http\Responses\LoginResponse` (bound in `AppServiceProvider::boot()`,
+  after Filament's own binding) lands the user on the workspace screen, or on the remembered address when
+  `Support\Filament\IntendedDestination` confirms it: plainly this host (`PanelUrl::sameSiteAddress()` refuses
+  another host, userinfo, backslashes and control characters, and rebuilds the address from its checked parts; no
+  open redirect) and a page the user may open — the panel, the page's or resource's access, the record inside the
+  user's visible scope and the view/edit right — or an attachment or backup download the user may take.
+- **The workspace screen** (`Filament\Pages\Workspaces`, the home panel's home) shows all four cards in the enum's
+  order: *Enter* for a workspace the user may enter, a locked card (lock icon, «غير متاح لحسابك», no link)
+  otherwise. Every top bar carries the brand (leading to the workspace screen), the workspace switcher
+  (`filament.partials.workspace-switcher`, the enterable workspaces only) and a user menu leading to the home
+  panel's profile and notification preferences.
+- **URLs.** Resources use `Filament\Concerns\BuildsUrlsInOwningPanel` and pages `BuildsPageUrlsInOwningPanel`: their
+  route names are built against the panel the registry assigns them (`Support\Filament\OwningPanel`), so
+  `TaskResource::getUrl()` points into `/tasks` from a sales page, a queued mail or a console command alike. A link
+  into another workspace goes through `Support\Filament\PanelUrl::forReader()` (and `RecordUrl::forReader()` for
+  records), which returns null when the reader may not enter that workspace; the caller then renders plain text —
+  notifications through `Support\Notifications\NotificationLink` (no *Open* button), mails through
+  `MailMessage::when()`, and the timeline, the calendar, related-record links and the workspace homes alike.
+- **Moved addresses.** `Support\Http\LegacyAdminRedirects` maps every pre-D-23 `/admin/<path>` of a moved page
+  (sales records, tasks, the boards, the calendar, the nine reports, sign-in, password reset, profile, notification
+  preferences) to its new address; `LegacyAdminRedirectController` answers 301 with the rest of the path and the
+  query string kept. Nothing the Administration workspace still serves is shadowed.
+- **Non-panel routes** (attachment and backup downloads, the landing page) carry `panel:app`, so they run in the
+  home panel (its theme, its sign-in address and the authentication rule every signed-in user meets there); the
+  landing route also carries the language switch's `SwitchLanguageLocale` middleware.
+- **Global search** runs inside a workspace: Sales (leads, contacts, accounts, deals) and Tasks (tasks).
+- **Caches.** Each panel keeps its own component cache; `filament:optimize` writes all five and `app:preflight`
+  warns in production when any one is missing.
+
+### 3.4.2 Public landing page (D-24)
+
+- `/` is `LandingController` (presentation only) rendering `resources/views/landing/*` with `lang/{ar,en}/landing.php`;
+  `POST /language` (`LandingLanguageController`) stores a language choice exactly like the profile menu, so the page
+  works without JavaScript. Facts are read from the code (`Support\Landing\LandingFacts`: workspaces, built-in
+  roles, languages, audit-retention days); the call to action is the sign-in page for a guest and the workspace
+  screen for a signed-in visitor. Styles live in the shared theme file; motion only behind `prefers-reduced-motion:
+  no-preference`. Only `/` may be indexed: `App\Http\Middleware\KeepOutOfSearchEngines` (web group and every
+  panel) sends `X-Robots-Tag: noindex, nofollow` on every other response, and `public/robots.txt` lets crawlers in so
+  they can read it. Each language has its own address (`LandingPageChrome::addressFor()`: `/` for Arabic,
+  `/?locale=en`), canonical to itself, with hreflang alternates. `tests/Feature/Landing/LandingClaimsTest.php` pins
+  every claim of the page to the shipped code.
 
 ### 3.5 Localization architecture
 
@@ -244,8 +322,9 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
 
 As built (step 12, read from `app/Notifications` and `routes/console.php` on 2026-09-15).
 
-- Laravel notifications with Filament's database envelope (`FilamentNotification::make()->…`), panel
-  `->databaseNotifications()->databaseNotificationsPolling('30s')`, actions inside notifications (open record).
+- Laravel notifications with Filament's database envelope (`FilamentNotification::make()->…`), every panel's
+  `->databaseNotifications()->databaseNotificationsPolling('30s')`, actions inside notifications (open record —
+  pointing into the owning workspace and left out when the recipient may not enter it, D-23).
 - Notification classes (`app/Notifications`):
 
   | Class | Sent by | To | Queued |
@@ -427,8 +506,8 @@ Each step is designed → implemented → validated → authorised → tested (P
 > Quality pass (2026-09-14): `phpunit.xml` sets `failOnWarning`, `failOnRisky`, `failOnDeprecation` and `failOnPhpunitDeprecation`, so a deprecation raised only on the PHP 8.3 CI runner or the 8.4 local runner fails the build. Per-role authorisation matrices for every owned entity live in `tests/Feature/Access/OwnedPolicyMatrixTest.php`. Shared fixtures live in `Tests\Concerns\CreatesCrmFixtures` and upload byte builders in `Tests\Concerns\BuildsUploadBytes`. Lazy loading is prevented for the whole suite in `tests/TestCase.php`. `Storage::fake()` uses `storage/framework/testing/disks/<disk>` for every process, so two PHPUnit runs at the same time wipe each other's fake files even on different databases — run suites that touch the fake disk one at a time.
 
 - **Framework**: PHPUnit 12 with `#[Test]` attributes, `final` classes, snake_case sentence names,
-  `RefreshDatabase` against MySQL `crm_testing`, `Filament::setCurrentPanel('admin')` before Livewire
-  tests, `Notification::fake()`, `Queue::fake()`, `Storage::fake()`, `$this->travelTo()` for time logic.
+  `RefreshDatabase` against MySQL `crm_testing`, `$this->usePanel()` before Livewire tests (the home panel
+  becomes current and each mounted component switches to its owning panel, D-23), `Notification::fake()`, `Queue::fake()`, `Storage::fake()`, `$this->travelTo()` for time logic.
 - **Fixtures**: `tests/Concerns/CreatesCrmFixtures` (typed helpers creating users per role, teams,
   lookups, leads, accounts, contacts, deals) plus model factories for bulk data.
 - **Families per module**:
@@ -493,7 +572,7 @@ Each step is designed → implemented → validated → authorised → tested (P
   and activities, with a translated hint when the range was cut.
 - Imports chunked (100 rows) and queued; exports chunked and queued; both prunable.
 - Global search limited per resource; indexed columns only.
-- `filament:optimize`, config/route/view cache in deploys.
+- `filament:optimize` (the component caches of all five panels), config/route/view cache in deploys.
 
 ---
 
@@ -512,7 +591,10 @@ Step 13 status (2026-09-15). The runbook is [DEPLOYMENT.md](DEPLOYMENT.md), day-
   `app:preflight`, the `current` switch and `up` on the host. The release commands live inline in the workflow; the
   `scripts/deploy-production.sh` of the step-0 proposal was not needed. One cron running `schedule:run` every minute
   drives the schedule of section 3.6; `.env` is set on the server only; no `storage:link` is needed (nothing is served
-  from the public disk). If a VPS: same pipeline plus Supervisor for `queue:work`.
+  from the public disk). If a VPS: same pipeline plus Supervisor for `queue:work`. Since D-23 the same steps cover
+  every panel: `filament:optimize` iterates `Filament::getPanels()`, and preflight checks each panel's cache; the
+  data migration `2026_10_05_100001_grant_workspace_permissions_to_existing_roles` runs before `db:seed`, so existing
+  roles hold their workspace keys from the first request of the release.
 - Built: trusted proxies through `CRM_TRUSTED_PROXIES` (`App\Http\Middleware\TrustProxies`, read per request),
   `tests/Feature/System/TrustedProxiesTest.php`.
 - Built: `.github/workflows/ci.yml` (Pint, PHPStan, asset build and PHPUnit on PHP 8.3 + MySQL 8.4).
@@ -569,11 +651,13 @@ CRM_Project/
 │   ├── Exceptions/{Leads,Deals,Tasks,Attachments,Imports,Access}/
 │   ├── Filament/
 │   │   ├── Auth/Pages/            ResetPassword, RequestPasswordReset (pending users may request)
-│   │   ├── Concerns/              ScopesQueriesToVisibleRecords, RunsWorkflowActions, ChecksPermission
+│   │   ├── Auth/Http/Responses/   LoginResponse, LogoutResponse (D-23)
+│   │   ├── Concerns/              ScopesQueriesToVisibleRecords, RunsWorkflowActions, ChecksPermission,
+│   │   │                          BuildsUrlsInOwningPanel, BuildsPageUrlsInOwningPanel (D-23)
 │   │   ├── Exports/               LeadExporter, ContactExporter, AccountExporter, DealExporter, ActivityExporter, TaskExporter
 │   │   ├── Imports/               LeadImporter, ContactImporter, AccountImporter, DealImporter
-│   │   ├── Pages/                 Dashboard, DealBoard, Calendar, TasksBoard, Settings/GeneralSettings, System/Backups,
-│   │   │                          NotificationPreferences,
+│   │   ├── Pages/                 Workspaces, SalesDashboard, TasksDashboard, ReportsHome, AdminHome (D-23), DealBoard, Calendar,
+│   │   │                          TasksBoard, Settings/GeneralSettings, System/Backups, NotificationPreferences,
 │   │   │   ├── Reports/           LeadReport, ConversionReport, PipelineReport, SalesPerformanceReport, ActivityReport,
 │   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport
 │   │   │   └── Concerns/          HasReportFilters
@@ -581,17 +665,20 @@ CRM_Project/
 │   │   │                          Pipelines/ (+StagesRelationManager), LeadStatuses/, LeadSources/, Industries/, ActivityTypes/, CloseReasons/,
 │   │   │                          Competitors/, Tags/, Teams/, CustomFields/, Users/, Roles/, ActivityLogs/, Imports/, Exports/
 │   │   │                          (each: XResource, Schemas/, Tables/, Pages/, RelationManagers/)
-│   │   ├── Support/               LeadActions, DealActions, TaskActions, ContactActions, SharedSchemas (address, owner, tags, custom fields)
+│   │   ├── Support/               LeadActions, DealActions, TaskActions, ContactActions, SharedSchemas (address, owner, tags, custom fields),
+│   │   │                          WorkspaceCard, WorkspaceLink, WorkspaceLinkSection (D-23)
 │   │   └── Widgets/               SalesKpisWidget, LeadFunnelWidget, PipelineByStageChart, WonRevenueTrendChart, MyTasksTodayWidget,
 │   │                              OverdueTasksWidget, UpcomingFollowUpsWidget, StaleDealsWidget, RecentLeadsWidget, ActivityFeedWidget
-│   ├── Http/Controllers/          AttachmentDownloadController, BackupDownloadController
+│   ├── Http/Controllers/          AttachmentDownloadController, BackupDownloadController, LandingController, LandingLanguageController (D-24),
+│   │                              LegacyAdminRedirectController (D-23)
+│   ├── Http/Middleware/           AuthenticateWorkspace (D-23), KeepOutOfSearchEngines (D-24), SecurityHeaders, TrustProxies
 │   ├── Jobs/                      RescoreLeads, CreateBackup
 │   ├── Listeners/                 ActivateInvitedUser, RecordAuthActivity, PersistUserLocale, FailHealthCheckWithoutSchedulerHeartbeat
 │   ├── Models/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
 │   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
-│   │                              Activity, Task, TaskUpdate, TaskUpdateMention, TaskTemplate, Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
+│   │                              Activity, Task, TaskUpdate, TaskUpdateMention, TaskTemplate, TaskChecklistItem, TaskTemplateChecklistItem (D-25), Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
 │   │                              TaskCompletedNotification, TaskProgressNotification, TaskCommentNotification, TaskMentionNotification,
@@ -601,9 +688,9 @@ CRM_Project/
 │   │                              TaskUpdateAppendOnlyObserver, TaskUpdateMentionAppendOnlyObserver (D-20),
 │   │                              TaskAssignmentStampObserver (tasks.assigned_at, D-21)
 │   ├── Policies/                  <Model>Policy per model + Concerns/ChecksPermissions
-│   ├── Providers/                 AppServiceProvider, Filament/AdminPanelProvider
+│   ├── Providers/                 AppServiceProvider, Filament/{Home,Sales,Tasks,Reports,Admin}PanelProvider + Filament/Concerns/ConfiguresCrmPanel (D-23)
 │   ├── Services/
-│   │   ├── Access/                RecordVisibilityResolver, RoleService
+│   │   ├── Access/                RecordVisibilityResolver, RoleService, PanelAccess (D-23)
 │   │   ├── Accounts/ Contacts/    AccountService, ContactService, DuplicateFinder, RecordMerger
 │   │   ├── Activities/            ActivityRecorder, TimelineReader, TimelineEntry
 │   │   ├── Attachments/           AttachmentStorage, AttachmentService
@@ -618,12 +705,15 @@ CRM_Project/
 │   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome,
 │   │   │                          WeeklySummary (+ WeeklySummaryReport, WeeklySummaryTask, WeeklySummaryAssignee, WeeklySummaryHealth),
 │   │   │                          CommentDraft and TaskParticipants (mentions and the participant read path, D-20),
-│   │   │                          RoutineTaskService (routine tasks, D-22)
+│   │   │                          RoutineTaskService (routine tasks, D-22), TaskChecklist (checklist rules, D-25)
 │   │   └── Users/                 UserInvitationService
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
 │       ├── Database/              EnumCheck, DatabaseEngine, TimestampRange
-│       ├── Filament/              FilamentLanguageMenuItems
+│       ├── Filament/              FilamentLanguageMenuItems, WorkspacePanelRegistry, OwningPanel, PanelUrl (D-23)
+│       ├── Http/                  LegacyAdminRedirects (D-23)
+│       ├── Landing/               LandingFacts, LandingFact, LandingPageChrome (D-24)
+│       ├── Notifications/         NotificationChannels, NotificationLink (D-23)
 │       ├── System/                PlatformRequirements, Paths
 │       ├── Money.php              deal line totals (D-8)
 │       └── PhoneNumber.php        normalisation
@@ -635,15 +725,17 @@ CRM_Project/
 │                                  DEPLOYMENT.md, OPERATIONS.md, Static_Analysis_Known_False_Positives.md; not built: MODULES.md, DESIGN_TOKENS.md
 ├── lang/{ar,en}/                  app, navigation, enums, auth, passwords, validation, pagination, dashboard, leads, contacts, accounts, deals,
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
-│                                  views, imports, reports, activity, notifications, backups, task_templates
+│                                  views, imports, reports, activity, notifications, backups, task_templates, workspaces (D-23), landing (D-24)
 ├── lang/vendor/                   Filament Arabic gap patches
-├── resources/css/                 filament/admin/theme.css (the panel is the whole front end; no non-panel stylesheet)
+├── resources/css/                 filament/admin/theme.css (shared by all five panels and the landing page; no other stylesheet)
 ├── resources/js/                  calendar.js
-├── resources/views/filament/      pages/ (incl. system/backups), widgets/, components/timeline/, activity-log/
+├── resources/views/filament/      pages/ (incl. system/backups, workspaces, workspace-home), partials/workspace-switcher, widgets/,
+│                                  components/timeline/, activity-log/
+├── resources/views/landing/       index + partials/ (the public landing page, D-24)
 ├── resources/views/mail/          crm-message (D-10), weekly-summary (the markdown mail of D-18)
 ├── routes/                        web.php, console.php
 ├── tests/                         Concerns/, Support/, Feature/{Access,Audit,Leads,Contacts,Accounts,Deals,Activities,Tasks,Attachments,Imports,
-│                                  Views,Search,Filament,Isolation,Qa,Seeders,System,Domain,Statistics,Localization}, Unit/{Services,Deployment}
+│                                  Views,Search,Filament,Isolation,Qa,Seeders,System,Domain,Statistics,Localization,Workspaces,Landing}, Unit/{Services,Deployment}
 ├── tools/                         ramp.mjs (colour ramps)
 ├── .github/workflows/             ci.yml (lint, analyse, test on push/PR); deploy.yml (release archive + SSH deploy after green CI on master, or by hand);
 │                                  uptime.yml (every 15 minutes: /up incl. scheduler heartbeat, D-16)
@@ -669,6 +761,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-22 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-25 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

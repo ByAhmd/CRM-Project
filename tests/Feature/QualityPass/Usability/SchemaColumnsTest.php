@@ -346,7 +346,7 @@ final class SchemaColumnsTest extends TestCase
     }
 
     /**
-     * Every form and infolist schema of the panel, plus the stage form, which
+     * Every form and infolist schema of every panel, plus the stage form, which
      * is served by the pipeline's relation manager rather than a resource page
      * and would otherwise escape the walk.
      *
@@ -356,9 +356,15 @@ final class SchemaColumnsTest extends TestCase
     {
         $schemas = [];
 
-        foreach (Filament::getPanel('admin')->getResources() as $resource) {
-            $schemas[$resource.'::form'] = $resource::form(Schema::make());
-            $schemas[$resource.'::infolist'] = $resource::infolist(Schema::make());
+        // Every panel's resources (D-23): one panel alone would let the
+        // schemas of the other workspaces drop out of the walk silently.
+        foreach (Filament::getPanels() as $panel) {
+            Filament::setCurrentPanel($panel);
+
+            foreach ($panel->getResources() as $resource) {
+                $schemas[$resource.'::form'] = $resource::form(Schema::make());
+                $schemas[$resource.'::infolist'] = $resource::infolist(Schema::make());
+            }
         }
 
         $schemas[PipelineStageForm::class] = PipelineStageForm::configure(

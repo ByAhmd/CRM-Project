@@ -10,6 +10,7 @@ use App\Enums\Permission;
 use App\Enums\TaskStatus;
 use App\Enums\TaskUpdateKind;
 use App\Enums\UserStatus;
+use App\Enums\WorkspacePanel;
 use App\Filament\Pages\TasksBoard;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
@@ -362,6 +363,7 @@ final class WeeklySummaryTest extends TestCase
         $this->assertStringContainsString('No open task is overdue.', $html);
         $this->assertStringContainsString(TasksBoard::getUrl(), $html);
         $this->assertStringNotContainsString('System health', $html);
+        $this->assertUrlInWorkspace(WorkspacePanel::Tasks, TaskResource::getUrl('view', ['record' => $stuck]));
         $this->assertStringNotContainsString(TaskResource::getUrl('view', ['record' => $stuck]), $html, 'no task link without a readable id');
     }
 

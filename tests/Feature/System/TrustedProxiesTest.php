@@ -114,19 +114,19 @@ final class TrustedProxiesTest extends TestCase
         config()->set('crm.trusted_proxies', null);
 
         $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])
-            ->get(self::ORIGIN.'/admin/login', $this->forwardedHeaders())
+            ->get(self::ORIGIN.'/app/login', $this->forwardedHeaders())
             ->assertOk()
             ->assertHeaderMissing('Strict-Transport-Security');
 
         config()->set('crm.trusted_proxies', self::PROXY);
 
         $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])
-            ->get(self::ORIGIN.'/admin/login', $this->forwardedHeaders())
+            ->get(self::ORIGIN.'/app/login', $this->forwardedHeaders())
             ->assertOk()
             ->assertHeaderMissing('Strict-Transport-Security');
 
         $this->withServerVariables(['REMOTE_ADDR' => self::PROXY])
-            ->get(self::ORIGIN.'/admin/login', $this->forwardedHeaders())
+            ->get(self::ORIGIN.'/app/login', $this->forwardedHeaders())
             ->assertOk()
             ->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }

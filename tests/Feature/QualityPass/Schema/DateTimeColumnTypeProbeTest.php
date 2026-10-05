@@ -33,6 +33,8 @@ final class DateTimeColumnTypeProbeTest extends TestCase
         'activities' => ['occurred_at'],
         // D-14 amendment (2026-09-28): the moment of a progress-log entry.
         'task_updates' => ['created_at'],
+        // D-25: the moment a checklist item was ticked.
+        'task_checklist_items' => ['completed_at'],
     ];
 
     #[Test]

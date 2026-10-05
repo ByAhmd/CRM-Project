@@ -42,11 +42,22 @@ final class CompletenessProbeTest extends TestCase
         $this->usePanel();
         $this->actingAs($this->superAdmin());
 
+        // D-23: a resource is offered in global search only inside a panel
+        // whose search field is switched on, so the walk covers every panel
+        // and counts a resource only where its panel has a search provider.
         $searchable = [];
 
-        foreach (Filament::getCurrentOrDefaultPanel()->getResources() as $resource) {
-            if (is_subclass_of($resource, FilamentResource::class) && $resource::canGloballySearch()) {
-                $searchable[] = $resource;
+        foreach (Filament::getPanels() as $panel) {
+            Filament::setCurrentPanel($panel);
+
+            if ($panel->getGlobalSearchProvider() === null) {
+                continue;
+            }
+
+            foreach ($panel->getResources() as $resource) {
+                if (is_subclass_of($resource, FilamentResource::class) && $resource::canGloballySearch()) {
+                    $searchable[] = $resource;
+                }
             }
         }
 

@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Tasks;
 
 use App\Enums\NavigationGroup;
 use App\Enums\VisibilityLevel;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Activities\ActivityResource;
@@ -48,6 +49,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class TaskResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Task::class;
@@ -60,7 +62,7 @@ final class TaskResource extends Resource
 
     public static function getNavigationGroup(): NavigationGroup
     {
-        return NavigationGroup::Activities;
+        return NavigationGroup::Tasks;
     }
 
     public static function getNavigationLabel(): string

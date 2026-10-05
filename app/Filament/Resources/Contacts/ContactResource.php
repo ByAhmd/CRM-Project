@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Contacts;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Contacts\Pages\CreateContact;
 use App\Filament\Resources\Contacts\Pages\EditContact;
@@ -32,6 +33,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class ContactResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Contact::class;

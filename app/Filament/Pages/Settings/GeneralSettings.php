@@ -6,6 +6,7 @@ namespace App\Filament\Pages\Settings;
 
 use App\Enums\NavigationGroup;
 use App\Enums\Permission;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Models\User;
 use App\Services\Settings\SettingsRepository;
 use BackedEnum;
@@ -30,6 +31,8 @@ use Filament\Support\Icons\Heroicon;
  */
 final class GeneralSettings extends Page
 {
+    use BuildsPageUrlsInOwningPanel;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
     protected static ?int $navigationSort = 90;

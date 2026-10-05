@@ -51,7 +51,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * current assignee (D-21) — is written by TaskAssignmentStampObserver only.
  * `template_id` links a task to the routine that created it (D-22): written
  * via forceFill by RoutineTaskService only, never fillable, and cleared when
- * the routine is deleted.
+ * the routine is deleted. The checklist (D-25, `checklistItems`) is written
+ * by TaskService only: its structure by whoever may edit the task, its ticks
+ * by whoever may report on it while the task is open.
  *
  * @property ?int $assigned_by
  * @property ?int $template_id
@@ -267,6 +269,17 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
     public function updates(): HasMany
     {
         return $this->hasMany(TaskUpdate::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    /**
+     * The checklist (D-25), in its order. Read it eagerly or through
+     * TaskChecklist::counts() — never as a lazy property.
+     *
+     * @return HasMany<TaskChecklistItem, $this>
+     */
+    public function checklistItems(): HasMany
+    {
+        return $this->hasMany(TaskChecklistItem::class)->orderBy('position')->orderBy('id');
     }
 
     /**

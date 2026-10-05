@@ -137,6 +137,7 @@ return [
             'account' => 'Account',
             'deal' => 'Deal',
             'recurrence_frequency' => 'Repeats',
+            'checklist' => 'Checklist (done of total)',
             'description' => 'Description',
             'created_at' => 'Created',
         ],
@@ -188,6 +189,8 @@ return [
     'values' => [
         'yes' => 'Yes',
         'no' => 'No',
+        // Words, not "2/3": a spreadsheet opening the CSV reads a bare 2/3 as a date.
+        'checklist_progress' => ':done of :total',
     ],
 
     'empty' => [

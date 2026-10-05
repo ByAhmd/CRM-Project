@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CrmRole;
 use App\Enums\UserStatus;
+use App\Services\Access\PanelAccess;
 use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
@@ -120,10 +121,13 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
         return $this->hasMany(NotificationPreference::class);
     }
 
-    /** Only active accounts may enter the panel; roles decide what they see inside. */
+    /**
+     * Only active accounts enter any panel; a workspace also needs its
+     * `workspace.*` permission (D-23). The rule lives in PanelAccess.
+     */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->status->canAuthenticate();
+        return app(PanelAccess::class)->canAccess($this, $panel);
     }
 
     public function isSuperAdmin(): bool

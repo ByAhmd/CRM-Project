@@ -21,6 +21,9 @@ use Illuminate\Validation\Rule;
  */
 final class RoleForm
 {
+    /** The permission group of the four workspace keys (D-23). */
+    private const string WORKSPACE_GROUP = 'workspace';
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -60,6 +63,14 @@ final class RoleForm
                     ])
                     ->columns(['default' => 1, 'lg' => 2]),
 
+                // D-23: which workspaces the role may enter, ahead of what it
+                // may do inside them. Same `permissions.<group>` state as every
+                // other list, so RoleService saves it like any permission.
+                Section::make(__('roles.sections.workspaces'))
+                    ->description(__('roles.helpers.workspaces'))
+                    ->schema([self::permissionList(self::WORKSPACE_GROUP, Permission::workspaces())->hiddenLabel()])
+                    ->columns(1),
+
                 Section::make(__('roles.sections.permissions'))
                     ->description(__('roles.helpers.permissions'))
                     ->schema(self::permissionGroups())
@@ -69,7 +80,8 @@ final class RoleForm
     }
 
     /**
-     * One checkbox list per permission group, in enum declaration order.
+     * One checkbox list per permission group, in enum declaration order; the
+     * workspace keys have their own section above.
      *
      * @return list<CheckboxList>
      */
@@ -78,19 +90,31 @@ final class RoleForm
         $lists = [];
 
         foreach (Permission::grouped() as $group => $permissions) {
-            $options = [];
-
-            foreach ($permissions as $permission) {
-                $options[$permission->value] = $permission->label();
+            if ($group === self::WORKSPACE_GROUP) {
+                continue;
             }
 
-            $lists[] = CheckboxList::make('permissions.'.$group)
-                ->label(__('permissions.groups.'.$group))
-                ->options($options)
-                ->bulkToggleable()
-                ->columns(3);
+            $lists[] = self::permissionList($group, $permissions);
         }
 
         return $lists;
+    }
+
+    /**
+     * @param  list<Permission>  $permissions
+     */
+    private static function permissionList(string $group, array $permissions): CheckboxList
+    {
+        $options = [];
+
+        foreach ($permissions as $permission) {
+            $options[$permission->value] = $permission->label();
+        }
+
+        return CheckboxList::make('permissions.'.$group)
+            ->label(__('permissions.groups.'.$group))
+            ->options($options)
+            ->bulkToggleable()
+            ->columns(3);
     }
 }

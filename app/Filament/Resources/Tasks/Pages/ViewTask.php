@@ -20,7 +20,9 @@ use Illuminate\Database\Eloquent\Model;
  * cancel, delete and restore stay with those TaskPolicy lets edit it; anyone
  * who may view the task may comment on it, mentioning colleagues (D-20). The
  * thread — progress entries and comments — its authors and the colleagues
- * its comments mention are loaded with the record.
+ * its comments mention are loaded with the record, and so are the checklist
+ * items and who ticked them (D-25), which whoever may report on the task
+ * ticks through the "Checklist" action.
  */
 final class ViewTask extends ViewRecord
 {
@@ -30,7 +32,7 @@ final class ViewTask extends ViewRecord
     {
         $record = parent::resolveRecord($key);
 
-        return $record instanceof Task ? $record->loadMissing(['updates.author', 'updates.mentions.user']) : $record;
+        return $record instanceof Task ? $record->loadMissing(['updates.author', 'updates.mentions.user', 'checklistItems.completer']) : $record;
     }
 
     protected function getHeaderActions(): array
@@ -38,6 +40,7 @@ final class ViewTask extends ViewRecord
         return [
             TaskActions::start(),
             TaskActions::postUpdate(),
+            TaskActions::checklist(),
             TaskActions::comment(),
             TaskActions::complete(),
             TaskActions::cancel(),

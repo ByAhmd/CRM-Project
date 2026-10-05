@@ -100,12 +100,22 @@ final class StructuralGuardsTest extends TestCase
     #[Test]
     public function every_resource_model_has_a_policy_and_owned_models_scope_their_queries(): void
     {
-        Filament::setCurrentPanel('admin');
+        // D-23: every panel's resources; walking one panel would silently
+        // stop checking the others.
+        $resources = [];
+
+        foreach (Filament::getPanels() as $panel) {
+            foreach ($panel->getResources() as $resource) {
+                $resources[$resource] = $resource;
+            }
+        }
+
+        $this->assertCount(count(glob(app_path('Filament/Resources/*/*Resource.php')) ?: []), $resources, 'sanity: the guard walks every resource class the application declares');
 
         $withoutPolicy = [];
         $unscoped = [];
 
-        foreach (Filament::getResources() as $resource) {
+        foreach ($resources as $resource) {
             $model = $resource::getModel();
 
             if (Gate::getPolicyFor($model) === null) {

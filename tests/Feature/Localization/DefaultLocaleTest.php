@@ -23,7 +23,7 @@ final class DefaultLocaleTest extends TestCase
     {
         $this->withHeaders(['Accept-Language' => 'en-US,en;q=0.9']);
 
-        $this->get('/admin/login')
+        $this->get('/app/login')
             ->assertOk()
             ->assertSee('dir="rtl"', escape: false);
 
@@ -36,7 +36,7 @@ final class DefaultLocaleTest extends TestCase
     {
         $this->withSession(['locale' => 'en'])->withHeaders(['Accept-Language' => 'ar-SA,ar;q=0.9']);
 
-        $this->get('/admin/login')
+        $this->get('/app/login')
             ->assertOk()
             ->assertSee('dir="ltr"', escape: false)
             ->assertSee('lang="en"', escape: false);
@@ -59,7 +59,7 @@ final class DefaultLocaleTest extends TestCase
 
         $this->actingAs($user)
             ->withHeaders(['Accept-Language' => 'ar-SA,ar;q=0.9'])
-            ->get('/admin')
+            ->get('/app')
             ->assertOk()
             ->assertSee('lang="en"', escape: false);
     }

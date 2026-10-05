@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Dashboard;
 
-use App\Filament\Pages\Dashboard;
+use App\Enums\Permission;
+use App\Filament\Pages\SalesDashboard;
+use App\Filament\Pages\TasksDashboard;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
 use App\Filament\Widgets\MyTasksTodayWidget;
@@ -18,6 +20,7 @@ use App\Models\Lead;
 use App\Models\Pipeline;
 use App\Models\User;
 use App\Services\Statistics\DashboardFilters;
+use App\Support\Filament\PanelUrl;
 use Closure;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,10 +31,13 @@ use Tests\Concerns\CreatesCrmFixtures;
 use Tests\TestCase;
 
 /**
- * The dashboard page (plan section 3.9): it opens for every seeded role,
- * the filters form defaults to the organisation's current month and
- * validates the period, and the owner and team filters show only to a
- * viewer whose deal visibility reaches that far (D-4).
+ * The dashboard pages (plan section 3.9, D-23): the sales dashboard — the
+ * Sales workspace's home — opens for every role that enters Sales, the
+ * filters form defaults to the organisation's current month and validates
+ * the period, and the owner and team filters show only to a viewer whose
+ * deal visibility reaches that far (D-4). The two task lists that used to
+ * sit beside the sales widgets are the Tasks workspace's home, open to every
+ * seeded role, the employee included (D-15).
  */
 final class DashboardPageTest extends TestCase
 {
@@ -54,6 +60,7 @@ final class DashboardPageTest extends TestCase
         $team = $this->makeTeam();
 
         foreach ([
+            $this->superAdmin(),
             $this->admin(),
             $this->salesManager($team),
             $this->salesRep($team),
@@ -61,7 +68,7 @@ final class DashboardPageTest extends TestCase
             $this->readOnly(),
         ] as $user) {
             $this->actingAs($user)
-                ->get(Dashboard::getUrl())
+                ->get(SalesDashboard::getUrl())
                 ->assertOk()
                 ->assertSee(__('dashboard.title'))
                 ->assertSee(__('dashboard.filters.period'))
@@ -70,12 +77,45 @@ final class DashboardPageTest extends TestCase
                 ->assertSee(self::widgetName(LeadsByStatusChart::class), false)
                 ->assertSee(self::widgetName(PipelineByStageChart::class), false)
                 ->assertSee(self::widgetName(RevenueWonByMonthChart::class), false)
+                ->assertSee(self::widgetName(StaleDealsWidget::class), false)
+                ->assertSee(self::widgetName(ActivityCountsWidget::class), false)
+                // D-23: the task lists moved to the Tasks workspace's home.
+                ->assertDontSee(self::widgetName(MyTasksTodayWidget::class), false)
+                ->assertDontSee(self::widgetName(UpcomingFollowUpsWidget::class), false);
+
+            Livewire::actingAs($user)->test(SalesDashboard::class)->assertOk();
+        }
+
+        // D-23 + D-15: the employee does not enter the Sales workspace.
+        $this->actingAs($this->employee())->get(SalesDashboard::getUrl())->assertForbidden();
+    }
+
+    #[Test]
+    public function the_tasks_dashboard_renders_the_two_task_lists_for_every_seeded_role(): void
+    {
+        $team = $this->makeTeam();
+
+        foreach ([
+            $this->superAdmin(),
+            $this->admin(),
+            $this->salesManager($team),
+            $this->salesRep($team),
+            $this->support(),
+            $this->readOnly(),
+            $this->employee(),
+        ] as $user) {
+            $this->actingAs($user)
+                ->get(TasksDashboard::getUrl())
+                ->assertOk()
+                ->assertSee(__('workspaces.pages.tasks_home.title'))
                 ->assertSee(self::widgetName(MyTasksTodayWidget::class), false)
                 ->assertSee(self::widgetName(UpcomingFollowUpsWidget::class), false)
-                ->assertSee(self::widgetName(StaleDealsWidget::class), false)
-                ->assertSee(self::widgetName(ActivityCountsWidget::class), false);
+                // Fixed windows inside the viewer's scope: no filters, and no sales widget.
+                ->assertDontSee(__('dashboard.filters.reset'))
+                ->assertDontSee(self::widgetName(SalesKpisWidget::class), false)
+                ->assertDontSee(self::widgetName(ActivityCountsWidget::class), false);
 
-            Livewire::actingAs($user)->test(Dashboard::class)->assertOk();
+            Livewire::actingAs($user)->test(TasksDashboard::class)->assertOk();
         }
     }
 
@@ -83,7 +123,7 @@ final class DashboardPageTest extends TestCase
     public function the_default_period_is_the_current_month_of_the_organisation(): void
     {
         Livewire::actingAs($this->salesRep())
-            ->test(Dashboard::class)
+            ->test(SalesDashboard::class)
             ->assertSet('filters.from', self::onDay('2026-09-01'))
             ->assertSet('filters.to', self::onDay('2026-09-30'))
             ->assertSet('filters.pipeline_id', null)
@@ -93,7 +133,7 @@ final class DashboardPageTest extends TestCase
     #[Test]
     public function the_filters_form_refuses_a_reversed_period_and_one_wider_than_a_year(): void
     {
-        $page = Livewire::actingAs($this->admin())->test(Dashboard::class);
+        $page = Livewire::actingAs($this->admin())->test(SalesDashboard::class);
 
         $page->set('filters.to', '2026-08-15')
             ->assertHasErrors(['filters.to']);
@@ -117,18 +157,18 @@ final class DashboardPageTest extends TestCase
         $team = $this->makeTeam();
 
         Livewire::actingAs($this->salesRep($team))
-            ->test(Dashboard::class)
+            ->test(SalesDashboard::class)
             ->assertSchemaComponentHidden('owner_id', 'filtersForm')
             ->assertSchemaComponentHidden('team_id', 'filtersForm')
             ->assertSchemaComponentVisible('pipeline_id', 'filtersForm');
 
         Livewire::actingAs($this->salesManager($team))
-            ->test(Dashboard::class)
+            ->test(SalesDashboard::class)
             ->assertSchemaComponentVisible('owner_id', 'filtersForm')
             ->assertSchemaComponentHidden('team_id', 'filtersForm');
 
         Livewire::actingAs($this->admin())
-            ->test(Dashboard::class)
+            ->test(SalesDashboard::class)
             ->assertSchemaComponentVisible('owner_id', 'filtersForm')
             ->assertSchemaComponentVisible('team_id', 'filtersForm');
     }
@@ -141,8 +181,8 @@ final class DashboardPageTest extends TestCase
         $rep = $this->salesRep($team);
         $outsider = $this->salesRep();
 
-        $page = Livewire::actingAs($manager)->test(Dashboard::class)->instance();
-        assert($page instanceof Dashboard);
+        $page = Livewire::actingAs($manager)->test(SalesDashboard::class)->instance();
+        assert($page instanceof SalesDashboard);
 
         $owner = $page->getFiltersForm()->getFlatFields(withHidden: true)['owner_id'] ?? null;
         assert($owner instanceof Select);
@@ -159,8 +199,8 @@ final class DashboardPageTest extends TestCase
         $active = Pipeline::query()->where('is_default', true)->firstOrFail();
         $inactive = Pipeline::factory()->create(['is_active' => false, 'is_default' => false, 'name_en' => 'Legacy', 'name_ar' => 'قديم']);
 
-        $page = Livewire::actingAs($this->admin())->test(Dashboard::class)->instance();
-        assert($page instanceof Dashboard);
+        $page = Livewire::actingAs($this->admin())->test(SalesDashboard::class)->instance();
+        assert($page instanceof SalesDashboard);
 
         $pipeline = $page->getFiltersForm()->getFlatFields(withHidden: true)['pipeline_id'] ?? null;
         assert($pipeline instanceof Select);
@@ -177,7 +217,7 @@ final class DashboardPageTest extends TestCase
 
         // Reversed: the state the widgets use is the state the form shows, without a stale error.
         Livewire::actingAs($this->admin())
-            ->test(Dashboard::class, ['filters' => ['from' => '2026-08-15', 'to' => '2026-08-01', 'pipeline_id' => $pipeline->getKey()]])
+            ->test(SalesDashboard::class, ['filters' => ['from' => '2026-08-15', 'to' => '2026-08-01', 'pipeline_id' => $pipeline->getKey()]])
             ->assertHasNoErrors()
             ->assertSet('filters.from', self::onDay('2026-09-01'))
             ->assertSet('filters.to', self::onDay('2026-09-30'))
@@ -186,7 +226,7 @@ final class DashboardPageTest extends TestCase
 
         // Wider than a year.
         Livewire::actingAs($this->admin())
-            ->test(Dashboard::class, ['filters' => ['from' => '2025-08-01', 'to' => '2026-09-30']])
+            ->test(SalesDashboard::class, ['filters' => ['from' => '2025-08-01', 'to' => '2026-09-30']])
             ->assertHasNoErrors()
             ->assertSet('filters.from', self::onDay('2026-09-01'))
             ->assertSet('filters.to', self::onDay('2026-09-30'))
@@ -194,7 +234,7 @@ final class DashboardPageTest extends TestCase
 
         // A valid period is kept as it came.
         Livewire::actingAs($this->admin())
-            ->test(Dashboard::class, ['filters' => ['from' => '2026-08-01', 'to' => '2026-08-31', 'pipeline_id' => $pipeline->getKey()]])
+            ->test(SalesDashboard::class, ['filters' => ['from' => '2026-08-01', 'to' => '2026-08-31', 'pipeline_id' => $pipeline->getKey()]])
             ->assertHasNoErrors()
             ->assertSet('filters.from', self::onDay('2026-08-01'))
             ->assertSet('filters.to', self::onDay('2026-08-31'))
@@ -208,7 +248,7 @@ final class DashboardPageTest extends TestCase
         $pipeline = Pipeline::query()->where('is_default', true)->firstOrFail();
 
         Livewire::actingAs($this->admin())
-            ->test(Dashboard::class)
+            ->test(SalesDashboard::class)
             ->set('filters.from', '2026-08-01')
             ->set('filters.to', '2026-08-31')
             ->set('filters.pipeline_id', $pipeline->getKey())
@@ -232,7 +272,7 @@ final class DashboardPageTest extends TestCase
         Deal::factory()->create(['owner_id' => $other->getKey(), 'title' => 'Their open deal']);
 
         $this->actingAs($rep)
-            ->get(Dashboard::getUrl())
+            ->get(SalesDashboard::getUrl())
             ->assertOk()
             ->assertSee(self::widgetName(SalesKpisWidget::class), false)
             ->assertSee(self::widgetName(StaleDealsWidget::class), false);
@@ -247,7 +287,7 @@ final class DashboardPageTest extends TestCase
 
         // A filter arriving through the URL with an owner outside reach is ignored, not honoured.
         Livewire::actingAs($rep)
-            ->test(Dashboard::class, ['filters' => ['from' => '2026-09-01', 'to' => '2026-09-30', 'owner_id' => $other->getKey()]])
+            ->test(SalesDashboard::class, ['filters' => ['from' => '2026-09-01', 'to' => '2026-09-30', 'owner_id' => $other->getKey()]])
             ->assertSet('filters.owner_id', $other->getKey())
             ->assertOk();
 
@@ -265,7 +305,8 @@ final class DashboardPageTest extends TestCase
     #[Test]
     public function the_widget_grid_and_every_widget_span_are_declared_per_breakpoint(): void
     {
-        $this->assertSame(['default' => 1, 'md' => 2], (new Dashboard)->getColumns());
+        $this->assertSame(['default' => 1, 'md' => 2], (new SalesDashboard)->getColumns());
+        $this->assertSame(['default' => 1, 'md' => 2], (new TasksDashboard)->getColumns());
 
         // Full width at every breakpoint. ActivityCounts is the LAST widget
         // and has no partner: at half width it would sit beside a permanently
@@ -279,21 +320,47 @@ final class DashboardPageTest extends TestCase
             $this->assertSame(['default' => 'full', 'md' => 1], (new $widget)->getColumnSpan(), $widget);
         }
 
-        // Tables: full width up to lg — half a tablet cannot hold one — then paired.
+        // The Tasks workspace's two lists: full width up to lg — half a
+        // tablet cannot hold a table — then paired with each other.
+        $this->assertSame([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class], (new TasksDashboard)->getWidgets());
+
         foreach ([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class] as $widget) {
             $this->assertSame(['default' => 'full', 'lg' => 1], (new $widget)->getColumnSpan(), $widget);
         }
     }
 
     #[Test]
-    public function a_user_without_any_permission_sees_the_page_without_widgets(): void
+    public function a_user_who_enters_a_workspace_but_holds_nothing_else_sees_its_home_without_widgets(): void
+    {
+        $salesOnly = $this->userWithPermissions(null, [Permission::WorkspaceSales]);
+
+        $this->actingAs($salesOnly)
+            ->get(SalesDashboard::getUrl())
+            ->assertOk()
+            ->assertSee(__('dashboard.title'))
+            ->assertDontSee(__('dashboard.filters.reset'))
+            ->assertDontSee(self::widgetName(SalesKpisWidget::class), false)
+            ->assertDontSee(self::widgetName(ActivityCountsWidget::class), false);
+
+        $this->actingAs($this->userWithPermissions(null, [Permission::WorkspaceTasks]))
+            ->get(TasksDashboard::getUrl())
+            ->assertOk()
+            ->assertSee(__('workspaces.pages.tasks_home.title'))
+            ->assertDontSee(self::widgetName(MyTasksTodayWidget::class), false)
+            ->assertDontSee(self::widgetName(UpcomingFollowUpsWidget::class), false);
+    }
+
+    #[Test]
+    public function a_user_without_any_permission_is_refused_both_dashboards_and_lands_on_the_workspace_screen(): void
     {
         $nobody = User::factory()->create();
 
+        $this->actingAs($nobody)->get(SalesDashboard::getUrl())->assertForbidden();
+        $this->actingAs($nobody)->get(TasksDashboard::getUrl())->assertForbidden();
+
         $this->actingAs($nobody)
-            ->get(Dashboard::getUrl())
+            ->get(PanelUrl::workspaceScreen())
             ->assertOk()
-            ->assertSee(__('dashboard.title'))
             ->assertDontSee(self::widgetName(SalesKpisWidget::class), false)
             ->assertDontSee(self::widgetName(MyTasksTodayWidget::class), false)
             ->assertDontSee(self::widgetName(ActivityCountsWidget::class), false);

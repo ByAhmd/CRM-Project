@@ -11,6 +11,8 @@ use App\Models\TaskTemplate;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Tasks\RoutineTaskService;
+use App\Services\Tasks\TaskChecklist;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -31,7 +33,9 @@ use Illuminate\Validation\ValidationException;
  * plus — on an edit — the routine's current assignees whatever their state,
  * so the form shows who is on it; RoutineTaskService refuses to save an
  * assignee the actor may not reach, so one who left that reach has to be
- * taken off. The service re-validates everything the form checks.
+ * taken off. The checklist (D-25) is a list of lines copied, unticked, into
+ * every task the routine creates. The service re-validates everything the
+ * form checks.
  */
 final class TaskTemplateForm
 {
@@ -134,6 +138,31 @@ final class TaskTemplateForm
                             ->native(false),
                     ])
                     ->columns(1),
+
+                // The steps every task of the routine carries, copied unticked
+                // (D-25). A plain repeater: RoutineTaskService replaces the
+                // rows and records the change.
+                Section::make(__('task_templates.sections.checklist'))
+                    ->description(__('task_templates.helpers.checklist'))
+                    ->schema([
+                        Repeater::make('checklist')
+                            ->label(__('task_templates.sections.checklist'))
+                            ->hiddenLabel()
+                            ->simple(
+                                TextInput::make('body')
+                                    ->label(__('task_templates.fields.checklist_item'))
+                                    ->placeholder(__('task_templates.placeholders.checklist_item'))
+                                    ->required()
+                                    ->maxLength(TaskChecklist::BODY_MAX),
+                            )
+                            ->addActionLabel(__('task_templates.actions.add_checklist_item'))
+                            ->reorderable()
+                            ->maxItems(TaskChecklist::MAX_ITEMS)
+                            ->defaultItems(0)
+                            ->default([]),
+                    ])
+                    ->columns(1)
+                    ->collapsible(),
             ])
             ->columns(1);
     }

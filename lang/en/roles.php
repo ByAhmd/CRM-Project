@@ -11,6 +11,7 @@ return [
     ],
 
     'sections' => [
+        'workspaces' => 'Workspaces',
         'details' => 'Role details',
         'permissions' => 'Permissions',
     ],
@@ -30,6 +31,7 @@ return [
     ],
 
     'helpers' => [
+        'workspaces' => 'The workspaces holders of this role may enter from the control panel. Inside each one, the permissions below still decide every screen.',
         'key' => 'Lowercase letters, digits and underscores only. Built-in roles keep their key.',
         'permissions' => 'Choose what holders of this role may do. View permissions are cumulative: "team records" includes own records, and "all records" includes everything.',
     ],

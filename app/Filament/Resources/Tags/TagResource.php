@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Tags;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\Tags\Pages\CreateTag;
 use App\Filament\Resources\Tags\Pages\EditTag;
 use App\Filament\Resources\Tags\Pages\ListTags;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class TagResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = Tag::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;

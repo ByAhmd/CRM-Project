@@ -6,6 +6,7 @@ namespace Tests\Feature\Tasks;
 
 use App\Enums\Permission;
 use App\Enums\TaskStatus;
+use App\Enums\WorkspacePanel;
 use App\Filament\Pages\Calendar;
 use App\Filament\Resources\Deals\Pages\ViewDeal;
 use App\Filament\Resources\Deals\RelationManagers\DealTasksRelationManager;
@@ -233,6 +234,7 @@ final class HandedOutTaskPolicyTest extends TestCase
         $own = app(TaskService::class)->create(['title' => 'My own follow-up', 'assignee_id' => $this->rep->getKey()], $this->rep);
 
         // The rendered list carries the edit link of the rep's own task only.
+        $this->assertUrlInWorkspace(WorkspacePanel::Tasks, TaskResource::getUrl('edit', ['record' => $task]));
         Livewire::actingAs($this->rep)
             ->test(ListTasks::class)
             ->assertSeeHtml(TaskResource::getUrl('edit', ['record' => $own]))

@@ -9,22 +9,28 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The panel boots, the root redirects into it, and the default locale/direction reach the HTML.
+ * The panels boot, the root is the public landing page (D-24) whose way in is the one sign-in
+ * page, the workspace screen sends a guest there (D-23), and the default locale/direction reach
+ * the HTML of the sign-in page.
  */
 final class PanelSmokeTest extends TestCase
 {
     use RefreshDatabase;
 
     #[Test]
-    public function the_root_url_redirects_to_the_admin_login(): void
+    public function the_root_url_is_the_landing_page_and_its_way_in_is_the_sign_in_page(): void
     {
-        $this->get('/')->assertRedirect('/admin/login');
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('href="'.url('/app/login').'"', escape: false);
+
+        $this->get('/app')->assertRedirect('/app/login');
     }
 
     #[Test]
-    public function the_admin_login_page_renders_in_arabic_and_rtl_by_default(): void
+    public function the_sign_in_page_renders_in_arabic_and_rtl_by_default(): void
     {
-        $this->get('/admin/login')
+        $this->get('/app/login')
             ->assertOk()
             ->assertSee('lang="ar"', escape: false)
             ->assertSee('dir="rtl"', escape: false);

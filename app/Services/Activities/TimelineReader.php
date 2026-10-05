@@ -6,13 +6,7 @@ namespace App\Services\Activities;
 
 use App\Enums\ActivityLogEvent;
 use App\Enums\TimelineEntryKind;
-use App\Filament\Resources\Accounts\AccountResource;
-use App\Filament\Resources\Activities\ActivityResource;
-use App\Filament\Resources\Contacts\ContactResource;
-use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Deals\Schemas\DealInfolist;
-use App\Filament\Resources\Leads\LeadResource;
-use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Account;
 use App\Models\Activity;
 use App\Models\ActivityLog;
@@ -31,6 +25,7 @@ use App\Services\Audit\ActivityLogPresenter;
 use App\Services\Audit\ActivityLogQuery;
 use App\Services\Notes\ReadableNoteScope;
 use App\Services\Settings\SettingsRepository;
+use App\Support\RecordUrl;
 use DateTimeInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -160,6 +155,18 @@ final class TimelineReader
     }
 
     /**
+     * The page of a record an entry points to, for this viewer: only when
+     * the viewer may open the record (its policy) and enter the workspace
+     * that owns its page (D-23) — a task on a sales record's timeline links
+     * into the Tasks workspace, so a viewer without it sees the entry
+     * unlinked rather than a link that answers 403.
+     */
+    private function link(User $viewer, Model $record): ?string
+    {
+        return $viewer->can('view', $record) ? RecordUrl::forReader($viewer, $record) : null;
+    }
+
+    /**
      * Every source merged, de-duplicated and sorted: the newest rows older
      * than `$before`, or — when `$at` is given — every row at exactly that
      * second, used to complete the group a page boundary fell into.
@@ -239,7 +246,7 @@ final class TimelineReader
                 sourceId: (int) $activity->getKey(),
                 body: self::excerpt($activity->body),
                 actor: $activity->owner?->name,
-                url: $viewer->can('view', $activity) ? ActivityResource::getUrl('view', ['record' => $activity]) : null,
+                url: $this->link($viewer, $activity),
                 badge: $activity->kind->getLabel(),
                 meta: array_filter([
                     __('timeline.fields.outcome') => $activity->outcome,
@@ -319,7 +326,7 @@ final class TimelineReader
             sourceId: (int) $task->getKey(),
             body: $completed ? null : self::excerpt($task->description),
             actor: $task->assignee?->name,
-            url: $viewer->can('view', $task) ? TaskResource::getUrl('view', ['record' => $task]) : null,
+            url: $this->link($viewer, $task),
             badge: $task->status->getLabel(),
             meta: array_filter([
                 __('timeline.fields.priority') => $task->priority->getLabel(),
@@ -496,7 +503,7 @@ final class TimelineReader
                     sourceId: (int) $log->getKey(),
                     body: self::excerpt(self::property($log, 'note')),
                     actor: $presenter->causerLabel(),
-                    url: $lead instanceof Lead && $viewer->can('view', $lead) ? LeadResource::getUrl('view', ['record' => $lead]) : null,
+                    url: $lead instanceof Lead ? $this->link($viewer, $lead) : null,
                     badge: __('timeline.fields.lead'),
                 );
             })
@@ -597,7 +604,6 @@ final class TimelineReader
     private function conversionEntry(ActivityLog $log, User $viewer, Carbon $occurredAt, string $actor, int $sourceId): TimelineEntry
     {
         $meta = [];
-        $links = [];
 
         $accountId = self::propertyId($log, 'account_id');
         $contactId = self::propertyId($log, 'contact_id');
@@ -623,17 +629,11 @@ final class TimelineReader
             $meta[__('timeline.fields.deal')] = $dealTitle;
         }
 
-        if ($account instanceof Account && $viewer->can('view', $account)) {
-            $links[__('timeline.fields.account')] = AccountResource::getUrl('view', ['record' => $account]);
-        }
-
-        if ($contact instanceof Contact && $viewer->can('view', $contact)) {
-            $links[__('timeline.fields.contact')] = ContactResource::getUrl('view', ['record' => $contact]);
-        }
-
-        if ($deal instanceof Deal && $viewer->can('view', $deal)) {
-            $links[__('timeline.fields.deal')] = DealResource::getUrl('view', ['record' => $deal]);
-        }
+        $links = array_filter([
+            __('timeline.fields.account') => $account instanceof Account ? $this->link($viewer, $account) : null,
+            __('timeline.fields.contact') => $contact instanceof Contact ? $this->link($viewer, $contact) : null,
+            __('timeline.fields.deal') => $deal instanceof Deal ? $this->link($viewer, $deal) : null,
+        ], static fn (?string $url): bool => $url !== null);
 
         return new TimelineEntry(
             kind: TimelineEntryKind::Conversion,

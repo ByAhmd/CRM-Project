@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Tasks;
 
 use App\Enums\CrmRole;
+use App\Enums\WorkspacePanel;
 use App\Filament\Pages\TasksBoard;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
@@ -106,6 +107,7 @@ final class TasksBoardPageTest extends TestCase
         $other = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
         $mine = Task::factory()->create(['assignee_id' => $viewer->getKey(), 'title' => 'My own call']);
         $foreign = Task::factory()->create(['assignee_id' => $other->getKey(), 'title' => 'Foreign follow-up']);
+        $this->assertUrlInWorkspace(WorkspacePanel::Tasks, TaskResource::getUrl('view', ['record' => $foreign]));
 
         Livewire::actingAs($viewer)
             ->test(TasksBoard::class)

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Tasks\Pages;
 
+use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Tasks\TaskChecklist;
 use App\Services\Tasks\TaskService;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\RestoreAction;
@@ -18,7 +20,8 @@ use Illuminate\Database\Eloquent\Model;
  * Editing goes through TaskService (A-10). The form's assignee field is
  * OwnerSelect's `owner_id`, filled from `assignee_id` here and mapped back
  * by the service; the status is read-only on the form and changes only
- * through the actions.
+ * through the actions. The checklist (D-25) is filled from the stored items,
+ * each with its id, and synced by the service.
  */
 final class EditTask extends EditRecord
 {
@@ -41,6 +44,13 @@ final class EditTask extends EditRecord
     {
         $data['owner_id'] = $data['assignee_id'] ?? null;
 
+        $record = $this->getRecord();
+        assert($record instanceof Task);
+
+        // The repeater always submits its state, so it must start from the
+        // stored items or the save would wipe them (D-25).
+        $data['checklist'] = TaskChecklist::formState($record);
+
         return $data;
     }
 
@@ -54,7 +64,7 @@ final class EditTask extends EditRecord
         $actor = auth()->user();
         assert($actor instanceof User);
 
-        return app(TaskService::class)->update($record, $data, $actor);
+        return TaskForm::saving(static fn (): Task => app(TaskService::class)->update($record, $data, $actor));
     }
 
     protected function getRedirectUrl(): string

@@ -6,6 +6,7 @@ namespace App\Filament\Pages\Reports;
 
 use App\Enums\NavigationGroup;
 use App\Enums\Permission;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Exports\Reports\ReportRowExporter;
 use App\Models\Pipeline;
 use App\Models\Team;
@@ -56,6 +57,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 abstract class BaseReportPage extends Page
 {
+    use BuildsPageUrlsInOwningPanel;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     protected string $view = 'filament.pages.reports.report';

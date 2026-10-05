@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\LeadSources;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\LeadSources\Pages\CreateLeadSource;
 use App\Filament\Resources\LeadSources\Pages\EditLeadSource;
 use App\Filament\Resources\LeadSources\Pages\ListLeadSources;
@@ -22,6 +23,8 @@ use Filament\Tables\Table;
  */
 final class LeadSourceResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = LeadSource::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFunnel;

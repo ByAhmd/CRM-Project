@@ -67,7 +67,7 @@ final class UserInvitationTest extends TestCase
             $mail = $notification->toMail($user);
 
             return $channels === ['mail']
-                && str_contains((string) $mail->actionUrl, '/admin/password-reset/reset')
+                && str_contains((string) $mail->actionUrl, '/app/password-reset/reset')
                 && str_contains((string) $mail->actionUrl, 'sara%40example.com');
         });
 

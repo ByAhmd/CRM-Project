@@ -10,6 +10,7 @@ use App\Filament\Resources\TaskTemplates\TaskTemplateResource;
 use App\Models\TaskTemplate;
 use App\Models\User;
 use App\Services\Tasks\RoutineTaskService;
+use App\Services\Tasks\TaskChecklist;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
@@ -17,7 +18,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Editing a routine goes through RoutineTaskService (D-22): saving makes the
  * actor its assigner, and a changed schedule recomputes its next run day from
- * today. The assignees are filled from the pivot; pausing, resuming and
+ * today. The assignees are filled from the pivot and the checklist from its
+ * rows (D-25); pausing, resuming and
  * deleting are header actions.
  */
 final class EditTaskTemplate extends EditRecord
@@ -44,6 +46,8 @@ final class EditTaskTemplate extends EditRecord
 
         $data['assignees'] = $record->assignees()->pluck('users.id')->map(static fn (mixed $id): int => (int) $id)->all();
         $data['due_time'] = substr((string) ($data['due_time'] ?? RoutineTaskService::DEFAULT_DUE_TIME), 0, 5);
+        // The repeater submits its whole state, so it starts from the stored lines (D-25).
+        $data['checklist'] = TaskChecklist::templateBodies($record);
 
         return $data;
     }

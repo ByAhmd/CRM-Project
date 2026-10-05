@@ -11,12 +11,14 @@ use App\Filament\Exports\TaskExporter;
 use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\ImportExportActions;
+use App\Filament\Support\LtrText;
 use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\TaskActions;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Settings\SettingsRepository;
+use App\Services\Tasks\TaskChecklist;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -47,7 +49,7 @@ final class TasksTable
     {
         return $table
             // Phone budget: title, status and due date stay at every width;
-            // kind, priority and the recurrence marker step in from `md`, the
+            // kind, priority, the checklist progress and the recurrence marker step in from `md`, the
             // assignee and the related record from `lg`. CSS breakpoints only —
             // the cells stay in the DOM.
             ->columns([
@@ -101,6 +103,17 @@ final class TasksTable
                         ->visibleFrom('lg'),
                 ] : [],
 
+                // Checklist progress (D-25), "done/total", from the counts the
+                // query below adds — no query per row.
+                LtrText::column(
+                    TextColumn::make('checklist_progress')
+                        ->label(__('tasks.fields.checklist'))
+                        ->state(fn (Task $record): ?string => TaskChecklist::progressLabel($record))
+                        ->color(fn (Task $record): ?string => self::checklistColor($record))
+                        ->placeholder(__('common.placeholders.empty'))
+                        ->visibleFrom('md'),
+                ),
+
                 IconColumn::make('recurrence_frequency')
                     ->label(__('tasks.fields.recurrence_frequency'))
                     ->icon(fn (Task $record): ?Heroicon => $record->repeats() ? Heroicon::OutlinedArrowPath : null)
@@ -114,6 +127,10 @@ final class TasksTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            // The checklist counts ride on the table query, not on the
+            // resource's base query, which the calendar and the tab badges
+            // share and which stays a plain `select * from tasks`.
+            ->modifyQueryUsing(fn (Builder $query): Builder => TaskChecklist::withCounts($query))
             ->defaultSort(fn (Builder $query): Builder => $query->orderBy('due_at')->orderBy('id'))
             ->filters([
                 SelectFilter::make('status')
@@ -166,6 +183,7 @@ final class TasksTable
                     EditAction::make(),
                     TaskActions::start(),
                     TaskActions::postUpdate(),
+                    TaskActions::checklist(),
                     TaskActions::comment(),
                     TaskActions::complete(),
                     TaskActions::cancel(),
@@ -187,5 +205,13 @@ final class TasksTable
             ])
             ->emptyStateHeading(__('tasks.empty.heading'))
             ->emptyStateDescription(__('tasks.empty.description'));
+    }
+
+    /** Success once every item is ticked, nothing otherwise. */
+    private static function checklistColor(Task $record): ?string
+    {
+        ['done' => $done, 'total' => $total] = TaskChecklist::counts($record);
+
+        return $total > 0 && $done === $total ? 'success' : null;
     }
 }

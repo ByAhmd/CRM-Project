@@ -40,6 +40,7 @@ return [
         'causer' => 'بواسطة',
         'recorded_at' => 'التاريخ والوقت',
         'from_to' => 'من «:old» إلى «:new»',
+        'list_separator' => '؛ ',
     ],
 
     'log_names' => [
@@ -123,6 +124,8 @@ return [
         'task.started' => 'بدء مهمة',
         'task.progress_posted' => 'نشر تحديث على مهمة',
         'task.commented' => 'تعليق على مهمة',
+        'task.checklist_changed' => 'تغيير قائمة تحقق مهمة',
+        'task.checklist_ticked' => 'تأشير على قائمة تحقق مهمة',
         'note.created' => 'إضافة ملاحظة',
         'note.updated' => 'تعديل ملاحظة',
         'note.deleted' => 'حذف ملاحظة',
@@ -317,6 +320,15 @@ return [
         'day_of_month' => 'يوم الشهر',
         'due_time' => 'وقت الاستحقاق',
         'due_in_days' => 'الاستحقاق بعد (أيام)',
+        'checklist_added' => 'بنود أُضيفت إلى قائمة التحقق',
+        'checklist_removed' => 'بنود حُذفت من قائمة التحقق',
+        'checklist_renamed' => 'بنود أُعيدت تسميتها في قائمة التحقق',
+        'checklist_reordered' => 'أُعيد ترتيب قائمة التحقق',
+        'checklist_checked' => 'بنود أُشّر عليها',
+        'checklist_unchecked' => 'بنود أُزيل التأشير عنها',
+        'checklist_done' => 'بنود قائمة التحقق المُنجزة',
+        'checklist_open' => 'بنود قائمة التحقق غير المُنجزة',
+        'checklist_total' => 'بنود قائمة التحقق',
     ],
 
     // Labels that differ for one audited model; checked before the shared attribute labels.

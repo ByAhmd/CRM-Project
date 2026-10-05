@@ -33,6 +33,8 @@ use Illuminate\Support\Carbon;
  * day produced last). Audited as configuration (the `settings` channel, like
  * the other configurable rows) with an explicit attribute whitelist; the
  * hourly advance of the run days is bookkeeping and stays out of the ledger.
+ * Its checklist (D-25) is a list of child rows the service replaces and
+ * records on the routine, like the assignees.
  *
  * @property TaskPriority $priority
  * @property RoutineFrequency $frequency
@@ -103,6 +105,17 @@ final class TaskTemplate extends Model
     public function assigner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by')->withTrashed();
+    }
+
+    /**
+     * The checklist copied, unticked, into every task the routine creates
+     * (D-25), in its order.
+     *
+     * @return HasMany<TaskTemplateChecklistItem, $this>
+     */
+    public function checklistItems(): HasMany
+    {
+        return $this->hasMany(TaskTemplateChecklistItem::class)->orderBy('position')->orderBy('id');
     }
 
     /**

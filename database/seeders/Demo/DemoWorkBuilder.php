@@ -21,6 +21,7 @@ use App\Models\Lead;
 use App\Models\LeadStatus;
 use App\Models\Note;
 use App\Models\Task;
+use App\Models\TaskChecklistItem;
 use App\Models\User;
 use App\Services\Activities\ActivityRecorder;
 use App\Services\Activities\ActivitySubject;
@@ -152,9 +153,22 @@ final class DemoWorkBuilder
             'priority' => TaskPriority::High,
             'due_at' => $context->now->copy()->addDays(3)->setTime(13, 0),
             'assignee_id' => $rep->getKey(),
+            // A multi-step job (D-25): the rep has ticked the first step.
+            'checklist' => [
+                ['body' => 'مراجعة تواريخ الإغلاق المتوقعة في الصفقات المفتوحة'],
+                ['body' => 'تحديث مبالغ الصفقات حسب آخر العروض'],
+                ['body' => 'إغلاق الصفقات المتوقفة منذ أكثر من شهر'],
+                ['body' => 'إرسال ملخص بالتغييرات إلى مدير النظام'],
+            ],
         ], $admin));
 
         $context->record('tasks', (int) $task->getKey());
+
+        $first = TaskChecklistItem::query()->where('task_id', $task->getKey())->orderBy('position')->orderBy('id')->value('id');
+
+        if ($first !== null) {
+            $context->as($rep, $context->ago(1, $batch), fn (): Task => $this->tasks->tickChecklist($task, $rep, [(int) $first]));
+        }
     }
 
     /** A weekly pipeline review: last week's occurrence is done, so the next one is scheduled. */

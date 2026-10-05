@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Enums\VisibilityLevel;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\PipelineByStageChart;
 use App\Filament\Widgets\RevenueWonByMonthChart;
 use App\Filament\Widgets\SalesKpisWidget;
 use App\Filament\Widgets\StaleDealsWidget;
-use App\Filament\Widgets\UpcomingFollowUpsWidget;
 use App\Models\Deal;
 use App\Models\Pipeline;
 use App\Models\Team;
@@ -34,10 +33,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The panel landing page (plan section 3.9): the sales KPI strip, the
- * charts and the attention lists, every one fed by a statistics service
- * inside the viewer's visibility scope (D-4) and gated by its own
- * canView().
+ * The home page of the Sales workspace (plan section 3.9, decision D-23):
+ * the sales KPI strip, the charts and the stale-deals list, every one fed
+ * by a statistics service inside the viewer's visibility scope (D-4) and
+ * gated by its own canView(). Until D-23 this was the single panel's
+ * landing page, which also carried the two task lists; they now open the
+ * Tasks workspace (TasksDashboard).
  *
  * The filters form (period, owner, team, pipeline) is live: every change
  * validates the period, is kept in the session, and reaches the widgets
@@ -49,7 +50,8 @@ use Illuminate\Validation\ValidationException;
  * replaced by the defaults when it fails: what the form displays is
  * always the state the widgets use. The owner filter only shows to a viewer whose deal visibility
  * reaches a team; the team filter only to one who sees every deal. Every
- * panel user may open the page; what it shows is decided per widget.
+ * user who may enter the workspace may open the page; what it shows is
+ * decided per widget.
  *
  * Two departures from the plan and the constitution are deliberate and
  * recorded here, where the next reader of this form will look:
@@ -66,8 +68,9 @@ use Illuminate\Validation\ValidationException;
  *    convention protects — an explicit `columns()` on every Section, never
  *    an implicit one — is still honoured.
  */
-final class Dashboard extends BaseDashboard
+final class SalesDashboard extends BaseDashboard
 {
+    use BuildsPageUrlsInOwningPanel;
     use HasFiltersForm {
         updatedFilters as persistFilters;
         mountHasFilters as fillFiltersFromRequest;
@@ -163,10 +166,10 @@ final class Dashboard extends BaseDashboard
     }
 
     /**
-     * Whether any widget the viewer sees reads the filters. The task lists
-     * run on fixed windows, so a viewer who sees only those — the employee
-     * (D-15) — gets neither the filters nor their reset: controls that would
-     * change nothing on the page are not shown.
+     * Whether any widget the viewer sees reads the filters. A viewer who may
+     * enter the workspace but sees none of them — a role granted only the
+     * email templates, say — gets neither the filters nor their reset:
+     * controls that would change nothing on the page are not shown.
      */
     private static function filtersApply(): bool
     {
@@ -245,8 +248,6 @@ final class Dashboard extends BaseDashboard
             LeadsByStatusChart::class,
             PipelineByStageChart::class,
             RevenueWonByMonthChart::class,
-            MyTasksTodayWidget::class,
-            UpcomingFollowUpsWidget::class,
             StaleDealsWidget::class,
             ActivityCountsWidget::class,
         ];

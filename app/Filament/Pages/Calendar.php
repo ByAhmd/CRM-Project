@@ -8,6 +8,7 @@ use App\Enums\NavigationGroup;
 use App\Enums\RecurrenceFrequency;
 use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Resources\Activities\ActivityResource;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Services\Settings\SettingsRepository;
 use App\Services\Tasks\CalendarEvent;
 use App\Services\Tasks\CalendarFeed;
+use App\Services\Tasks\TaskChecklist;
 use App\Services\Tasks\TaskService;
 use BackedEnum;
 use Carbon\Exceptions\InvalidFormatException;
@@ -45,6 +47,8 @@ use Livewire\Attributes\Locked;
  */
 final class Calendar extends Page
 {
+    use BuildsPageUrlsInOwningPanel;
+
     /** The browser event the calendar listens for to refetch its range. */
     public const REFRESH_EVENT = 'crm-calendar-refresh';
 
@@ -71,7 +75,7 @@ final class Calendar extends Page
 
     public static function getNavigationGroup(): NavigationGroup
     {
-        return NavigationGroup::Activities;
+        return NavigationGroup::Tasks;
     }
 
     public static function getNavigationLabel(): string
@@ -220,7 +224,7 @@ final class Calendar extends Page
             ])
             ->authorize(fn (): bool => $this->actor()->can('create', Task::class))
             ->action(function (array $data): void {
-                app(TaskService::class)->create($data, $this->actor());
+                TaskForm::saving(fn (): Task => app(TaskService::class)->create($data, $this->actor()));
 
                 Notification::make()->title(__('calendar.notifications.created'))->success()->send();
             })
@@ -243,7 +247,7 @@ final class Calendar extends Page
             ->fillForm(static fn (?Task $record): array => $record instanceof Task ? self::formData($record) : [])
             ->authorize(fn (?Task $record): bool => $record instanceof Task && $this->actor()->can('update', $record))
             ->action(function (Task $record, array $data): void {
-                app(TaskService::class)->update($record, $data, $this->actor());
+                TaskForm::saving(fn (): Task => app(TaskService::class)->update($record, $data, $this->actor()));
 
                 Notification::make()->title(__('calendar.notifications.updated'))->success()->send();
             })
@@ -310,7 +314,9 @@ final class Calendar extends Page
 
     /**
      * The form state of a task: its editable attributes only, the assignee
-     * under OwnerSelect's name — the same mapping as the edit page.
+     * under OwnerSelect's name and the stored checklist items — the same
+     * mapping as the edit page, so a save from the calendar never wipes the
+     * checklist (D-25).
      *
      * @return array<string, mixed>
      */
@@ -319,6 +325,7 @@ final class Calendar extends Page
         return [
             ...Arr::only($task->attributesToArray(), self::FORM_ATTRIBUTES),
             'owner_id' => $task->assignee_id,
+            'checklist' => TaskChecklist::formState($task),
         ];
     }
 

@@ -82,7 +82,8 @@ final class PermissionMatrixTest extends TestCase
 
         foreach (Permission::cases() as $permission) {
             // Exporting is reading (D-13): read_only exports what it may see.
-            if (in_array($permission->verb(), ['view_any', 'view_team', 'view_all', 'view', 'download', 'export'], true)) {
+            // Entering a workspace is not a write either (D-23).
+            if (in_array($permission->verb(), ['view_any', 'view_team', 'view_all', 'view', 'download', 'export'], true) || $permission->group() === 'workspace') {
                 continue;
             }
 
@@ -123,9 +124,11 @@ final class PermissionMatrixTest extends TestCase
     #[Test]
     public function the_employee_holds_exactly_its_task_and_attachment_keys(): void
     {
-        // D-15 (2026-09-28): own tasks, the board and the calendar, files on the tasks it may open — nothing else.
+        // D-15 (2026-09-28): own tasks, the board and the calendar, files on the tasks it may open — nothing else;
+        // D-23 (2026-10-05): the Tasks workspace and no other.
         $employee = $this->employee();
         $granted = [
+            Permission::WorkspaceTasks,
             Permission::TaskViewAny, Permission::TaskCreate, Permission::TaskUpdate, Permission::TaskDelete,
             Permission::AttachmentCreate, Permission::AttachmentDownload,
         ];

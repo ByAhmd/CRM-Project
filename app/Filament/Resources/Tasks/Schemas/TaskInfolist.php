@@ -6,20 +6,26 @@ namespace App\Filament\Resources\Tasks\Schemas;
 
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
+use App\Models\TaskChecklistItem;
 use App\Models\TaskUpdate;
 use App\Models\TaskUpdateMention;
 use App\Models\User;
+use App\Services\Settings\SettingsRepository;
+use App\Services\Tasks\TaskChecklist;
+use App\Support\Filament\PanelUrl;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\TextSize;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 
 /**
- * One task (decisions A-10, D-14, D-17, D-20): what it is, how the work is going
+ * One task (decisions A-10, D-14, D-17, D-20, D-25): what it is, its checklist, how the work is going
  * (the thread of progress entries and comments), when it is due, the records it is linked to, who it is
  * assigned to and by whom, how it repeats and who created it. Links to a
  * linked record, and to the first task of its series, appear only when the
@@ -60,6 +66,8 @@ final class TaskInfolist
                             ->columnSpanFull(),
                     ])
                     ->columns(1),
+
+                self::checklistSection(),
 
                 self::threadSection(),
 
@@ -129,7 +137,7 @@ final class TaskInfolist
                                 ->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('series.title')
                                 ->label(__('tasks.fields.series'))
-                                ->url(fn (Task $record): ?string => $record->series === null || auth()->user()?->can('view', $record->series) !== true ? null : TaskResource::getUrl('view', ['record' => $record->series]))
+                                ->url(fn (Task $record): ?string => self::seriesUrl($record))
                                 ->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('occurrences_count')
                                 ->label(__('tasks.fields.occurrences_count'))
@@ -162,6 +170,75 @@ final class TaskInfolist
                     ->collapsible(),
             ])
             ->columns(1);
+    }
+
+    /**
+     * The checklist (D-25), shown when the task has one: the progress as
+     * "done/total" and each item in order — ticked or not, its text as plain
+     * text, and for a ticked item who ticked it and when, in the
+     * organisation's timezone. The items and who ticked them are loaded in a
+     * fixed number of queries whatever the length; ticking is the
+     * "Checklist" action's.
+     */
+    private static function checklistSection(): Section
+    {
+        return Section::make(__('tasks.sections.checklist'))
+            ->description(static fn (?Model $record): ?string => $record instanceof Task ? TaskChecklist::progressLabel($record) : null)
+            ->visible(static fn (?Model $record): bool => $record instanceof Task && self::checklistItems($record)->isNotEmpty())
+            ->schema([
+                RepeatableEntry::make('checklistItems')
+                    ->label(__('tasks.fields.checklist'))
+                    ->hiddenLabel()
+                    ->state(static fn (?Model $record): ?Collection => $record instanceof Task ? self::checklistItems($record) : null)
+                    ->schema([
+                        TextEntry::make('body')
+                            ->label(__('tasks.fields.checklist_item'))
+                            ->hiddenLabel()
+                            ->icon(static fn (?Model $record): Heroicon => $record instanceof TaskChecklistItem && $record->isDone() ? Heroicon::OutlinedCheckCircle : Heroicon::OutlinedStop)
+                            ->iconColor(static fn (?Model $record): string => $record instanceof TaskChecklistItem && $record->isDone() ? 'success' : 'gray')
+                            ->tooltip(static fn (?Model $record): string => $record instanceof TaskChecklistItem && $record->isDone() ? __('tasks.fields.checklist_item_done') : __('tasks.fields.checklist_item_open')),
+                        TextEntry::make('ticked')
+                            ->label(__('tasks.fields.checklist_ticked_by'))
+                            ->hiddenLabel()
+                            ->state(static fn (?Model $record): ?string => $record instanceof TaskChecklistItem ? self::tickedBy($record) : null)
+                            ->size(TextSize::Small)
+                            ->color('gray')
+                            ->visible(static fn (?Model $record): bool => $record instanceof TaskChecklistItem && $record->isDone()),
+                    ])
+                    ->columns(1),
+            ])
+            ->columns(1);
+    }
+
+    /**
+     * The task's checklist with who ticked each item, loaded once.
+     *
+     * @return Collection<int, TaskChecklistItem>
+     */
+    private static function checklistItems(Task $task): Collection
+    {
+        return $task->loadMissing('checklistItems.completer')->checklistItems;
+    }
+
+    /** "Ticked by Sara, 2026-10-05 09:30" — the moment in the organisation's timezone. */
+    private static function tickedBy(TaskChecklistItem $item): ?string
+    {
+        if ($item->completed_at === null) {
+            return null;
+        }
+
+        $date = $item->completed_at->copy()->setTimezone(app(SettingsRepository::class)->timezone())->format('Y-m-d H:i');
+        $completer = $item->completer;
+
+        if ($completer === null) {
+            return __('tasks.fields.checklist_ticked_at', ['date' => $date]);
+        }
+
+        $name = $completer->trashed()
+            ? __('tasks.empty.deleted_author_named', ['name' => $completer->name])
+            : $completer->name;
+
+        return __('tasks.fields.checklist_ticked', ['name' => $name, 'date' => $date]);
     }
 
     /**
@@ -268,6 +345,23 @@ final class TaskInfolist
         return $author->trashed()
             ? __('tasks.empty.deleted_author_named', ['name' => $author->name])
             : $author->name;
+    }
+
+    /**
+     * The first task of the series, when the reader may open it and may
+     * enter the Tasks workspace (D-23): this infolist also renders in the
+     * task modals of sales record pages.
+     */
+    private static function seriesUrl(Task $record): ?string
+    {
+        $series = $record->series;
+        $user = auth()->user();
+
+        if ($series === null || ! $user instanceof User || ! $user->can('view', $series)) {
+            return null;
+        }
+
+        return PanelUrl::forReader($user, TaskResource::class, static fn (): string => TaskResource::getUrl('view', ['record' => $series]));
     }
 
     /** "Every 2 weeks", "Every day" — or "does not repeat", in the reader's language. */

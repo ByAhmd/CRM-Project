@@ -40,6 +40,7 @@ return [
         'causer' => 'By',
         'recorded_at' => 'Date and time',
         'from_to' => 'from ":old" to ":new"',
+        'list_separator' => '; ',
     ],
 
     'log_names' => [
@@ -123,6 +124,8 @@ return [
         'task.started' => 'Task started',
         'task.progress_posted' => 'Task progress update posted',
         'task.commented' => 'Comment on a task',
+        'task.checklist_changed' => 'Task checklist changed',
+        'task.checklist_ticked' => 'Task checklist ticked',
         'note.created' => 'Note added',
         'note.updated' => 'Note edited',
         'note.deleted' => 'Note deleted',
@@ -317,6 +320,15 @@ return [
         'day_of_month' => 'Day of the month',
         'due_time' => 'Due time',
         'due_in_days' => 'Due after (days)',
+        'checklist_added' => 'Checklist items added',
+        'checklist_removed' => 'Checklist items removed',
+        'checklist_renamed' => 'Checklist items renamed',
+        'checklist_reordered' => 'Checklist reordered',
+        'checklist_checked' => 'Checklist items ticked',
+        'checklist_unchecked' => 'Checklist items unticked',
+        'checklist_done' => 'Checklist items done',
+        'checklist_open' => 'Checklist items not done',
+        'checklist_total' => 'Checklist items',
     ],
 
     // Labels that differ for one audited model; checked before the shared attribute labels.

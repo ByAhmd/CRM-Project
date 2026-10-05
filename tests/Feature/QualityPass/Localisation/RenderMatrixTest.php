@@ -10,6 +10,7 @@ use App\Filament\Imports\LeadImporter;
 use App\Models\Export;
 use App\Models\Import;
 use App\Models\User;
+use App\Support\Filament\WorkspacePanelRegistry;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Model;
@@ -55,33 +56,43 @@ final class RenderMatrixTest extends TestCase
         $admin = $this->makeUser(CrmRole::SuperAdmin, ['name' => 'Super Admin', 'locale' => $locale]);
         $this->actingAs($admin);
 
-        $panel = Filament::getPanel('admin');
+        // D-23: every panel — the home panel (workspace screen, notification
+        // preferences, profile) and the four workspaces — is walked; the
+        // super admin enters them all.
         $urls = [];
 
-        foreach ($panel->getPages() as $page) {
-            $urls[$page] = $page::getUrl();
-        }
+        foreach (Filament::getPanels() as $panel) {
+            Filament::setCurrentPanel($panel);
 
-        foreach ($panel->getResources() as $resource) {
-            $record = null;
+            foreach ($panel->getPages() as $page) {
+                $urls[$page] = $page::getUrl();
+            }
 
-            foreach (array_keys($resource::getPages()) as $name) {
-                if (in_array($name, ['view', 'edit'], true)) {
-                    $record ??= $this->recordFor($resource, $admin);
+            if ($panel->hasProfile()) {
+                $urls["{$panel->getId()}@profile"] = (string) $panel->getProfileUrl();
+            }
 
-                    if ($record === null) {
-                        $urls["{$resource}@{$name}"] = 'SKIPPED: no record could be made';
+            foreach ($panel->getResources() as $resource) {
+                $record = null;
+
+                foreach (array_keys($resource::getPages()) as $name) {
+                    if (in_array($name, ['view', 'edit'], true)) {
+                        $record ??= $this->recordFor($resource, $admin);
+
+                        if ($record === null) {
+                            $urls["{$resource}@{$name}"] = 'SKIPPED: no record could be made';
+
+                            continue;
+                        }
+
+                        $urls["{$resource}@{$name}"] = $resource::getUrl($name, ['record' => $record]);
 
                         continue;
                     }
 
-                    $urls["{$resource}@{$name}"] = $resource::getUrl($name, ['record' => $record]);
-
-                    continue;
-                }
-
-                if ($name === 'index' || $name === 'create') {
-                    $urls["{$resource}@{$name}"] = $resource::getUrl($name);
+                    if ($name === 'index' || $name === 'create') {
+                        $urls["{$resource}@{$name}"] = $resource::getUrl($name);
+                    }
                 }
             }
         }
@@ -125,7 +136,8 @@ final class RenderMatrixTest extends TestCase
             }
         }
 
-        $this->assertGreaterThan(40, count($urls), 'sanity: the walk covers the panel');
+        $this->assertGreaterThan(40, count($urls), 'sanity: the walk covers the panels');
+        $this->assertCount(count(WorkspacePanelRegistry::panelIds()), Filament::getPanels(), 'sanity: the walk covers every registered panel');
         $this->assertSame(['leads.fields.name', 'filament-panels::layout.direction'], $this->rawKeys('<p>leads.fields.name <a href="https://a.b.c/x.y.z">filament-panels::layout.direction</a> mail@a.b.c</p>'), 'sanity: the detector sees raw keys');
         $this->assertSame([], $failures, "{$locale} render walk failures:\n".implode("\n", $failures)."\nskipped:\n".implode("\n", $skipped));
     }

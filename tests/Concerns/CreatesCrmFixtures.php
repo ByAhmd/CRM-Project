@@ -10,6 +10,7 @@ use App\Enums\CrmRole;
 use App\Enums\LeadStatusKind;
 use App\Enums\Permission;
 use App\Enums\StageKind;
+use App\Enums\WorkspacePanel;
 use App\Models\ActivityType;
 use App\Models\Deal;
 use App\Models\DealCloseReason;
@@ -18,6 +19,7 @@ use App\Models\LeadStatus;
 use App\Models\PipelineStage;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\Filament\WorkspacePanelRegistry;
 use Database\Seeders\ActivityTypeSeeder;
 use Database\Seeders\DealCloseReasonSeeder;
 use Database\Seeders\IndustrySeeder;
@@ -28,8 +30,17 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\SettingsSeeder;
 use Filament\Actions\Imports\Models\FailedImportRow;
 use Filament\Facades\Filament;
+use Filament\Resources\Pages\Page as ResourcePage;
+use Filament\Resources\RelationManagers\RelationManager;
+use Illuminate\Testing\TestResponse;
 use League\Csv\Reader;
+use Livewire\Component;
+use Livewire\Livewire;
+use Livewire\Mechanisms\HandleRequests\HandleRequests;
 use Spatie\Permission\PermissionRegistrar;
+use Symfony\Component\HttpFoundation\Response;
+
+use function Livewire\before;
 
 /**
  * Fixture helpers shared by feature tests (CLAUDE.md section 3: fixtures come
@@ -63,9 +74,70 @@ trait CreatesCrmFixtures
         ]);
     }
 
+    /**
+     * Makes Filament's panel context follow the component under test (D-23).
+     *
+     * The home panel (the login host and default panel) becomes current, and
+     * every Livewire component mounted or hydrated from then on — through
+     * Livewire::test(), or nested inside one — switches the current panel to
+     * the panel that registers it: a resource page or relation manager to its
+     * resource's panel, a page or widget to the panel that lists it
+     * (WorkspacePanelRegistry). Anything no panel lists (the auth pages, the
+     * top bar, the record timeline) leaves the current panel alone. Laravel
+     * builds a fresh application per test, so the hooks never outlive it.
+     */
     protected function usePanel(): void
     {
-        Filament::setCurrentPanel('admin');
+        Filament::setCurrentPanel(WorkspacePanel::HOME);
+
+        before('mount', static function (Component $component, mixed $params = []): void {
+            $panelId = self::owningPanelOfComponent($component, is_array($params) ? $params : []);
+
+            if ($panelId !== null) {
+                Filament::setCurrentPanel($panelId);
+            }
+        });
+
+        before('hydrate', static function (Component $component): void {
+            $panelId = self::owningPanelOfComponent($component, []);
+
+            if ($panelId !== null) {
+                Filament::setCurrentPanel($panelId);
+            }
+        });
+    }
+
+    /**
+     * The id of the panel that serves a Livewire component; null for one no
+     * panel registers.
+     *
+     * @param  array<mixed>  $params
+     */
+    private static function owningPanelOfComponent(Component $component, array $params): ?string
+    {
+        if ($component instanceof ResourcePage) {
+            return WorkspacePanelRegistry::owningPanelId($component::getResource());
+        }
+
+        if ($component instanceof RelationManager) {
+            $pageClass = $params['pageClass'] ?? $component->pageClass;
+
+            if (is_string($pageClass) && is_subclass_of($pageClass, ResourcePage::class)) {
+                return WorkspacePanelRegistry::owningPanelId($pageClass::getResource());
+            }
+
+            foreach (WorkspacePanelRegistry::panelIds() as $panelId) {
+                foreach (WorkspacePanelRegistry::resources($panelId) as $resource) {
+                    if (in_array($component::class, $resource::getRelations(), true)) {
+                        return $panelId;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        return WorkspacePanelRegistry::owningPanelId($component::class);
     }
 
     /**
@@ -220,5 +292,51 @@ trait CreatesCrmFixtures
         }
 
         $this->fail("no failed row with {$column} = {$value}");
+    }
+
+    /**
+     * Pins a URL a test computed to the workspace that serves it (D-23), so a
+     * negative assertion over rendered HTML ("this link is absent") cannot
+     * pass merely because the test built the address in another panel than
+     * the one the application renders.
+     */
+    protected function assertUrlInWorkspace(WorkspacePanel $workspace, string $url): void
+    {
+        $this->assertStringStartsWith(
+            rtrim(url($workspace->path()), '/').'/',
+            $url,
+            "{$url} is not an address of the {$workspace->id()} workspace",
+        );
+    }
+
+    /**
+     * Loads a panel page as the user over HTTP and returns the first
+     * Livewire snapshot it rendered, exactly as the browser holds it — the
+     * starting point for replaying update requests from an open page.
+     */
+    protected function firstLivewireSnapshot(User $user, string $url): string
+    {
+        $html = (string) $this->actingAs($user)->get($url)->assertOk()->getContent();
+
+        $this->assertSame(1, preg_match('/wire:snapshot="([^"]+)"/', $html, $match), 'The page rendered no Livewire snapshot.');
+
+        return html_entity_decode($match[1], ENT_QUOTES | ENT_HTML5);
+    }
+
+    /**
+     * One update request from an open page. Livewire remembers, per request
+     * cycle, which routes it already ran persistent middleware for; a real
+     * browser request starts a fresh cycle, so the state is flushed first to
+     * make each call behave like its own request.
+     *
+     * @return TestResponse<Response>
+     */
+    protected function livewireUpdate(string $snapshot): TestResponse
+    {
+        Livewire::flushState();
+
+        return $this->withHeaders(['X-Livewire' => 'true'])->postJson(app(HandleRequests::class)->getUpdateUri(), [
+            'components' => [['snapshot' => $snapshot, 'updates' => [], 'calls' => []]],
+        ]);
     }
 }

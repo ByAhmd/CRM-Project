@@ -6,6 +6,7 @@ declare(strict_types=1);
 return [
 
     'groups' => [
+        'workspace' => 'Workspaces',
         'lead' => 'Leads',
         'contact' => 'Contacts',
         'account' => 'Accounts (companies and customers)',
@@ -28,6 +29,11 @@ return [
     ],
 
     'verbs' => [
+        // The four workspace keys (D-23): the workspace a role may enter.
+        'sales' => 'Sales',
+        'tasks' => 'Tasks',
+        'reports' => 'Reports',
+        'admin' => 'Administration',
         'view_any' => 'View own records',
         'view_team' => 'View team records',
         'view_all' => 'View all records',

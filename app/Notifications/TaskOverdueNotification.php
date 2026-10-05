@@ -8,8 +8,9 @@ use App\Enums\NotificationEvent;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Filament\PanelUrl;
 use App\Support\Notifications\NotificationChannels;
-use Filament\Actions\Action;
+use App\Support\Notifications\NotificationLink;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -44,12 +45,7 @@ final class TaskOverdueNotification extends Notification
             ->body($this->body())
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->danger()
-            ->actions([
-                Action::make('open')
-                    ->label(__('tasks.notifications.open'))
-                    ->url($this->url())
-                    ->markAsRead(),
-            ])
+            ->actions(NotificationLink::actions($this->linkFor($notifiable), __('tasks.notifications.open')))
             ->getDatabaseMessage();
     }
 
@@ -59,7 +55,7 @@ final class TaskOverdueNotification extends Notification
             ->subject($this->title())
             ->greeting(__('tasks.notifications.greeting', ['name' => $notifiable->name]))
             ->line($this->body())
-            ->action(__('tasks.notifications.open'), $this->url());
+            ->when($this->linkFor($notifiable), static fn (MailMessage $mail, string $url): MailMessage => $mail->action(__('tasks.notifications.open'), $url));
     }
 
     public function title(): string
@@ -78,5 +74,11 @@ final class TaskOverdueNotification extends Notification
     public function url(): string
     {
         return TaskResource::getUrl('view', ['record' => $this->task]);
+    }
+
+    /** The task's page, unless the recipient may not enter the Tasks workspace (D-23). */
+    private function linkFor(User $notifiable): ?string
+    {
+        return PanelUrl::forReader($notifiable, TaskResource::class, fn (): string => $this->url());
     }
 }

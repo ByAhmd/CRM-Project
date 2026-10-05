@@ -18,7 +18,7 @@ use Illuminate\Support\Collection;
  */
 final class TaskPerformanceReportPage extends BaseReportPage
 {
-    protected static ?string $slug = 'reports/tasks';
+    protected static ?string $slug = 'tasks';
 
     protected static ?int $navigationSort = 90;
 

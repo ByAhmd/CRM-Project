@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Tasks\Pages;
 
+use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\User;
 use App\Services\Tasks\TaskService;
@@ -28,7 +29,7 @@ final class CreateTask extends CreateRecord
         $actor = auth()->user();
         assert($actor instanceof User);
 
-        return app(TaskService::class)->create($data, $actor);
+        return TaskForm::saving(static fn (): Model => app(TaskService::class)->create($data, $actor));
     }
 
     protected function getRedirectUrl(): string

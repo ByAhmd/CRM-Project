@@ -137,6 +137,7 @@ return [
             'account' => 'الحساب',
             'deal' => 'الصفقة',
             'recurrence_frequency' => 'التكرار',
+            'checklist' => 'قائمة التحقق (المُنجز من الكل)',
             'description' => 'الوصف',
             'created_at' => 'تاريخ الإنشاء',
         ],
@@ -188,6 +189,8 @@ return [
     'values' => [
         'yes' => 'نعم',
         'no' => 'لا',
+        // Words, not "2/3": a spreadsheet opening the CSV reads a bare 2/3 as a date.
+        'checklist_progress' => ':done من :total',
     ],
 
     'empty' => [

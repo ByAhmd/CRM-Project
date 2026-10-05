@@ -474,6 +474,9 @@ final class ReportPagesTest extends TestCase
 
     private function reportsGroup(): ?FilamentNavigationGroup
     {
+        // The reports live in the Reports workspace (D-23); no component mount sets its panel here.
+        Filament::setCurrentPanel('reports');
+
         foreach (Filament::getNavigation() as $group) {
             if ((string) $group->getLabel() === NavigationGroup::Reports->getLabel()) {
                 return $group;

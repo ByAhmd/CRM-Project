@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Deals;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Deals\Pages\CreateDeal;
 use App\Filament\Resources\Deals\Pages\EditDeal;
@@ -39,6 +40,7 @@ use Illuminate\Support\Number;
  */
 final class DealResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Deal::class;

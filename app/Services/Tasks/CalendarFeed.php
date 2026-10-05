@@ -13,6 +13,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Settings\SettingsRepository;
+use App\Support\Filament\PanelUrl;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -131,11 +132,18 @@ final class CalendarFeed
 
         $editable = $this->taskEditability($viewer);
 
+        // An event links to its page only in a workspace the viewer may enter
+        // (D-23): an activity opens in Sales, so a viewer without Sales — the
+        // employee — sees it on the calendar without a link. Both sources are
+        // already scoped to what the viewer may read.
+        $linksTasks = PanelUrl::readerMayEnter($viewer, TaskResource::class);
+        $linksActivities = PanelUrl::readerMayEnter($viewer, ActivityResource::class);
+
         $events = $candidates
             ->take(self::MAX_EVENTS)
             ->map(fn (array $candidate): CalendarEvent => $candidate['record'] instanceof Task
-                ? $this->taskEvent($candidate['record'], $editable, $timezone)
-                : $this->activityEvent($candidate['record'], $timezone))
+                ? $this->taskEvent($candidate['record'], $editable, $timezone, $linksTasks)
+                : $this->activityEvent($candidate['record'], $timezone, $linksActivities))
             ->sortBy(static fn (CalendarEvent $event): int => Carbon::parse($event->start, $timezone)->getTimestamp())
             ->values();
 
@@ -258,7 +266,7 @@ final class CalendarFeed
     /**
      * @param  Closure(Task): bool  $editable
      */
-    private function taskEvent(Task $task, Closure $editable, string $timezone): CalendarEvent
+    private function taskEvent(Task $task, Closure $editable, string $timezone, bool $linked): CalendarEvent
     {
         $timed = $task->starts_at !== null;
         $open = $task->isOpen();
@@ -283,7 +291,7 @@ final class CalendarFeed
             backgroundColor: $color,
             borderColor: $color,
             textColor: self::TEXT_COLOR,
-            url: TaskResource::getUrl('view', ['record' => $task]),
+            url: $linked ? TaskResource::getUrl('view', ['record' => $task]) : null,
             editable: $open && $canEdit,
             classNames: $open ? [] : [self::MUTED_CLASS],
             extendedProps: [
@@ -299,7 +307,7 @@ final class CalendarFeed
         );
     }
 
-    private function activityEvent(Activity $activity, string $timezone): CalendarEvent
+    private function activityEvent(Activity $activity, string $timezone, bool $linked): CalendarEvent
     {
         $color = self::color($activity->kind->getColor());
         $duration = (int) ($activity->duration_minutes ?? 0);
@@ -313,7 +321,7 @@ final class CalendarFeed
             backgroundColor: $color,
             borderColor: $color,
             textColor: self::TEXT_COLOR,
-            url: ActivityResource::getUrl('view', ['record' => $activity]),
+            url: $linked ? ActivityResource::getUrl('view', ['record' => $activity]) : null,
             editable: false,
             classNames: [],
             extendedProps: [

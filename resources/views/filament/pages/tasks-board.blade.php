@@ -2,6 +2,7 @@
     use App\Enums\TaskStatus;
     use App\Filament\Resources\Tasks\TaskResource;
     use App\Services\Tasks\TaskBoardFeed;
+    use App\Services\Tasks\TaskChecklist;
 @endphp
 
 <x-filament-panels::page>
@@ -105,6 +106,19 @@
                                         <x-filament::badge :color="$task->priority->getColor()" size="sm">
                                             {{ $task->priority->getLabel() }}
                                         </x-filament::badge>
+
+                                        @php($checklist = TaskChecklist::counts($task))
+
+                                        @if ($checklist['total'] > 0)
+                                            <x-filament::badge
+                                                :color="$checklist['done'] === $checklist['total'] ? 'success' : 'gray'"
+                                                size="sm"
+                                                icon="heroicon-o-list-bullet"
+                                                :title="__('tasks.fields.checklist')"
+                                            >
+                                                <span class="crm-ltr">{{ __('tasks.fields.checklist_progress', ['done' => $checklist['done'], 'total' => $checklist['total']]) }}</span>
+                                            </x-filament::badge>
+                                        @endif
                                     </div>
 
                                     @if ($task->due_at !== null)

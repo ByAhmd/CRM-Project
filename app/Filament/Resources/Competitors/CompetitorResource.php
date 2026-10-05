@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Competitors;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsUrlsInOwningPanel;
 use App\Filament\Resources\Competitors\Pages\CreateCompetitor;
 use App\Filament\Resources\Competitors\Pages\EditCompetitor;
 use App\Filament\Resources\Competitors\Pages\ListCompetitors;
@@ -24,6 +25,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
  */
 final class CompetitorResource extends Resource
 {
+    use BuildsUrlsInOwningPanel;
+
     protected static ?string $model = Competitor::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBriefcase;

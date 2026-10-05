@@ -176,7 +176,7 @@ final class AttachmentDownloadTest extends TestCase
         $lead = Lead::factory()->create(['owner_id' => $rep->getKey()]);
         $attachment = $this->storePdf($lead, $rep);
 
-        $this->get($attachment->downloadUrl())->assertRedirect(route('filament.admin.auth.login'));
+        $this->get($attachment->downloadUrl())->assertRedirect(route('filament.app.auth.login'));
     }
 
     #[Test]

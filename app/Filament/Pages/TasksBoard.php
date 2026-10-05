@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Enums\NavigationGroup;
+use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Tasks\TaskBoardFeed;
@@ -26,6 +27,8 @@ use Filament\Support\Icons\Heroicon;
  */
 final class TasksBoard extends Page
 {
+    use BuildsPageUrlsInOwningPanel;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquares2x2;
 
     protected static ?int $navigationSort = 25;
@@ -34,7 +37,7 @@ final class TasksBoard extends Page
 
     public static function getNavigationGroup(): NavigationGroup
     {
-        return NavigationGroup::Activities;
+        return NavigationGroup::Tasks;
     }
 
     public static function getNavigationLabel(): string

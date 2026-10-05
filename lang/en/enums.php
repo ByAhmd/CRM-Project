@@ -197,4 +197,19 @@ return [
         'deal' => 'Deals',
     ],
 
+    // D-23: the four workspaces, in WorkspacePanel order.
+    'workspace_panel' => [
+        'sales' => 'Sales',
+        'tasks' => 'Tasks',
+        'reports' => 'Reports',
+        'admin' => 'Administration',
+    ],
+
+    'workspace_panel_description' => [
+        'sales' => 'Leads, deals, contacts, accounts, products, activities and email templates.',
+        'tasks' => 'Tasks, the tasks board, routine tasks and the calendar.',
+        'reports' => 'Lead, deal, sales, activity and task reports.',
+        'admin' => 'Users, roles, teams, settings, lookup lists, the audit log and backups.',
+    ],
+
 ];
