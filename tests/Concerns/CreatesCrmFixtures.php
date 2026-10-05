@@ -10,6 +10,8 @@ use App\Enums\CrmRole;
 use App\Enums\LeadStatusKind;
 use App\Enums\Permission;
 use App\Enums\StageKind;
+use App\Enums\TaskStatus;
+use App\Enums\TaskUpdateKind;
 use App\Enums\WorkspacePanel;
 use App\Models\ActivityType;
 use App\Models\Deal;
@@ -17,9 +19,13 @@ use App\Models\DealCloseReason;
 use App\Models\Import;
 use App\Models\LeadStatus;
 use App\Models\PipelineStage;
+use App\Models\Task;
+use App\Models\TaskChecklistItem;
+use App\Models\TaskUpdate;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\Filament\WorkspacePanelRegistry;
+use Carbon\CarbonInterface;
 use Database\Seeders\ActivityTypeSeeder;
 use Database\Seeders\DealCloseReasonSeeder;
 use Database\Seeders\IndustrySeeder;
@@ -212,6 +218,57 @@ trait CreatesCrmFixtures
             'name_ar' => $nameAr,
             'manager_user_id' => $manager?->getKey(),
         ]);
+    }
+
+    /**
+     * A task assigned to the user in the given state, written straight to the
+     * table the way TaskFactory's closed states are (the workflow guard
+     * watches updates, not inserts), so a read model can be pinned to fixed
+     * moments (D-26). `assigned_at` is stamped by the observer at the current
+     * (travelled) time; `created_at`, `updated_at`, `due_at` and
+     * `completed_at` may be given.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function taskAssignedTo(User $assignee, TaskStatus $status, array $attributes = []): Task
+    {
+        return Task::factory()->create([
+            'assignee_id' => $assignee->getKey(),
+            'created_by' => $assignee->getKey(),
+            'status' => $status,
+            ...$attributes,
+        ]);
+    }
+
+    /** A thread entry (progress or comment) on the task at a fixed moment, as TaskService writes it. */
+    protected function threadEntryOn(Task $task, User $author, CarbonInterface $at, TaskUpdateKind $kind = TaskUpdateKind::Comment, string $body = 'Entry', ?TaskStatus $status = null): TaskUpdate
+    {
+        $entry = new TaskUpdate;
+        $entry->forceFill([
+            'task_id' => $task->getKey(),
+            'user_id' => $author->getKey(),
+            'kind' => $kind,
+            'status' => $status,
+            'body' => $body,
+            'created_at' => $at,
+        ])->save();
+
+        return $entry;
+    }
+
+    /** A checklist item on the task, ticked at the given moment or left open. */
+    protected function checklistItemOn(Task $task, string $body, ?CarbonInterface $tickedAt = null): TaskChecklistItem
+    {
+        $item = new TaskChecklistItem;
+        $item->forceFill([
+            'task_id' => $task->getKey(),
+            'body' => $body,
+            'position' => TaskChecklistItem::query()->where('task_id', $task->getKey())->count(),
+            'completed_at' => $tickedAt,
+            'completed_by' => $tickedAt === null ? null : $task->assignee_id,
+        ])->save();
+
+        return $item;
     }
 
     /** The first active seeded lead status of a kind, in status order (needs seedLookups()). */

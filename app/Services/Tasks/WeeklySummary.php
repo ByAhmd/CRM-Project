@@ -8,8 +8,6 @@ use App\Enums\Permission;
 use App\Enums\TaskStatus;
 use App\Enums\UserStatus;
 use App\Models\Task;
-use App\Models\TaskChecklistItem;
-use App\Models\TaskUpdate;
 use App\Models\User;
 use App\Notifications\WeeklySummaryNotification;
 use App\Services\Settings\SettingsRepository;
@@ -28,7 +26,8 @@ use Throwable;
  * tasks completed in the window (in total and per assignee), open tasks
  * overdue now (oldest due first), stalled tasks (in progress with no
  * progress entry, comment or checklist tick — D-25 — for
- * STALLED_AFTER_DAYS), tasks handed out in the
+ * STALLED_AFTER_DAYS, under the rule StalledTaskRule shares with the
+ * employee dashboard, D-26), tasks handed out in the
  * window (created with an assignee other than the person who assigned them),
  * and a per-assignee table (open / overdue / completed). Task titles and
  * assignees are organisation-wide, as on the shared board (D-14). Every
@@ -51,11 +50,8 @@ final class WeeklySummary
 {
     public const int WINDOW_DAYS = 7;
 
-    /** An in-progress task with no progress entry, comment or checklist tick for this long is stalled. */
-    public const int STALLED_AFTER_DAYS = 3;
-
-    /** Stands in for "no entry or tick at all" when the quietest stalled tasks are ordered first. */
-    private const string NEVER = '1000-01-01 00:00:00';
+    /** An in-progress task with no progress entry, comment or checklist tick for this long is stalled (StalledTaskRule). */
+    public const int STALLED_AFTER_DAYS = StalledTaskRule::AFTER_DAYS;
 
     /** The most tasks the overdue and the stalled list each name. */
     public const int LIST_LIMIT = 10;
@@ -292,32 +288,14 @@ final class WeeklySummary
     }
 
     /**
-     * In progress, no thread entry and no checklist tick since the cutoff (a
-     * tick counts as progress, D-25), and — for a task from before the
-     * thread existed, which has neither — not touched since the cutoff
-     * either.
+     * The organisation's stalled tasks under the one shared rule
+     * (StalledTaskRule, D-18 / D-25 / D-26).
      *
      * @return Builder<Task>
      */
     private function stalledQuery(CarbonImmutable $to): Builder
     {
-        $cutoff = $to->subDays(self::STALLED_AFTER_DAYS);
-
-        return Task::query()
-            ->where('status', TaskStatus::InProgress->value)
-            ->whereDoesntHave('updates', static function (Builder $entries) use ($cutoff): void {
-                $entries->where('created_at', '>=', $cutoff);
-            })
-            ->whereDoesntHave('checklistItems', static function (Builder $items) use ($cutoff): void {
-                $items->where('completed_at', '>=', $cutoff);
-            })
-            ->where(static function (Builder $query) use ($cutoff): void {
-                $query->has('updates')
-                    ->orWhereHas('checklistItems', static function (Builder $items): void {
-                        $items->whereNotNull('completed_at');
-                    })
-                    ->orWhere('updated_at', '<', $cutoff);
-            });
+        return StalledTaskRule::constrain(Task::query(), $to);
     }
 
     /**
@@ -327,43 +305,14 @@ final class WeeklySummary
      */
     private function stalledList(Builder $query, CarbonImmutable $to, array $names, string $timezone): array
     {
-        $tasks = $query
-            ->select(['id', 'title', 'assignee_id', 'updated_at'])
-            ->addSelect([
-                'last_entry_at' => TaskUpdate::query()
-                    ->select('created_at')
-                    ->whereColumn('task_updates.task_id', 'tasks.id')
-                    ->orderByDesc('created_at')
-                    ->limit(1),
-                'last_tick_at' => TaskChecklistItem::query()
-                    ->select('completed_at')
-                    ->whereColumn('task_checklist_items.task_id', 'tasks.id')
-                    ->whereNotNull('completed_at')
-                    ->orderByDesc('completed_at')
-                    ->limit(1),
-            ])
-            // Quietest first: by the later of the last entry and the last
-            // tick, a task with neither (from before the thread) first of all.
-            ->orderByRaw('GREATEST(COALESCE(`last_entry_at`, ?), COALESCE(`last_tick_at`, ?))', [self::NEVER, self::NEVER])
-            ->orderBy('updated_at')
-            ->orderBy('id')
+        $tasks = StalledTaskRule::quietestFirst($query->select(['id', 'title', 'assignee_id', 'updated_at']))
             ->limit(self::LIST_LIMIT)
             ->get();
 
         $lines = [];
-        $storedIn = (string) config('app.timezone');
 
         foreach ($tasks as $task) {
-            $moments = array_values(array_filter(
-                [$task->getAttribute('last_entry_at'), $task->getAttribute('last_tick_at')],
-                static fn (mixed $moment): bool => is_string($moment) && $moment !== '',
-            ));
-
-            $since = $moments === []
-                ? CarbonImmutable::instance($task->updated_at ?? $to)
-                : CarbonImmutable::parse(max($moments), $storedIn);
-
-            $lines[] = $this->line($task, $names, $since, $to, $timezone);
+            $lines[] = $this->line($task, $names, StalledTaskRule::since($task, $to), $to, $timezone);
         }
 
         return $lines;

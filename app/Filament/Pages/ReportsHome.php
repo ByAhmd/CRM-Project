@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Pages\Reports\BaseReportPage;
+use App\Filament\Pages\Reports\EmployeeDashboardPage;
 use App\Filament\Support\WorkspaceLink;
 use App\Filament\Support\WorkspaceLinkSection;
 use App\Models\User;
@@ -17,7 +18,8 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * The home page of the Reports workspace (decision D-23): the reports the
- * viewer may open, each with what it answers. A report the viewer may not
+ * viewer may open, each with what it answers, and the employee dashboard
+ * (D-26). A report the viewer may not
  * open is not listed — every link here opens (ISS-062 in the reference
  * project); the reports themselves keep their own `reports.view` gate.
  */
@@ -74,6 +76,16 @@ final class ReportsHome extends Page
                 url: $page::getUrl(),
                 icon: $page::getNavigationIcon(),
                 description: __('reports.pages.'.$page::reportKey().'.description'),
+            );
+        }
+
+        // D-26: the employee dashboard, under the same reports.view gate.
+        if (EmployeeDashboardPage::canAccess()) {
+            $links[] = new WorkspaceLink(
+                label: EmployeeDashboardPage::getNavigationLabel(),
+                url: EmployeeDashboardPage::getUrl(),
+                icon: EmployeeDashboardPage::getNavigationIcon(),
+                description: __('reports.pages.employee.description'),
             );
         }
 

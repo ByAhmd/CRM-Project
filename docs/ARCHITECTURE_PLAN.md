@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-25 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-26 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -433,6 +433,19 @@ As built (step 12, read from `app/Notifications` and `routes/console.php` on 202
   cleared on unassignment; a direct write is undone) and was backfilled from `created_at` for tasks assigned before
   D-21. The page shows whole days and hours — under an hour reads "less than an hour", from one hour up the mean is
   rounded to the nearest hour — and the export writes hours with one decimal.
+- Employee dashboard (D-26, `Pages/Reports/EmployeeDashboardPage` at `/reports/employee`,
+  `Services/Statistics/Reports/EmployeeDashboard`): one employee's task work for a reader inside whose task reach
+  (`RecordVisibilityResolver::visibleOwners()`) the employee lies; `?employee=<id>` is admitted on mount (404
+  otherwise) and locked. One grouped aggregate gives open / overdue / due today, completed this week and this month,
+  the on-time rate and the average time to finish of this month's completions (the same
+  `TaskPerformanceReport::FINISH_SECONDS_SQL` as D-21) and eight organisation weeks of completions — every boundary
+  computed in PHP on the organisation clock, calendar and week start, bound as stored moments. The overdue, stalled
+  (`Services/Tasks/StalledTaskRule`, shared with the weekly summary, D-18) and completed-with-open-checklist lists are
+  each capped at 10 with their own count; the latest activity is the employee's 10 newest entries, their text shown
+  only on tasks the reader may view (the thread opens with the task). Links only where the reader may view the task
+  and enter the Tasks workspace; «—» for an empty rate or average; the mean through `ReportRow::meanSeconds()` and
+  "overdue" bound like the task report's "overdue now" (the current moment in the storage timezone), so the two agree.
+  Read-only: no writes, no audit.
 
 ### 3.10 Integration architecture
 
@@ -659,7 +672,8 @@ CRM_Project/
 │   │   ├── Pages/                 Workspaces, SalesDashboard, TasksDashboard, ReportsHome, AdminHome (D-23), DealBoard, Calendar,
 │   │   │                          TasksBoard, Settings/GeneralSettings, System/Backups, NotificationPreferences,
 │   │   │   ├── Reports/           LeadReport, ConversionReport, PipelineReport, SalesPerformanceReport, ActivityReport,
-│   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport
+│   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport,
+│   │   │   │                      EmployeeDashboard (D-26)
 │   │   │   └── Concerns/          HasReportFilters
 │   │   ├── Resources/             Leads/, Contacts/, Accounts/, Deals/, Activities/, Tasks/, TaskTemplates/ (routine tasks, D-22), Notes/ (relation-only), Attachments/ (relation-only),
 │   │   │                          Pipelines/ (+StagesRelationManager), LeadStatuses/, LeadSources/, Industries/, ActivityTypes/, CloseReasons/,
@@ -705,7 +719,8 @@ CRM_Project/
 │   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome,
 │   │   │                          WeeklySummary (+ WeeklySummaryReport, WeeklySummaryTask, WeeklySummaryAssignee, WeeklySummaryHealth),
 │   │   │                          CommentDraft and TaskParticipants (mentions and the participant read path, D-20),
-│   │   │                          RoutineTaskService (routine tasks, D-22), TaskChecklist (checklist rules, D-25)
+│   │   │                          RoutineTaskService (routine tasks, D-22), TaskChecklist (checklist rules, D-25),
+│   │   │                          StalledTaskRule (the stalled rule, D-18 / D-26)
 │   │   └── Users/                 UserInvitationService
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
@@ -761,6 +776,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-25 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-26 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

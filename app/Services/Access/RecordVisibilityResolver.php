@@ -184,6 +184,29 @@ final class RecordVisibilityResolver
     }
 
     /**
+     * The users whose records of the model the user reads by ownership —
+     * the people visible() reaches, as a user query: everyone (deleted
+     * accounts included, their records stay readable) at all level, the
+     * user and their team's current members at team level, the user alone
+     * at own level, nobody without the entity. Whatever the account's
+     * status: a disabled colleague's records stay in reach. The employee
+     * dashboard (D-26) lists and admits employees through this, so a
+     * dashboard's reach and the records behind its figures never part.
+     *
+     * @param  class-string<Model&OwnedRecord>  $model
+     * @return Builder<User>
+     */
+    public function visibleOwners(User $user, string $model): Builder
+    {
+        return match ($this->levelFor($user, $model)) {
+            VisibilityLevel::All => User::withTrashed(),
+            VisibilityLevel::Team => User::query()->whereIn('users.id', $this->teamMemberIds($user)),
+            VisibilityLevel::Own => User::query()->whereKey($user->getKey()),
+            VisibilityLevel::None => User::query()->whereRaw('1 = 0'),
+        };
+    }
+
+    /**
      * canWrite() for many records of one model at once, as a test on the
      * owner id: the level is resolved here, once, and the team's member ids
      * are read at most once, so a long list (a calendar range) costs no

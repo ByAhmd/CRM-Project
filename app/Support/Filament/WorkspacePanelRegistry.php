@@ -11,6 +11,7 @@ use App\Filament\Pages\DealBoard;
 use App\Filament\Pages\NotificationPreferences;
 use App\Filament\Pages\Reports\ActivityReportPage;
 use App\Filament\Pages\Reports\ConversionFunnelReportPage;
+use App\Filament\Pages\Reports\EmployeeDashboardPage;
 use App\Filament\Pages\Reports\ForecastReportPage;
 use App\Filament\Pages\Reports\LeadReportPage;
 use App\Filament\Pages\Reports\PipelineReportPage;
@@ -160,6 +161,8 @@ final class WorkspacePanelRegistry
             WorkspacePanel::Reports->id() => [
                 ReportsHome::class,
                 ...self::reportPages(),
+                // D-26: the per-employee dashboard, a Reports page beside the nine reports.
+                EmployeeDashboardPage::class,
             ],
             WorkspacePanel::Admin->id() => [
                 AdminHome::class,

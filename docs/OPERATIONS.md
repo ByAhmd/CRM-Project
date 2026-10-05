@@ -7,7 +7,7 @@ screen (`/app`) or the switcher in the top bar: **Administration** (`/admin`) ho
 (users, roles, teams, audit log, backups, general settings, lookups, pipelines, custom fields, lead-scoring rules);
 **Sales** (`/sales`) the sales records, *Sales → Products*, *Settings → Email templates* and *System → Imports /
 Exports*; **Tasks** (`/tasks`) tasks, routine tasks, the tasks board and the calendar; **Reports** (`/reports`) the
-nine reports. The profile (two-step verification) and *Notification preferences* are in the user menu (the round
+nine reports and the employee dashboard. The profile (two-step verification) and *Notification preferences* are in the user menu (the round
 avatar at the top) of every panel. Commands run from the application directory (release folders:
 `DEPLOY_PATH/current`) with the host's PHP 8.3 binary. After any change to `.env`, rebuild the caches:
 `php artisan optimize` and `php artisan filament:optimize` — a cached configuration ignores `.env` until then.
@@ -16,7 +16,7 @@ Contents: 1 Users · 2 Roles, permissions and teams · 3 Audit ledger · 4 Delet
 6 Attachments and disk growth · 7 Queue and failed jobs · 8 Scheduler · 9 Currency and timezone · 10 Lookups,
 custom fields and email templates · 11 Notification preferences · 12 Demo data · 13 Command reference ·
 14 Common preflight failures · 15 Backups · 16 Weekly summary · 17 Routine tasks · 18 Task mentions, checklists and the task
-report.
+report · 19 Employee dashboard.
 
 ---
 
@@ -451,3 +451,34 @@ a day twice. To check what is due first, sort the routine list by *Next run*.
   unticked into every task it hands out, and a repeating task copies its checklist unticked into the next
   occurrence. Ticks are audited (*Task checklist ticked*), never notified; a tick counts as progress for the weekly
   summary's "stalled" rule.
+
+## 19. Employee dashboard
+
+*Reports → Employee dashboard* («لوحة الموظف», `/reports/employee`, D-26) shows one employee's task work on one screen.
+Open it from the Reports home, or click an employee's name on *Reports → Tasks*; then pick the employee in the select.
+The address keeps the choice (`/reports/employee?employee=<id>`), so a dashboard can be bookmarked or sent to a
+colleague — who sees it only if the employee is in their own reach.
+
+- **Who appears.** Holders of `reports.view` open the page; the employee list follows the reader's *task* visibility:
+  `task.view_all` (administrators by default) lists everyone, deleted, disabled and pending accounts marked as such;
+  `task.view_team` (sales managers by default) lists the reader and their team's members; `task.view_any` alone (sales
+  reps by default) lists the reader only. Anyone else's address answers *404*. The `employee` role has no Reports
+  workspace and never opens the page. A manager sees an employee only while both are in the same team
+  (*Administration → Teams*); to let a manager follow everyone, give their role `task.view_all`
+  (*Administration → Roles*).
+- **Now.** Open tasks, overdue tasks (open, past their due moment — the same count as *overdue now* on *Reports →
+  Tasks*) and tasks due today.
+- **Performance.** Completed this week and this month, the on-time rate of this month's completions (on or before the
+  due date, or without one) and their average time to finish, measured as on *Reports → Tasks* (from when the task
+  reached the employee). With nothing completed this month the rate and the average read «—», not 0%.
+- **Trend.** Completions per week for the last eight weeks, the current one last.
+- **Needs attention.** Overdue tasks (oldest due first); stalled tasks under the weekly summary's rule (in progress with
+  no progress entry, comment or checklist tick for three days, see §16); tasks completed this month with checklist items
+  left unticked. Each list names at most ten tasks and says how many more there are.
+- **Latest activity.** The employee's ten newest progress entries and comments. On a task the reader may open, the line
+  shows the text and the title links to the task (when the reader may also enter the Tasks workspace). On any other
+  task — for example a colleague outside the reader's team mentioned the employee — the line shows only the kind of
+  entry, its status, its moment and the task title as plain text: the comment itself stays with the task.
+- **Clock and calendar.** Today, this week, this month and the eight trend weeks follow *Settings → General settings*:
+  the organisation timezone and the first day of the week. Changing either moves the boundaries at once.
+- The page only reads: nothing on it writes, notifies or enters the audit ledger.

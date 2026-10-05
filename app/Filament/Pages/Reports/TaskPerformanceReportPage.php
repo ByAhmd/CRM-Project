@@ -6,6 +6,7 @@ namespace App\Filament\Pages\Reports;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Statistics\Reports\EmployeeDashboard;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
 use App\Services\Statistics\Reports\TaskPerformanceReport;
@@ -14,7 +15,9 @@ use Illuminate\Support\Collection;
 /**
  * Task performance page (module 23): completed, on-time, late, open and
  * overdue tasks per assignee, with the average time to finish (D-21).
- * Presentation only — TaskPerformanceReport owns the figures.
+ * Presentation only — TaskPerformanceReport owns the figures. Each
+ * employee's name opens their employee dashboard (D-26) when the reader may
+ * open it for them; the unassigned line and anyone out of reach stay text.
  */
 final class TaskPerformanceReportPage extends BaseReportPage
 {
@@ -60,6 +63,42 @@ final class TaskPerformanceReportPage extends BaseReportPage
     protected function reportFormats(): array
     {
         return $this->report()->formats();
+    }
+
+    protected function rowUrls(User $viewer, Collection $rows): array
+    {
+        if (! EmployeeDashboardPage::canAccess()) {
+            return [];
+        }
+
+        $assignees = [];
+
+        foreach ($rows as $index => $row) {
+            $id = $row->meta['assignee_id'] ?? null;
+
+            if (is_int($id)) {
+                $assignees[$index] = $id;
+            }
+        }
+
+        if ($assignees === []) {
+            return [];
+        }
+
+        $reachable = array_map('intval', app(EmployeeDashboard::class)->employees($viewer)
+            ->whereKey(array_values($assignees))
+            ->pluck('users.id')
+            ->all());
+
+        $urls = [];
+
+        foreach ($assignees as $index => $id) {
+            if (in_array($id, $reachable, true)) {
+                $urls[$index] = EmployeeDashboardPage::getUrl(['employee' => $id]);
+            }
+        }
+
+        return $urls;
     }
 
     private function report(): TaskPerformanceReport

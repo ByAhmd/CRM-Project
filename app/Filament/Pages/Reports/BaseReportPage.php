@@ -61,6 +61,9 @@ abstract class BaseReportPage extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
+    /** The palette names a chart's datasets may use, resolved to the panel's colours in the current theme. */
+    public const array CHART_PALETTE = ['primary', 'success', 'danger', 'warning', 'info', 'gray'];
+
     protected string $view = 'filament.pages.reports.report';
 
     /**
@@ -359,8 +362,22 @@ abstract class BaseReportPage extends Page
             'chartType' => static::chartType(),
             'chartOptions' => self::chartOptions($locale === 'ar', static::chartIsStacked()),
             'chartId' => 'crm-report-chart-'.Str::slug(static::reportKey()),
-            'palette' => ['primary', 'success', 'danger', 'warning', 'info', 'gray'],
+            'palette' => self::CHART_PALETTE,
+            'rowUrls' => $isEmpty ? [] : $this->rowUrls($viewer, $rows),
         ];
+    }
+
+    /**
+     * Where a row's label leads, keyed by the row's position; a row without
+     * an entry stays plain text. No report links its rows by default; one
+     * that does checks the reader's own access to every target (A-20).
+     *
+     * @param  Collection<int, ReportRow>  $rows
+     * @return array<int, string>
+     */
+    protected function rowUrls(User $viewer, Collection $rows): array
+    {
+        return [];
     }
 
     /**
@@ -494,7 +511,7 @@ abstract class BaseReportPage extends Page
      *
      * @return array<string, mixed>
      */
-    private static function chartOptions(bool $rtl, bool $stacked): array
+    public static function chartOptions(bool $rtl, bool $stacked): array
     {
         $direction = $rtl ? 'rtl' : 'ltr';
 

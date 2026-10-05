@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 a home panel plus four workspace panels (D-23). Engineering standard inherited from the Stockflow (ZonKSA)
 project and adapted; the authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-25 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-26 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -129,7 +129,9 @@ workspaces: home panel `/app` + Sales, Tasks, Reports and Administration panels 
 workspace screen with locked cards after sign-in, owning-panel links shown only to readers who may enter, permanent
 redirects from the old `/admin/...` addresses (D-23) · a public bilingual landing page at `/`, truthful claims only,
 panels kept out of search engines (D-24) · task checklists: written with `update`, ticked with `progress` while
-open, completion with unticked items allowed with a warning, copied unticked by routines and recurrence (D-25).
+open, completion with unticked items allowed with a warning, copied unticked by routines and recurrence (D-25) ·
+an employee dashboard in Reports (`/reports/employee`): one employee's task work, reach by the reader's task visibility
+all/team/own, a task's thread text and link only where the reader may open the task, read-only (D-26).
 
 ## 6. QA checklist before any commit
 

@@ -15,6 +15,7 @@ return [
         'win_loss' => 'Win / loss report',
         'forecast' => 'Forecast report',
         'tasks' => 'Task performance',
+        'employee' => 'Employee dashboard',
     ],
 
     'pages' => [
@@ -53,6 +54,10 @@ return [
         'tasks' => [
             'title' => 'Task performance',
             'description' => 'Tasks completed per assignee in the period, on time or late, how long they took on average, what is still open and what is overdue now.',
+        ],
+        'employee' => [
+            'title' => 'Employee dashboard',
+            'description' => "One employee's task work on one screen: what is open and overdue now, what they completed this week and this month, the last eight weeks, what needs attention and their latest updates.",
         ],
     ],
 
@@ -208,6 +213,74 @@ return [
         'days' => '{0} less than a day|{1} :count day|[2,*] :count days',
         'hours' => '{0} less than an hour|{1} :count hour|[2,*] :count hours',
         'days_and_hours' => ':days :hours',
+    ],
+
+    // The employee dashboard (D-26): one employee's task work on one screen.
+    'employee' => [
+        'sections' => [
+            'choose' => 'Employee',
+            'now' => 'Right now',
+            'performance' => 'Performance',
+            'trend' => 'Tasks completed per week',
+            'activity' => 'Latest activity',
+        ],
+        'fields' => [
+            'employee' => 'Employee',
+        ],
+        'placeholders' => [
+            'employee' => 'Choose an employee',
+        ],
+        'options' => [
+            'deleted' => ':name (deleted account)',
+            'disabled' => ':name (disabled account)',
+            'pending' => ':name (invitation not accepted yet)',
+        ],
+        'kpis' => [
+            'open' => 'Open tasks',
+            'overdue' => 'Overdue',
+            'overdue_description' => 'Open and past their due date',
+            'due_today' => 'Due today',
+            'due_today_description' => 'Open and due during today',
+            'completed_week' => 'Completed this week',
+            'completed_month' => 'Completed this month',
+            'on_time_rate' => 'On-time rate',
+            'on_time_rate_description' => "Of this month's completed tasks",
+            'average_time_to_finish' => 'Average time to finish',
+            'average_time_to_finish_description' => "This month's completed tasks, from assignment to completion",
+        ],
+        'chart' => [
+            'completed' => 'Completed',
+        ],
+        'lists' => [
+            'overdue' => [
+                'heading' => 'Overdue tasks',
+                'empty' => 'No overdue tasks.',
+                'detail' => 'Due :date · overdue for :days',
+            ],
+            'stalled' => [
+                'heading' => 'Stalled tasks',
+                'empty' => 'No stalled tasks.',
+                'detail' => 'Last progress :date · quiet for :days',
+            ],
+            'checklist_open' => [
+                'heading' => 'Completed with checklist items open',
+                'empty' => 'No task completed this month left checklist items open.',
+                'detail' => 'Completed :date · checklist :progress',
+            ],
+            'days' => '{0} less than a day|{1} :count day|[2,*] :count days',
+            'more' => '{1} +:count more task|[2,*] +:count more tasks',
+        ],
+        'empty' => [
+            'choose' => [
+                'heading' => 'Choose an employee',
+                'description' => 'Pick someone from the list above to see their task work.',
+            ],
+            'nobody' => [
+                'heading' => 'No one in your reach',
+                'description' => 'Your task visibility does not reach any employee yet.',
+            ],
+            'activity' => 'No progress updates or comments yet.',
+        ],
     ],
 
     'actions' => [

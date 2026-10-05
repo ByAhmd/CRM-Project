@@ -8,7 +8,6 @@ use App\Enums\TaskStatus;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
-use App\Services\Settings\SettingsRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -37,14 +36,24 @@ use Illuminate\Support\Collection;
  * least one visible task appear, plus an "unassigned" line when unassigned
  * tasks are in reach. Cancelled tasks are neither completed nor open.
  *
- * "Overdue right now" reads the organisation clock (SettingsRepository),
- * never the application clock; ReportPagesTest guards that the two agree.
+ * "Overdue right now" compares the due date with the current moment written
+ * in the application timezone the columns are stored in (A-19), like every
+ * other bound, so it holds whatever timezone the organisation keeps and
+ * matches the employee dashboard's overdue count (D-26);
+ * EmployeeDashboardFiguresTest guards that the two agree.
  */
 final class TaskPerformanceReport
 {
+    /**
+     * The time to finish of one completed task in seconds (D-21): from when
+     * it reached its assignee — its creation when no assignment moment is
+     * recorded — to its completion, never negative. The one expression every
+     * reader of the measure uses (this report, the employee dashboard, D-26).
+     */
+    public const string FINISH_SECONDS_SQL = 'GREATEST(0, TIMESTAMPDIFF(SECOND, COALESCE(tasks.assigned_at, tasks.created_at), tasks.completed_at))';
+
     public function __construct(
         private readonly RecordVisibilityResolver $visibility,
-        private readonly SettingsRepository $settings,
     ) {}
 
     /**
@@ -56,7 +65,9 @@ final class TaskPerformanceReport
         $completed = TaskStatus::Completed->value;
         $open = Task::openStatusValues();
         $openList = implode(', ', array_fill(0, count($open), '?'));
-        $now = CarbonImmutable::now($this->settings->timezone())->format('Y-m-d H:i:s');
+        // The current moment written in the timezone the columns are stored
+        // in (A-19), as every other bound (ReportFilters::inAppTimezone()).
+        $now = CarbonImmutable::now()->setTimezone((string) config('app.timezone'))->format('Y-m-d H:i:s');
 
         $aggregates = [];
 
@@ -67,7 +78,7 @@ final class TaskPerformanceReport
             ->selectRaw('SUM(CASE WHEN tasks.status = ? AND tasks.completed_at BETWEEN ? AND ? AND tasks.due_at IS NOT NULL AND tasks.completed_at > tasks.due_at THEN 1 ELSE 0 END) AS late', [$completed, $from, $to])
             ->selectRaw("SUM(CASE WHEN tasks.status IN ({$openList}) AND tasks.created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS still_open", [...$open, $from, $to])
             ->selectRaw("SUM(CASE WHEN tasks.status IN ({$openList}) AND tasks.due_at < ? THEN 1 ELSE 0 END) AS overdue_now", [...$open, $now])
-            ->selectRaw('SUM(CASE WHEN tasks.status = ? AND tasks.completed_at BETWEEN ? AND ? THEN GREATEST(0, TIMESTAMPDIFF(SECOND, COALESCE(tasks.assigned_at, tasks.created_at), tasks.completed_at)) ELSE 0 END) AS finish_seconds', [$completed, $from, $to])
+            ->selectRaw('SUM(CASE WHEN tasks.status = ? AND tasks.completed_at BETWEEN ? AND ? THEN '.self::FINISH_SECONDS_SQL.' ELSE 0 END) AS finish_seconds', [$completed, $from, $to])
             ->groupBy('tasks.assignee_id')
             ->toBase()
             ->get() as $aggregate) {

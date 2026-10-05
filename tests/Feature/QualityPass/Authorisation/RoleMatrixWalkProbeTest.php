@@ -12,6 +12,7 @@ use App\Filament\Pages\DealBoard;
 use App\Filament\Pages\NotificationPreferences;
 use App\Filament\Pages\Reports\ActivityReportPage;
 use App\Filament\Pages\Reports\ConversionFunnelReportPage;
+use App\Filament\Pages\Reports\EmployeeDashboardPage;
 use App\Filament\Pages\Reports\ForecastReportPage;
 use App\Filament\Pages\Reports\LeadReportPage;
 use App\Filament\Pages\Reports\PipelineReportPage;
@@ -218,6 +219,8 @@ final class RoleMatrixWalkProbeTest extends TestCase
             [SourcePerformanceReportPage::getUrl(), self::ALL],
             [TaskPerformanceReportPage::getUrl(), self::ALL],
             [WinLossReportPage::getUrl(), self::ALL],
+            // D-26: the employee dashboard opens like the reports; who it shows follows the task reach.
+            [EmployeeDashboardPage::getUrl(), self::ALL],
         ];
 
         $walkedPanels = [];

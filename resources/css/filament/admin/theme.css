@@ -848,6 +848,101 @@ a.crm-workspace-card:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------
+ | Employee dashboard (decision D-26)
+ |
+ | The KPI tiles, the trend chart and the sections are the panel's own
+ | components; these rules lay out the three "needs attention" lists and the
+ | latest activity, on tokens and logical properties only, so both themes and
+ | both directions read alike. A link is the accent text on the card (5.4:1
+ | light, 8.5:1 dark); a title that is not a link keeps the body text colour,
+ | so the difference never rests on colour alone (the link is underlined).
+ * ------------------------------------------------------------------------- */
+
+.crm-employee-kpis > * + * {
+    margin-block-start: 1.5rem;
+}
+
+.crm-employee-attention {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+@media (min-width: 80rem) {
+    .crm-employee-attention {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.crm-employee-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-employee-list-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-block: 0.625rem;
+    border-block-end: 1px solid var(--crm-border);
+}
+
+.crm-employee-list-item:last-child {
+    border-block-end: 0;
+}
+
+.crm-employee-list-title {
+    color: var(--crm-text);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+a.crm-employee-list-title,
+.crm-report-row-link {
+    color: var(--crm-accent-text);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+a.crm-employee-list-title:focus-visible,
+.crm-report-row-link:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.crm-employee-list-meta,
+.crm-employee-empty,
+.crm-employee-more {
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+.crm-employee-more {
+    margin-block-start: 0.75rem;
+    font-weight: 600;
+}
+
+.crm-employee-activity-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.crm-employee-activity-body {
+    color: var(--crm-text);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+/* ---------------------------------------------------------------------------
  | Reduced motion
  |
  | Zero out decorative transitions (hover fades, sidebar collapse slides,

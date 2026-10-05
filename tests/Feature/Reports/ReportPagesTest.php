@@ -10,6 +10,7 @@ use App\Enums\Permission;
 use App\Filament\Pages\Reports\ActivityReportPage;
 use App\Filament\Pages\Reports\BaseReportPage;
 use App\Filament\Pages\Reports\ConversionFunnelReportPage;
+use App\Filament\Pages\Reports\EmployeeDashboardPage;
 use App\Filament\Pages\Reports\ForecastReportPage;
 use App\Filament\Pages\Reports\LeadReportPage;
 use App\Filament\Pages\Reports\PipelineReportPage;
@@ -117,7 +118,7 @@ final class ReportPagesTest extends TestCase
     }
 
     #[Test]
-    public function the_navigation_lists_the_nine_report_pages_to_reports_view_holders(): void
+    public function the_navigation_lists_the_nine_reports_and_the_employee_dashboard_to_reports_view_holders(): void
     {
         $this->actingAs($this->salesManager());
         $group = $this->reportsGroup();
@@ -126,11 +127,14 @@ final class ReportPagesTest extends TestCase
 
         $labels = collect($group->getItems())->map(fn (mixed $item): string => (string) $item->getLabel())->all();
 
-        $this->assertCount(9, $labels);
+        // The nine reports and, since D-26, the employee dashboard beside them.
+        $this->assertCount(10, $labels);
 
         foreach (self::PAGES as $page) {
             $this->assertContains($page::getNavigationLabel(), $labels);
         }
+
+        $this->assertContains(EmployeeDashboardPage::getNavigationLabel(), $labels);
     }
 
     #[Test]

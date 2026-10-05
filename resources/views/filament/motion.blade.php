@@ -13,7 +13,8 @@
     - prefers-reduced-motion stops it entirely; the true value just appears.
     - Only whole numbers animate (plain or comma-grouped). A decimal such as
       «66.7%» never animates: rounding its intermediate frames would show
-      figures that were never true.
+      figures that were never true. Nor does a value marked data-crm-static —
+      words around numbers, such as a duration («يومان و5 ساعات», D-26).
     - The animation always ends on the exact server-rendered text, so the
       final frame is the source of truth, not a reconstruction.
     - A value is animated once (data-crm-counted); Livewire re-renders that
@@ -28,6 +29,12 @@
         const countUp = () => {
             document.querySelectorAll('.fi-wi-stats-overview-stat-value:not([data-crm-counted])').forEach((el) => {
                 el.dataset.crmCounted = '1';
+
+                // A figure marked static is words around numbers (a duration
+                // such as «يومان و5 ساعات», D-26), not a count: it appears as it is.
+                if (el.querySelector('[data-crm-static]')) {
+                    return;
+                }
 
                 const raw = el.textContent || '';
                 const match = raw.match(/\d{1,3}(?:,\d{3})+|\d+/);
