@@ -63,8 +63,6 @@ return [
     ],
 
     'tables' => [
-        'my_tasks_today' => 'My tasks today',
-        'my_tasks_today_description' => ':today due today · :overdue overdue',
         'upcoming_follow_ups' => 'Upcoming follow-ups',
         'upcoming_follow_ups_description' => '{1} Follow-ups, calls and meetings in the next day|[2,*] Follow-ups, calls and meetings in the next :days days',
         'stale_deals' => 'Stale deals',
@@ -72,7 +70,6 @@ return [
         'columns' => [
             'title' => 'Title',
             'kind' => 'Kind',
-            'priority' => 'Priority',
             'due_at' => 'Due',
             'subject' => 'Related to',
             'assignee' => 'Assignee',
@@ -85,8 +82,6 @@ return [
     ],
 
     'empty' => [
-        'tasks' => 'Nothing due today',
-        'tasks_description' => 'No open task assigned to you is due or overdue.',
         'follow_ups' => 'No upcoming follow-ups',
         'follow_ups_description' => 'No follow-up, call or meeting is due in the coming days.',
         'stale_deals' => 'No stale deals',

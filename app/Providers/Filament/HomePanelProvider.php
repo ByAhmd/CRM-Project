@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 use App\Enums\WorkspacePanel;
 use App\Filament\Auth\Pages\RequestPasswordReset;
 use App\Filament\Auth\Pages\ResetPassword;
+use App\Filament\Pages\Inbox;
 use App\Providers\Filament\Concerns\ConfiguresCrmPanel;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
@@ -25,7 +26,8 @@ use Filament\PanelProvider;
  * runs outside every panel (the attachment and backup downloads, queued
  * jobs, console commands) resolves to a panel that admits every active
  * user. No registration (invite-only). No sidebar: the screens here are
- * reached from the top bar.
+ * reached from the top bar. Its Inbox serves the workspace screen; inside a
+ * workspace the reader reads that workspace's own Inbox, sidebar kept (D-27).
  */
 final class HomePanelProvider extends PanelProvider
 {

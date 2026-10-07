@@ -13,6 +13,7 @@ return [
 
     'fields' => [
         'template' => 'Template',
+        'mail_warning' => 'Mail delivery',
         'locale' => 'Language',
         'to' => 'To',
         'subject' => 'Subject',

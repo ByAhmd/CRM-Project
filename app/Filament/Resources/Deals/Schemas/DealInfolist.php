@@ -134,6 +134,7 @@ final class DealInfolist
                 Section::make(__('deals.sections.line_items'))
                     ->schema([
                         RepeatableEntry::make('products')
+                            ->label(__('deals.sections.line_items'))
                             ->hiddenLabel()
                             ->schema([
                                 Grid::make(6)->schema([
@@ -160,6 +161,7 @@ final class DealInfolist
                 Section::make(__('deals.sections.stage_history'))
                     ->schema([
                         RepeatableEntry::make('stageLogs')
+                            ->label(__('deals.sections.stage_history'))
                             ->hiddenLabel()
                             ->schema([
                                 Grid::make(5)->schema([

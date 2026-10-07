@@ -115,6 +115,7 @@ final class DuplicateWarning
     private static function placeholder(callable $warning): Placeholder
     {
         return Placeholder::make('duplicate_warning')
+            ->label(__('merge.fields.duplicate_warning'))
             ->hiddenLabel()
             ->content(fn (Get $get, ?Model $record): Htmlable => self::render((string) $warning($get, $record)))
             ->visible(fn (Get $get, ?Model $record): bool => $warning($get, $record) !== null);

@@ -105,6 +105,7 @@ final class LeadInfolist
                 Section::make(__('leads.sections.status_history'))
                     ->schema([
                         RepeatableEntry::make('statusLogs')
+                            ->label(__('leads.sections.status_history'))
                             ->hiddenLabel()
                             ->schema([
                                 Grid::make(4)->schema([

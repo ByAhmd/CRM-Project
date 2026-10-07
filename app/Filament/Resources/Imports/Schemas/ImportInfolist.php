@@ -66,6 +66,7 @@ final class ImportInfolist
                     ->visible(fn (Import $record): bool => $record->getFailedRowsCount() > 0)
                     ->schema([
                         RepeatableEntry::make('failed_rows')
+                            ->label(__('imports.sections.failed_rows'))
                             ->hiddenLabel()
                             ->state(fn (Import $record): array => self::failedRows($record))
                             ->schema([

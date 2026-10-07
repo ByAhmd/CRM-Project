@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Tasks\Pages;
 
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
+use App\Filament\Support\TaskActions;
 use App\Models\User;
 use App\Services\Tasks\TaskService;
 use Filament\Resources\Pages\CreateRecord;
@@ -30,6 +31,28 @@ final class CreateTask extends CreateRecord
         assert($actor instanceof User);
 
         return TaskForm::saving(static fn (): Model => app(TaskService::class)->create($data, $actor));
+    }
+
+    /**
+     * Quick add's «خيارات أكثر» (D-27) opens this page with a one-time token
+     * in the address; the values typed so far wait in the reader's session
+     * and are filled over the form's defaults only as far as
+     * TaskActions::takePrefill() validates them. The save goes through
+     * TaskService like any other.
+     */
+    protected function afterFill(): void
+    {
+        $actor = auth()->user();
+
+        if (! $actor instanceof User) {
+            return;
+        }
+
+        $prefill = TaskActions::takePrefill(request()->query(TaskActions::PREFILL_PARAMETER), $actor);
+
+        if ($prefill !== []) {
+            $this->form->fillPartially($prefill, array_keys($prefill));
+        }
     }
 
     protected function getRedirectUrl(): string

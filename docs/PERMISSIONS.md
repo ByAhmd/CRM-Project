@@ -1,6 +1,6 @@
 # Permission model
 
-Decisions D-3, D-4, D-13, D-14, D-15, D-16, D-17, D-18, D-19, D-20, D-21, D-22, D-23, D-25, D-26 and A-12 as implemented in the foundation.
+Decisions D-3, D-4, D-13, D-14, D-15, D-16, D-17, D-18, D-19, D-20, D-21, D-22, D-23, D-25, D-26, D-27 and A-12 as implemented in the foundation.
 
 ## Where authority lives
 
@@ -67,6 +67,28 @@ The CRM is split into a home panel (`/app`: sign-in, password reset, profile and
 - Seeded roles keep their machine key; `super_admin` cannot be edited at all.
 - Permanent deletion is never granted (`forceDelete` = false everywhere, D-13).
 - The audit ledger is append-only (`ActivityLogAppendOnlyObserver`) and readable only with `audit.view`.
+
+## Tasks workspace controls (D-27)
+
+The quicker controls of the Tasks workspace add **no permission key and change no rule**: each one is a `TaskActions` action that `->authorize()`s with the `TaskPolicy` verb below and writes through `TaskService`, which checks the workflow again under a row lock. A control the reader may not use is not drawn (a plain pill, date or mark stands in); a forged mount is refused on the server all the same. Every task the controls act on is looked up again inside the reader's reach (`TaskResource::getEloquentQuery()`, or `MyWorkFeed::find()` for My Work), so an id outside it resolves to nothing.
+
+| Control | Where | Needs |
+|---|---|---|
+| Completion check (one click; the D-25 warning first when checklist items are open) | task list, My Work | `complete` (= `progress`) on an open task |
+| «تراجع» in the completion toast | every Tasks page (`TaskUndo`) | `reopen` of the completed task (= `progress`), and only while it is still completed |
+| Status pill — Start / Complete / Reopen | task list, My Work, board card, task page | `start` / `complete` / `reopen` (all `progress`; a cancelled task reopens only under `update`) |
+| Status pill — Cancel (with a confirmation) | same | `cancel` (= `update`) — never the handed-out assignee (D-14) |
+| Board drag (by-status view) | tasks board | the same verb as the move it makes; a refused move snaps back with the reason |
+| Reschedule chips (today, tomorrow, next week, pick a date) | task list due cell, My Work, task page | `update` on an open task — never the handed-out assignee (the dates stay with the assigner) |
+| Quick add (title, assignee, due chips, priority) | My Work, task list, the phone bar «+», the N key | `create`; choosing another assignee needs `assign` (`task.assign`, D-14), and the list offers only users in the reader's assignment reach (`RecordVisibilityResolver::assignableUsers`); «خيارات أكثر» keeps the values in the reader's session behind a one-time token (never in the address) and re-validates the same fields on the create page |
+| One-click checklist tick on the task page | task page | `tickChecklist` (= `progress` on an open task; never a mentioned participant, D-25) |
+| «تعديل القائمة» (edit the checklist) | task page | `update` on an open task |
+| Composer — comment (with @mentions) | task page | `comment` (= `view`, never on a deleted task, D-17, D-20) |
+| Composer — «تحديث إنجاز» (progress update) | task page | `postUpdate` (= `progress`) on an open task |
+| Header primary button and the «المزيد» menu | task page | each entry keeps its own verb (start, complete, reopen, post update, checklist, comment, cancel, assign, edit, delete, restore) |
+| «مهامي فقط» toggle | task list, tasks board | none beyond the page: it only narrows what the reader already sees |
+
+The **by-status board view** shows only the tasks the reader may open (the task list's query); the by-assignee view keeps D-14's organisation-wide display. **My Work** lists the reader's own tasks inside their scope. The **Inbox** (`/app/inbox`, the home panel) opens for every active user and lists only the reader's own notifications (`InboxService` starts every query from the reader and refuses another user's notice); opening a notice marks it read and follows its link only when the link points into this site and, for a workspace address, into one the reader may still enter (`PanelAccess`); otherwise no «فتح» is offered. The **web manifest** (`/manifest.webmanifest`) is public, holds no private data and runs without the session (no cookie is set); there is no service worker, so nothing is cached on the device.
 
 ## Adding a permission
 

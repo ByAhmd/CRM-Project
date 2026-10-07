@@ -13,6 +13,7 @@ return [
 
     'fields' => [
         'template' => 'القالب',
+        'mail_warning' => 'حالة إرسال البريد',
         'locale' => 'اللغة',
         'to' => 'إلى',
         'subject' => 'الموضوع',

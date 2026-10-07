@@ -24,6 +24,7 @@ use App\Filament\Resources\Tasks\Tables\TasksTable;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Settings\OrganisationCalendar;
 use App\Services\Tasks\TaskParticipants;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -98,7 +99,10 @@ final class TaskResource extends Resource
             return null;
         }
 
-        return $query->where('due_at', '<', now())->exists() ? 'danger' : 'warning';
+        // Overdue means due before the organisation's today began, as on My Work and the list (D-27).
+        $calendar = app(OrganisationCalendar::class);
+
+        return $query->where('tasks.due_at', '<', $calendar->stored($calendar->today()))->exists() ? 'danger' : 'warning';
     }
 
     public static function form(Schema $schema): Schema
@@ -223,8 +227,9 @@ final class TaskResource extends Resource
     }
 
     /**
-     * The actor's open tasks due by the end of today, or null when the actor
-     * may not list tasks at all.
+     * The actor's open tasks due by the end of the organisation's today (its
+     * calendar, never the server's day), or null when the actor may not list
+     * tasks at all.
      *
      * @return Builder<Task>|null
      */
@@ -236,9 +241,11 @@ final class TaskResource extends Resource
             return null;
         }
 
+        $calendar = app(OrganisationCalendar::class);
+
         return Task::query()
             ->whereIn('tasks.status', Task::openStatusValues())
             ->where('tasks.assignee_id', $user->getKey())
-            ->where('tasks.due_at', '<=', now()->endOfDay());
+            ->where('tasks.due_at', '<', $calendar->dayRange($calendar->today())[1]);
     }
 }

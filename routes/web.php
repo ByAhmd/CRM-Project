@@ -8,11 +8,17 @@ use App\Http\Controllers\BackupDownloadController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LandingLanguageController;
 use App\Http\Controllers\LegacyAdminRedirectController;
+use App\Http\Controllers\WebManifestController;
 use App\Support\Http\LegacyAdminRedirects;
 use BezhanSalleh\LanguageSwitch\Http\Middleware\SwitchLanguageLocale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /*
  | The public landing page at the site root (decision D-24). It is not a
@@ -33,6 +39,24 @@ Route::get('/', LandingController::class)
 
 Route::post('/language', LandingLanguageController::class)
     ->name('landing.language');
+
+/*
+ | The web manifest (decision D-27): installing the CRM as an app — its name,
+ | icons, theme colour and the workspace screen as start page. Public and
+ | session-free: it names the product only, never a user, and a browser
+ | fetches it without credentials, so it runs without the session and cookie
+ | middleware — no session is opened per fetch and the publicly cacheable
+ | response never carries a cookie. No service worker is registered.
+ */
+Route::get('/manifest.webmanifest', WebManifestController::class)
+    ->withoutMiddleware([
+        EncryptCookies::class,
+        AddQueuedCookiesToResponse::class,
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        PreventRequestForgery::class,
+    ])
+    ->name('manifest');
 
 /*
  | Addresses that moved out of /admin when the CRM split into workspaces

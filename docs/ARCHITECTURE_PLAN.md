@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-26 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-27 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -80,7 +80,7 @@ Administration workspaces, each entered by its own permission; the site root `/`
 
 | # | Module | Delivered capability |
 |---|---|---|
-| 1 | Dashboard | Permission-aware KPIs (leads by status, new/qualified/converted, open deals, weighted pipeline, won/lost, conversion rate, revenue won by month, my tasks today/overdue, upcoming follow-ups, stale deals, activity counts), date/owner/pipeline filters, charts. Since D-23 the sales KPIs and charts are the Sales workspace home (`SalesDashboard`, with the filters) and the two task lists the Tasks workspace home (`TasksDashboard`) |
+| 1 | Dashboard | Permission-aware KPIs (leads by status, new/qualified/converted, open deals, weighted pipeline, won/lost, conversion rate, revenue won by month, my tasks today/overdue, upcoming follow-ups, stale deals, activity counts), date/owner/pipeline filters, charts. Since D-23 the sales KPIs and charts are the Sales workspace home (`SalesDashboard`, with the filters) and the two task lists the Tasks workspace home (`TasksDashboard`); since D-27 that home is «عملي» (My Work: the reader's own tasks in buckets — overdue, today, next 7 days, later, no date, completed recently — fed by `MyWorkFeed`), with the upcoming follow-ups under it |
 | 2 | Leads | CRUD, status (configurable), source (configurable), owner, priority, score, qualification (status kind + qualified_at/by + history + notes), duplicate detection on email/phone, tags, notes, activities, tasks, attachments, timeline, bulk assign/status/tag/delete, import/export, conversion to Account + Contact + Deal |
 | 3 | Lead sources / statuses | Configurable bilingual lookup tables with ordering, colours and behavioural `kind` |
 | 4 | Contacts | CRUD, account link, job title, department, emails/phones, preferred locale, social link, owner, tags, notes, activities, tasks, attachments, timeline, related deals, duplicate detection, merge |
@@ -88,7 +88,7 @@ Administration workspaces, each entered by its own permission; the site root `/`
 | 6 | Deals (Opportunities) | CRUD, account, contacts (with roles), owner, pipeline, stage, probability (stage default + override), amount computed from product line items in SAR (D-8), expected close date, source, product line items (D-8), forecast category, status open/won/lost, win/loss reason (configurable), competitors, stage history, activities, tasks, attachments, timeline, kanban board |
 | 7 | Pipelines & stages | Configurable pipelines, ordered stages, probability, kind (open/won/lost), default stage, default pipeline, active flag |
 | 8 | Activities | Calls, meetings, emails (logged), other; configurable activity types; owner, links to lead/contact/account/deal, occurred_at, duration, outcome, attachments, timeline |
-| 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views, progress log and comments with @mentions (D-14, D-17, D-20), routine tasks (D-22), checklists with who ticked each item and done / total progress (D-25) |
+| 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views, progress log and comments with @mentions (D-14, D-17, D-20), routine tasks (D-22), checklists with who ticked each item and done / total progress (D-25); since D-27 a ClickUp-style Tasks workspace — My Work, the grouped list with the completion check and the status pill, quick add, the two-column task page with the composer, the board by status with drag, the Inbox, the phone bar, the installable app and keyboard shortcuts (section 3.4.3) |
 | 10 | Calendar | Month/week/day views of tasks, meetings and follow-ups with create/edit from the calendar |
 | 11 | Notes | Authored, timestamped, attached to lead/contact/account/deal, pinning, edit history (audit ledger) |
 | 12 | Timeline | Chronological, per record: activities, notes, tasks, stage/status changes, ownership changes, attachments, conversion, audit events |
@@ -213,8 +213,9 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   declares every group and Filament renders only the groups its items use.
 - Standard pages per resource; record 360 views (`ViewLead`, `ViewAccount`, `ViewDeal`) with tabs:
   overview, timeline, activities, tasks, notes, attachments, related records.
-- Custom pages: `Workspaces` (the workspace screen, home panel), `SalesDashboard` (Filament dashboard with filters
-  form), `TasksDashboard`, `ReportsHome`, `AdminHome` (the workspace homes), `DealBoard` (kanban),
+- Custom pages: `Workspaces` (the workspace screen, home panel), `Inbox` (home panel, D-27), `SalesDashboard` (Filament
+  dashboard with filters form), `TasksDashboard` (My Work since D-27), `ReportsHome`, `AdminHome` (the workspace homes),
+  `DealBoard` (kanban),
   `Calendar`, `TasksBoard` (the shared, organisation-wide tasks board, D-14; in-progress cards carry a status
   badge), `Reports/*`, `Settings/General`. `ViewTask` shows the task's progress log (D-14 amendment,
   2026-09-28) and offers the assignee start / post update / complete; a handed-out task's edit, cancel and
@@ -300,6 +301,101 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   they can read it. Each language has its own address (`LandingPageChrome::addressFor()`: `/` for Arabic,
   `/?locale=en`), canonical to itself, with hreflang alternates. `tests/Feature/Landing/LandingClaimsTest.php` pins
   every claim of the page to the shipped code.
+
+### 3.4.3 Tasks workspace (D-27)
+
+The Tasks workspace is presented apart from the Sales task tabs, on shared helpers, so every screen draws a task the
+same way and every control is the same authorised action. The rules (D-14 + amendment, D-17, D-20, D-22, D-25) are
+untouched: the UI only makes the allowed actions quicker.
+
+- **Separation.** `TasksTable::configure()` is the workspace list and `TaskInfolist::configure()` the workspace task
+  page; the lead, contact, account and deal task tabs (`BaseTasksRelationManager`) use `configureForSubjectTab()`,
+  built from the private `classic()` / `classicComponents()` — the listing and modal as they stood before D-27, pinned
+  by `tests/Feature/Tasks/SalesTaskTabsRegressionTest.php`. The Sales tabs keep the original `TaskActions` dialogs
+  (start, post update, comment, checklist, complete, cancel, reopen, bulk complete).
+- **Organisation clock.** `Services\Settings\OrganisationCalendar` (timezone and week start from `SettingsRepository`):
+  `today()`, `startOfWeek()`, `dayRange()` (a `[start, nextStart)` pair in the stored timezone, compared with the raw
+  `due_at`, never SQL `DATE()`) — used by the list tabs, My Work's buckets, the board's *Completed this week* and the
+  relative dates.
+- **Presentation helpers** (server-rendered, escaped): `Filament\Support\TaskVisuals` — status pill (the `TaskStatus`
+  colour plus an icon), priority flag (urgent red, high orange, medium and low muted; named for screen readers),
+  initials avatar (A-23), checklist meter (done / total), relative due date (`Services\Tasks\RelativeDueDates` →
+  `RelativeDue`: «اليوم 17:00», «غداً», «أمس», a weekday, the date; red when overdue with «متأخرة N أيام» through
+  `trans_choice`, amber today; `DueTone`), the completion check, and column/entry factories; the Blade components
+  `<x-task.status-pill>`, `<x-task.priority-flag>`, `<x-task.avatar>`, `<x-task.checklist-meter>`, `<x-task.due>`.
+  Colours are the `--crm-due-*`, `--crm-flag-*` and `--crm-meter-*` tokens (one "done" green shared by the check, the
+  meter and the checklist box).
+- **Actions** (`Filament\Support\TaskActions`, below its "Tasks workspace (D-27)" marker; each `->authorize()`d by the
+  `TaskPolicy` verb and writing only through `TaskService`): `statusStart` / `statusComplete` / `statusReopen` /
+  `statusCancel` (`App\Enums\TaskTransition`), `statusMenu()` and `changeStatus()` (the pill), `quickComplete()` (one
+  click; the D-25 warning dialog first when items are open; the toast's «تراجع» dispatches
+  `TaskActions::UNDO_COMPLETE_EVENT`, handled by `App\Livewire\TaskUndo` on every Tasks page, which calls
+  `TaskService::undoCompletion()` only while the task is still completed — on a repeating task it also withdraws the
+  occurrence that completion scheduled while nobody has touched it, and `TaskRecurrence::next()` never schedules a
+  second occurrence for the same due date; a refused undo is a danger toast, never an error page; `CHANGED_EVENT` then
+  redraws the page), `rescheduleTo()` / `reschedulePick()` / `reschedule()` (`DueShortcut`,
+  `Services\Tasks\DueShortcuts`, `TaskService::moveDue()`), `quickAdd()` (title, assignee for `task.assign` holders —
+  the options keyed by user id — due chips, priority → `TaskService::create()`; «خيارات أكثر» keeps the values in the
+  reader's session and opens the create page with a one-time `?prefill=` token only, never the typed text, re-validated
+  by `TaskActions::takePrefill()` / `createPrefill()`), and the predicates `transitionsFor()`, `mayComplete()` and `mayReschedule()` that
+  decide whether a control is drawn. Pages that render a task without a table record (My Work, the board) resolve it
+  from the browser's id through the reader's readable query (`TaskResource::getEloquentQuery()`, `MyWorkFeed::find()`).
+- **My Work** (`TasksDashboard`, view `filament.pages.my-work`): `Services\Tasks\MyWorkFeed::sections()` →
+  `MyWorkSection` per `App\Enums\MyWorkBucket` — one count query, one window-function query for the first 15 tasks of
+  each bucket with checklist counts, then the eager loads; quick add is the header action; the follow-ups widget stays
+  below; a bucket's «عرض … أخرى» opens the list on the same set (`TasksDashboard::listUrlFor()`: the matching tab,
+  «مهامي فقط», and the bucket's days or «بلا تاريخ استحقاق»). `MyTasksTodayWidget` was removed.
+- **Task list** (`TasksTable::configure()`, `ListTasks`): default grouping by status in `TasksTable::STATUS_ORDER`
+  (a bound `CASE`), closed groups collapsed on first render; the check column (`quickComplete`), the pill column
+  (`changeStatus`) and the due column (`reschedule`) are buttons only when the reader may act (`disabledClick`); the
+  three-dot row menu, bulk actions and export are unchanged; «مهامي فقط» and «بلا تاريخ استحقاق» are toggle filters;
+  the tabs use the organisation day; one empty state per tab plus one for a search or filter, each worded for whether
+  the reader may add tasks (quick add is the next step only for them).
+- **Task page** (`TaskInfolist::configure()`, `ViewTask`): a responsive two-column grid inside the `->columns(1)`
+  top-level schema (A-22) — content (description, checklist ticked one click per item through the page action
+  `tickChecklistItem` → `TaskService::tickChecklist()`, files from `TaskAttachmentsRelationManager` embedded) beside
+  the properties, then the activity: `App\Livewire\Tasks\TaskComposer` (a comment through `CommentDraft` →
+  `TaskService::comment()`, or «تحديث إنجاز» → `TaskService::postUpdate()`; the draft kept in the writer's session)
+  and the thread filtered in PHP (all · comments · updates). Header: one primary status button plus «المزيد», every
+  entry under its pre-D-27 name and policy.
+- **Tasks board** (`TasksBoard`, `tasks-board.blade.php`, `tasks-board-card.blade.php`): *by assignee* (D-14) and *by
+  status* (`TaskBoardFeed::byStatus()`, the readable tasks only, 50 cards per column), «مهامي فقط», view and toggle in
+  the URL and the session. Drag on Filament's bundled SortableJS (as `DealBoard`, no animation under reduced motion):
+  `moveTask()` re-reads the task in the readable query and refuses a stale origin, an off-board column at either end (a
+  cancelled task or a completion from before this week is never dragged, `TaskBoardFeed::isOnStatusBoard()`), a move
+  with no road (`TaskTransition::towards()`) or a policy refusal with a message; otherwise it mounts the matching status
+  action. The header's «متأخرة» counts what was due before the organisation's today, as My Work, the list and the
+  Tasks sidebar badge do.
+- **Inbox** (`Filament\Pages\InboxPage`, one copy per panel registered in `WorkspacePanelRegistry` — `Inbox` at
+  `/app/inbox` for the workspace screen, `SalesInbox`, `TasksInbox`, `ReportsInbox`, `AdminInbox` at `/<workspace>/inbox`
+  — so it opens inside the workspace the reader is in, sidebar kept, at the top of that sidebar with the unread badge;
+  `InboxPage::forPanel()` / `urlForCurrentPanel()` pick the copy for the user menu and the phone bar): the reader's
+  database notifications through `Services\Notifications\InboxService` (every query starts from the reader; foreign
+  ids are refused); opening marks read and follows only same-site links (`PanelUrl::sameSiteAddress()`) into a panel the
+  reader may still enter (`PanelAccess`; otherwise the notice has no «فتح» and only marks read). The first build kept
+  one home-panel page, which has no sidebar, so opening it from a workspace lost the way back (owner, 2026-10-07).
+- **Phone and install.** `Support\Filament\TasksTabBar` + `partials/tasks-tab-bar` (Tasks panel `BODY_END` only; its
+  «الوارد» is `TasksInbox`, so every tab swaps in place inside the workspace; below `md`, 44 px
+  targets; the safe-area padding reads 0 under Filament's viewport, which has no `viewport-fit=cover`, and an installed
+  iPhone app keeps the page above the home indicator itself — to be confirmed on a device, GoLive §17); the bar's «+»
+  carries no `wire:navigate`, so the shortcuts script opens quick add in place where the page offers it;
+  `GET /manifest.webmanifest` (`WebManifestController`, `Support\App\WebManifest`: name, a short name for the icon
+  label, description, language and direction — always the default locale, as the route runs without the session and
+  cookie middleware and sets no cookie on its public, cacheable response — the workspace screen as start page,
+  standalone, theme colour, icons in `public/icons`) with the head tags from `partials/app-install` in every panel and on the landing page; no service
+  worker.
+- **Keyboard.** `Support\Filament\TasksShortcuts` + `partials/tasks-shortcuts`: N (quick add in place where the page's
+  button carries `data-crm-shortcut="quick-add"` — `TaskActions::quickAdd()` always does — else My Work with
+  `?action=quickAdd`), `/` (search), `?` (the sheet, a native `<dialog>`), physical key positions so Arabic keyboards
+  work, ignored while typing; the Tasks search binding is `mod+k` with a platform hint.
+- **Theme.** Four commented sections of `theme.css`, kept together: *Tasks visual language*, *Task list and tasks
+  board*, *Task page*, and *My Work, the Tasks phone bar and the shortcut sheet* — tokens for both themes, logical
+  properties only, no motion, the theme's accent focus ring.
+- **Tests.** `tests/Feature/Tasks/` `TaskQuickActionsTest`, `TaskVisualLanguageTest`, `SalesTaskTabsRegressionTest`,
+  `TaskListWorkspaceTest`, `TasksBoardStatusViewTest`, `TaskPageTest`, `MyWorkTest`, `TasksWorkspaceShellTest`, and
+  `tests/Feature/Notifications/InboxTest.php`: every control per role (admin, handed-out assignee, mentioned
+  participant, read-only, outsider), forged mounts, the D-25 warning on every completion path, the organisation day,
+  both locales, and query counts.
 
 ### 3.5 Localization architecture
 
@@ -660,7 +756,8 @@ CRM_Project/
 │   ├── Contracts/                 TranslatableStatus
 │   ├── Enums/                     NavigationGroup, Permission, CrmRole, UserStatus, LeadStatusKind, LeadPriority, StageKind, DealStatus,
 │   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskUpdateKind, TaskPriority, RecurrenceFrequency, RoutineFrequency,
-│   │                              AccountType, CompanySize, CustomFieldType, ActivityLogEvent, NotificationEvent
+│   │                              AccountType, CompanySize, CustomFieldType, ActivityLogEvent, NotificationEvent,
+│   │                              TaskTransition, DueShortcut, DueTone, MyWorkBucket (D-27)
 │   ├── Exceptions/{Leads,Deals,Tasks,Attachments,Imports,Access}/
 │   ├── Filament/
 │   │   ├── Auth/Pages/            ResetPassword, RequestPasswordReset (pending users may request)
@@ -670,7 +767,7 @@ CRM_Project/
 │   │   ├── Exports/               LeadExporter, ContactExporter, AccountExporter, DealExporter, ActivityExporter, TaskExporter
 │   │   ├── Imports/               LeadImporter, ContactImporter, AccountImporter, DealImporter
 │   │   ├── Pages/                 Workspaces, SalesDashboard, TasksDashboard, ReportsHome, AdminHome (D-23), DealBoard, Calendar,
-│   │   │                          TasksBoard, Settings/GeneralSettings, System/Backups, NotificationPreferences,
+│   │   │                          TasksBoard, Inbox (D-27), Settings/GeneralSettings, System/Backups, NotificationPreferences,
 │   │   │   ├── Reports/           LeadReport, ConversionReport, PipelineReport, SalesPerformanceReport, ActivityReport,
 │   │   │   │                      SourcePerformanceReport, WinLossReport, ForecastReport, TaskPerformanceReport,
 │   │   │   │                      EmployeeDashboard (D-26)
@@ -680,13 +777,14 @@ CRM_Project/
 │   │   │                          Competitors/, Tags/, Teams/, CustomFields/, Users/, Roles/, ActivityLogs/, Imports/, Exports/
 │   │   │                          (each: XResource, Schemas/, Tables/, Pages/, RelationManagers/)
 │   │   ├── Support/               LeadActions, DealActions, TaskActions, ContactActions, SharedSchemas (address, owner, tags, custom fields),
-│   │   │                          WorkspaceCard, WorkspaceLink, WorkspaceLinkSection (D-23)
-│   │   └── Widgets/               SalesKpisWidget, LeadFunnelWidget, PipelineByStageChart, WonRevenueTrendChart, MyTasksTodayWidget,
+│   │   │                          WorkspaceCard, WorkspaceLink, WorkspaceLinkSection (D-23), TaskVisuals (D-27)
+│   │   └── Widgets/               SalesKpisWidget, LeadFunnelWidget, PipelineByStageChart, WonRevenueTrendChart,
 │   │                              OverdueTasksWidget, UpcomingFollowUpsWidget, StaleDealsWidget, RecentLeadsWidget, ActivityFeedWidget
 │   ├── Http/Controllers/          AttachmentDownloadController, BackupDownloadController, LandingController, LandingLanguageController (D-24),
-│   │                              LegacyAdminRedirectController (D-23)
+│   │                              LegacyAdminRedirectController (D-23), WebManifestController (D-27)
 │   ├── Http/Middleware/           AuthenticateWorkspace (D-23), KeepOutOfSearchEngines (D-24), SecurityHeaders, TrustProxies
 │   ├── Jobs/                      RescoreLeads, CreateBackup
+│   ├── Livewire/                  RecordTimeline, TaskUndo, Tasks/TaskComposer (D-27)
 │   ├── Listeners/                 ActivateInvitedUser, RecordAuthActivity, PersistUserLocale, FailHealthCheckWithoutSchedulerHeartbeat
 │   ├── Models/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
@@ -712,20 +810,23 @@ CRM_Project/
 │   │   ├── CustomFields/          CustomFieldSchemaBuilder, CustomFieldValueWriter
 │   │   ├── Deals/                 DealStageWorkflow, DealCloseService, DealAmountCalculator, ForecastReader
 │   │   ├── Leads/                 LeadStatusWorkflow, LeadConversionWorkflow, LeadAssignmentService, LeadScoringService
-│   │   ├── Notifications/         NotificationDispatcher, ChannelResolver
-│   │   ├── Settings/              SettingsRepository, LookupOrderingService, PipelineService
+│   │   ├── Notifications/         NotificationDispatcher, ChannelResolver, InboxService (D-27)
+│   │   ├── Settings/              SettingsRepository, LookupOrderingService, PipelineService, OrganisationCalendar (D-27)
 │   │   ├── Statistics/            DashboardMetrics, LeadFunnelMetrics, DealAnalytics, ActivityAnalytics, TaskAnalytics, SourceAnalytics, ForecastAnalytics
 │   │   ├── System/                BackupService, BackupSet, BackupFailure, BackupException, BackupInProgressException, LoggedErrorCounter
 │   │   ├── Tasks/                 TaskService, TaskRecurrenceService, TaskReminderEvaluator, ReminderOutcome,
 │   │   │                          WeeklySummary (+ WeeklySummaryReport, WeeklySummaryTask, WeeklySummaryAssignee, WeeklySummaryHealth),
 │   │   │                          CommentDraft and TaskParticipants (mentions and the participant read path, D-20),
 │   │   │                          RoutineTaskService (routine tasks, D-22), TaskChecklist (checklist rules, D-25),
-│   │   │                          StalledTaskRule (the stalled rule, D-18 / D-26)
+│   │   │                          StalledTaskRule (the stalled rule, D-18 / D-26),
+│   │   │                          MyWorkFeed, MyWorkSection, DueShortcuts, RelativeDueDates, RelativeDue (D-27)
 │   │   └── Users/                 UserInvitationService
 │   └── Support/
 │       ├── Access/                RolePermissionMatrix
+│       ├── App/                   WebManifest (D-27)
 │       ├── Database/              EnumCheck, DatabaseEngine, TimestampRange
-│       ├── Filament/              FilamentLanguageMenuItems, WorkspacePanelRegistry, OwningPanel, PanelUrl (D-23)
+│       ├── Filament/              FilamentLanguageMenuItems, WorkspacePanelRegistry, OwningPanel, PanelUrl (D-23),
+│       │                          TasksTabBar, TasksTabBarItem, TasksShortcuts (D-27)
 │       ├── Http/                  LegacyAdminRedirects (D-23)
 │       ├── Landing/               LandingFacts, LandingFact, LandingPageChrome (D-24)
 │       ├── Notifications/         NotificationChannels, NotificationLink (D-23)
@@ -740,12 +841,17 @@ CRM_Project/
 │                                  DEPLOYMENT.md, OPERATIONS.md, Static_Analysis_Known_False_Positives.md; not built: MODULES.md, DESIGN_TOKENS.md
 ├── lang/{ar,en}/                  app, navigation, enums, auth, passwords, validation, pagination, dashboard, leads, contacts, accounts, deals,
 │                                  pipelines, activities, tasks, notes, attachments, calendar, tags, custom_fields, users, roles, teams, settings,
-│                                  views, imports, reports, activity, notifications, backups, task_templates, workspaces (D-23), landing (D-24)
+│                                  views, imports, reports, activity, notifications, backups, task_templates, workspaces (D-23), landing (D-24),
+│                                  my_work, inbox (D-27)
 ├── lang/vendor/                   Filament Arabic gap patches
 ├── resources/css/                 filament/admin/theme.css (shared by all five panels and the landing page; no other stylesheet)
 ├── resources/js/                  calendar.js
-├── resources/views/filament/      pages/ (incl. system/backups, workspaces, workspace-home), partials/workspace-switcher, widgets/,
-│                                  components/timeline/, activity-log/
+├── resources/views/filament/      pages/ (incl. system/backups, workspaces, workspace-home, my-work, tasks-board-card),
+│                                  partials/ (workspace-switcher; tasks-tab-bar, tasks-shortcuts, app-install — D-27),
+│                                  tasks/ (page-checklist, thread-filter — D-27), widgets/, components/timeline/, activity-log/
+├── resources/views/components/    task/ (status-pill, priority-flag, avatar, checklist-meter, due — D-27)
+├── resources/views/livewire/      tasks/task-composer (D-27)
+├── public/icons/                  the installable app's icons (192, 512, maskable 512, apple-touch 180; D-27)
 ├── resources/views/landing/       index + partials/ (the public landing page, D-24)
 ├── resources/views/mail/          crm-message (D-10), weekly-summary (the markdown mail of D-18)
 ├── routes/                        web.php, console.php
@@ -776,6 +882,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-26 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-27 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

@@ -14,6 +14,7 @@ return [
 
     'fields' => [
         'keep' => 'السجل الذي يُحتفظ به',
+        'duplicate_warning' => 'تكرار محتمل',
     ],
 
     'helpers' => [

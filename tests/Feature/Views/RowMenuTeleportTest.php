@@ -78,7 +78,7 @@ final class RowMenuTeleportTest extends TestCase
         // declared later): while the pointer is on the menu the row is hovered, and
         // an equally specific rule would lose to the later hover rule.
         $this->assertSame(1, preg_match(
-            "/\\.fi-ta-table \\.fi-ta-row:has\\(\\[aria-expanded='true'\\]\\) \\{[^}]*?position:\\s*relative;[^}]*?z-index:\\s*(\\d+);/",
+            "/\\.fi-ta-table \\.fi-ta-row:not\\(\\.fi-ta-group-header\\):has\\(\\.fi-dropdown-trigger > \\[aria-expanded='true'\\]\\) \\{[^}]*?position:\\s*relative;[^}]*?z-index:\\s*(\\d+);/",
             $css,
             $openRow,
         ), 'a row with an open menu is not lifted above the hover rule: the sticky header would cover its menu');
@@ -87,6 +87,16 @@ final class RowMenuTeleportTest extends TestCase
             (int) $header[1],
             (int) $openRow[1],
             'a row with an open menu must stack above the sticky header, or the header covers the menu',
+        );
+
+        // Only an open dropdown lifts a row. A collapsible status group's header is
+        // aria-expanded while open too, and lifting it covered the sticky column
+        // headers (the owner's screenshot, 2026-10-07): no rule may lift a row on a
+        // bare aria-expanded any more.
+        $this->assertSame(
+            0,
+            preg_match("/\\.fi-ta-row:has\\(\\[aria-expanded='true'\\]\\)/", $css),
+            'a bare aria-expanded lifts collapsible group headers over the sticky header',
         );
     }
 
@@ -106,7 +116,7 @@ final class RowMenuTeleportTest extends TestCase
         $this->assertNotFalse($hover, 'the motion layer no longer lifts hovered rows — revisit this guard');
 
         $this->assertSame(1, preg_match(
-            "/\\.fi-ta-table \\.fi-ta-row:has\\(\\[aria-expanded='true'\\]\\) \\{[^}]*?transform:\\s*none;[^}]*?transition:\\s*none;/",
+            "/\\.fi-ta-table \\.fi-ta-row:not\\(\\.fi-ta-group-header\\):has\\(\\.fi-dropdown-trigger > \\[aria-expanded='true'\\]\\) \\{[^}]*?transform:\\s*none;[^}]*?transition:\\s*none;/",
             substr($motion, $hover),
             $matches,
         ), 'a row with an open menu still lifts: its transform traps the menu inside the row, and the table container clips it');

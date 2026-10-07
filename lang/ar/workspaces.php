@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 // The workspaces (D-23): the workspace screen, the top-bar switcher and the
-// home pages of the Tasks, Reports and Administration workspaces. Workspace
+// home pages of the Reports and Administration workspaces (the Tasks home,
+// «عملي», is lang/*/my_work.php, D-27). Workspace
 // names and descriptions are enum labels (enums.workspace_panel*).
 return [
 
     'navigation' => [
-        'tasks_home' => 'نظرة عامة',
         'reports_home' => 'كل التقارير',
         'admin_home' => 'نظرة عامة',
     ],
@@ -17,10 +17,6 @@ return [
         'screen' => [
             'title' => 'لوحة التحكم',
             'subheading' => 'اختر مساحة العمل',
-        ],
-        'tasks_home' => [
-            'title' => 'نظرة عامة على المهام',
-            'subheading' => 'مهامك المستحقة اليوم والمتأخرة، والمتابعات القادمة.',
         ],
         'reports_home' => [
             'title' => 'التقارير',

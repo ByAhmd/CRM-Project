@@ -6,8 +6,10 @@ namespace App\Support\Filament;
 
 use App\Enums\WorkspacePanel;
 use App\Filament\Pages\AdminHome;
+use App\Filament\Pages\AdminInbox;
 use App\Filament\Pages\Calendar;
 use App\Filament\Pages\DealBoard;
+use App\Filament\Pages\Inbox;
 use App\Filament\Pages\NotificationPreferences;
 use App\Filament\Pages\Reports\ActivityReportPage;
 use App\Filament\Pages\Reports\ConversionFunnelReportPage;
@@ -20,11 +22,14 @@ use App\Filament\Pages\Reports\SourcePerformanceReportPage;
 use App\Filament\Pages\Reports\TaskPerformanceReportPage;
 use App\Filament\Pages\Reports\WinLossReportPage;
 use App\Filament\Pages\ReportsHome;
+use App\Filament\Pages\ReportsInbox;
 use App\Filament\Pages\SalesDashboard;
+use App\Filament\Pages\SalesInbox;
 use App\Filament\Pages\Settings\GeneralSettings;
 use App\Filament\Pages\System\Backups;
 use App\Filament\Pages\TasksBoard;
 use App\Filament\Pages\TasksDashboard;
+use App\Filament\Pages\TasksInbox;
 use App\Filament\Pages\Workspaces;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Activities\ActivityResource;
@@ -53,7 +58,6 @@ use App\Filament\Resources\Teams\TeamResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\PipelineByStageChart;
 use App\Filament\Widgets\RevenueWonByMonthChart;
 use App\Filament\Widgets\SalesKpisWidget;
@@ -148,26 +152,33 @@ final class WorkspacePanelRegistry
             WorkspacePanel::HOME => [
                 Workspaces::class,
                 NotificationPreferences::class,
+                // D-27: the Inbox of the workspace screen; each workspace has its own copy.
+                Inbox::class,
             ],
             WorkspacePanel::Sales->id() => [
                 SalesDashboard::class,
                 DealBoard::class,
+                // D-27: each workspace reads the Inbox in place, its sidebar kept (InboxPage).
+                SalesInbox::class,
             ],
             WorkspacePanel::Tasks->id() => [
                 TasksDashboard::class,
                 TasksBoard::class,
                 Calendar::class,
+                TasksInbox::class,
             ],
             WorkspacePanel::Reports->id() => [
                 ReportsHome::class,
                 ...self::reportPages(),
                 // D-26: the per-employee dashboard, a Reports page beside the nine reports.
                 EmployeeDashboardPage::class,
+                ReportsInbox::class,
             ],
             WorkspacePanel::Admin->id() => [
                 AdminHome::class,
                 GeneralSettings::class,
                 Backups::class,
+                AdminInbox::class,
             ],
             default => [],
         };
@@ -188,7 +199,7 @@ final class WorkspacePanelRegistry
                 ActivityCountsWidget::class,
             ],
             WorkspacePanel::Tasks->id() => [
-                MyTasksTodayWidget::class,
+                // D-27: My Work (TasksDashboard) lists the reader's own tasks itself.
                 UpcomingFollowUpsWidget::class,
             ],
             default => [],

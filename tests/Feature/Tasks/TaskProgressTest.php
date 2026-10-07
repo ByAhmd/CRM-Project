@@ -596,7 +596,11 @@ final class TaskProgressTest extends TestCase
         $after = Livewire::actingAs($this->admin)->test(TasksBoard::class);
         $after->assertViewHas('stats', static fn (array $stats): bool => $stats['in_progress'] === 1);
 
-        $this->assertSame(substr_count($before->html(), $label) + 1, substr_count($after->html(), $label), 'the started card carries the status badge');
+        // Every card carries its status pill (D-27); the started card's is the In progress one.
+        $inProgressPills = static fn (string $html): int => (int) preg_match_all('/class="[^"]*\bfi-color-'.TaskStatus::InProgress->getColor().'\b[^"]*\bcrm-status-pill\b[^"]*"|class="[^"]*\bcrm-status-pill\b[^"]*\bfi-color-'.TaskStatus::InProgress->getColor().'\b[^"]*"/', $html);
+        $this->assertSame(0, $inProgressPills($before->html()));
+        $this->assertSame(1, $inProgressPills($after->html()), 'the started card carries the status badge');
+        $after->assertSee($label);
     }
 
     #[Test]

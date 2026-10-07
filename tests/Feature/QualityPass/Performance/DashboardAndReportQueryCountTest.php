@@ -6,10 +6,11 @@ namespace Tests\Feature\QualityPass\Performance;
 
 use App\Enums\ActivityKind;
 use App\Enums\TaskKind;
+use App\Enums\TaskStatus;
 use App\Filament\Pages\Reports\LeadReportPage;
+use App\Filament\Pages\TasksDashboard;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\PipelineByStageChart;
 use App\Filament\Widgets\RevenueWonByMonthChart;
 use App\Filament\Widgets\SalesKpisWidget;
@@ -31,8 +32,10 @@ use Tests\Feature\QualityPass\Performance\Concerns\CountsQueries;
 use Tests\TestCase;
 
 /**
- * Probe: every dashboard widget (plan section 3.9) and a report page are
- * aggregate SQL whose cost does not follow the number of records in reach.
+ * Probe: every dashboard widget (plan section 3.9), the Tasks home «عملي»
+ * (My Work, D-27 — it took over the former "my tasks today" widget's list)
+ * and a report page are aggregate SQL whose cost does not follow the number
+ * of records in reach.
  */
 final class DashboardAndReportQueryCountTest extends TestCase
 {
@@ -70,7 +73,6 @@ final class DashboardAndReportQueryCountTest extends TestCase
             'leads by status' => [LeadsByStatusChart::class],
             'pipeline by stage' => [PipelineByStageChart::class],
             'revenue won by month' => [RevenueWonByMonthChart::class],
-            'my tasks today' => [MyTasksTodayWidget::class],
             'upcoming follow-ups' => [UpcomingFollowUpsWidget::class],
             'stale deals' => [StaleDealsWidget::class],
             'activity counts' => [ActivityCountsWidget::class],
@@ -97,6 +99,31 @@ final class DashboardAndReportQueryCountTest extends TestCase
             count($small) + self::TOLERANCE,
             count($large),
             sprintf("%s: %d queries for 3 records of each kind, %d for 15. Most repeated:\n%s", $widget, count($small), count($large), $this->topRepeated($large)),
+        );
+    }
+
+    /**
+     * D-27: My Work lists every bucket of the reader's tasks with the status
+     * pill, flag, relative due, checklist meter, assigner's avatar, linked
+     * record and the per-row controls (each a policy check) — on a fixed
+     * number of queries whatever the number of rows.
+     */
+    #[Test]
+    public function my_work_issues_no_per_row_queries(): void
+    {
+        $this->seedMyWork(3);
+        $this->renderMyWork();
+
+        $small = $this->queriesDuring(fn () => $this->renderMyWork());
+
+        $this->seedMyWork(12);
+
+        $large = $this->queriesDuring(fn () => $this->renderMyWork());
+
+        $this->assertLessThanOrEqual(
+            count($small) + self::TOLERANCE,
+            count($large),
+            sprintf("My Work: %d queries for 3 tasks per bucket, %d for 15. Most repeated:\n%s", count($small), count($large), $this->topRepeated($large)),
         );
     }
 
@@ -132,6 +159,39 @@ final class DashboardAndReportQueryCountTest extends TestCase
         }
 
         $component->assertOk();
+    }
+
+    private function renderMyWork(): void
+    {
+        Livewire::actingAs($this->manager)
+            ->test(TasksDashboard::class)
+            ->assertOk();
+    }
+
+    /**
+     * Tasks of the manager in every My Work bucket, handed out by an
+     * administrator, linked to a lead, each with a checklist; and some
+     * completed yesterday.
+     */
+    private function seedMyWork(int $count): void
+    {
+        $assigner = $this->admin();
+
+        for ($i = 0; $i < $count; $i++) {
+            foreach ([now()->subDays(2), now()->setTime(15, 0), now()->addDays(3), now()->addDays(20), null] as $due) {
+                $task = Task::factory()->create([
+                    'assignee_id' => $this->manager->getKey(),
+                    'assigned_by' => $assigner->getKey(),
+                    'lead_id' => Lead::factory()->create(['owner_id' => $this->manager->getKey()])->getKey(),
+                    'due_at' => $due,
+                ]);
+
+                $this->checklistItemOn($task, 'Step one', now());
+                $this->checklistItemOn($task, 'Step two');
+            }
+
+            $this->taskAssignedTo($this->manager, TaskStatus::Completed, ['completed_at' => now()->subDay(), 'due_at' => now()->subDay()]);
+        }
     }
 
     private function renderReport(): void

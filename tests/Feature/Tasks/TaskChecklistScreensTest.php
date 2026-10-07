@@ -426,7 +426,8 @@ final class TaskChecklistScreensTest extends TestCase
         $this->tasks->tickChecklist($task, $this->rep, [$one->getKey()]);
 
         $cards = Livewire::actingAs($this->rep)->test(TasksBoard::class)->assertOk();
-        $cards->assertSeeHtml('<span class="crm-ltr">1/2</span>');
+        // The card draws the checklist meter (D-27): done/total in Latin digits, named for screen readers.
+        $cards->assertSeeHtml('<span class="crm-meter-text" dir="ltr" aria-hidden="true">1/2</span>');
 
         $queries = $this->queriesDuring(fn () => Livewire::actingAs($this->rep)->test(TasksBoard::class)->assertOk());
         $this->assertSame([], array_values(array_filter(

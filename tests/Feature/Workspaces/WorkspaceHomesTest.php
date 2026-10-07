@@ -15,7 +15,6 @@ use App\Filament\Pages\TasksDashboard;
 use App\Filament\Resources\LeadSources\LeadSourceResource;
 use App\Filament\Resources\Roles\RoleResource;
 use App\Filament\Resources\Users\UserResource;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\SalesKpisWidget;
 use App\Filament\Widgets\UpcomingFollowUpsWidget;
 use App\Support\Filament\PanelUrl;
@@ -27,7 +26,7 @@ use Tests\TestCase;
 
 /**
  * The home page of each workspace (decision D-23): the sales dashboard,
- * the tasks overview, the list of reports and the list of administration
+ * «عملي» (My Work, D-27), the list of reports and the list of administration
  * screens — the last two offering only what the viewer may open, so no
  * link on a home answers 403.
  */
@@ -58,25 +57,24 @@ final class WorkspaceHomesTest extends TestCase
         $widgets = (new SalesDashboard)->getWidgets();
 
         $this->assertContains(SalesKpisWidget::class, $widgets);
-        $this->assertNotContains(MyTasksTodayWidget::class, $widgets);
         $this->assertNotContains(UpcomingFollowUpsWidget::class, $widgets);
     }
 
     #[Test]
-    public function the_tasks_home_shows_the_viewers_task_lists(): void
+    public function the_tasks_home_is_my_work_with_the_follow_ups_under_it(): void
     {
         $employee = $this->employee();
 
+        // D-27: the Tasks home is «عملي» (My Work).
         $this->actingAs($employee)
             ->get(PanelUrl::panelHome(WorkspacePanel::Tasks))
             ->assertOk()
-            ->assertSee(__('workspaces.pages.tasks_home.title'))
+            ->assertSee(__('my_work.pages.title'))
             ->assertDontSee(__('dashboard.filters.period'));
 
-        $this->assertSame([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class], (new TasksDashboard)->getWidgets());
+        $this->assertSame([UpcomingFollowUpsWidget::class], (new TasksDashboard)->getWidgets());
 
         $this->actingAs($employee);
-        $this->assertTrue(MyTasksTodayWidget::canView());
         $this->assertTrue(UpcomingFollowUpsWidget::canView());
     }
 

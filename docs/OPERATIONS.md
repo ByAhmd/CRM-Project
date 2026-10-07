@@ -16,7 +16,7 @@ Contents: 1 Users · 2 Roles, permissions and teams · 3 Audit ledger · 4 Delet
 6 Attachments and disk growth · 7 Queue and failed jobs · 8 Scheduler · 9 Currency and timezone · 10 Lookups,
 custom fields and email templates · 11 Notification preferences · 12 Demo data · 13 Command reference ·
 14 Common preflight failures · 15 Backups · 16 Weekly summary · 17 Routine tasks · 18 Task mentions, checklists and the task
-report · 19 Employee dashboard.
+report · 19 Employee dashboard · 20 The Tasks workspace day to day, the Inbox and the phone app.
 
 ---
 
@@ -482,3 +482,81 @@ colleague — who sees it only if the employee is in their own reach.
 - **Clock and calendar.** Today, this week, this month and the eight trend weeks follow *Settings → General settings*:
   the organisation timezone and the first day of the week. Changing either moves the boundaries at once.
 - The page only reads: nothing on it writes, notifies or enters the audit ledger.
+
+## 20. The Tasks workspace day to day, the Inbox and the phone app
+
+D-27 makes the allowed task actions quicker; it changes no rule and adds no permission (the control-by-control table is
+in [PERMISSIONS.md](PERMISSIONS.md), *Tasks workspace controls*). The Sales side is unchanged: the task tabs on lead,
+contact, account and deal pages keep their columns, menus and dialogs.
+
+**What an employee sees** (and anyone else in the Tasks workspace):
+
+- **«عملي» (My Work)** is the Tasks home (`/tasks`): the reader's own tasks in buckets — *Overdue*, *Today*, *Next 7
+  days*, *Later*, *No date* — and *Completed recently* (the last seven days), with a count per bucket at the top. A
+  bucket shows its first 15 tasks and links to the task list narrowed to that bucket's tasks (the matching tab with
+  «مهامي فقط» and the bucket's days) for the rest. Each row has the completion
+  check, the status pill, the due date in words («اليوم 17:00», «غداً», «متأخرة 3 أيام» — red when overdue, amber
+  when due today), the priority flag, the checklist meter and, for a task handed out by someone else, that person's
+  initials. *Today* and *Overdue* follow the organisation's day (*Settings → General settings* timezone), not the
+  server's.
+- **The completion check** completes the task in one click. When checklist items are still open, the warning dialog
+  (D-25) comes first, with an optional note. The toast offers «تراجع» (undo), which reopens the task as long as nobody
+  changed it in the meantime. On a repeating task the undo also withdraws the next occurrence that completion created
+  (a soft delete, kept in the audit log), unless someone already worked on it — a comment, a progress update, a ticked
+  item, a file or an edit — in which case it stays. Completing a repeating task again never creates a second copy of
+  the same occurrence. If the task was deleted or the reader may no longer reopen it, the undo says so in a toast.
+- **The status pill** opens the moves the reader may make: start, complete, reopen — and cancel only for whoever may
+  edit the task. A handed-out assignee therefore never sees *cancel* or the reschedule chips; the dates stay with the
+  assigner (D-14).
+- **The task list** (*Tasks*) is grouped by status — *In progress* first, then *Pending*; *Completed* and *Cancelled*
+  start folded — and keeps its tabs. «مهامي فقط» narrows any tab to the reader's own tasks. Clicking a due date opens
+  the reschedule chips (today, tomorrow, next week, pick a date), for those who may edit the task; a chip keeps the
+  task's own time of day, or 17:00 when it has none.
+- **Quick add** (the primary button on My Work and the task list, the «+» on the phone bar, or the **N** key): a title,
+  a due chip and a priority; holders of `task.assign` also pick the assignee from the people in their reach.
+  «خيارات أكثر» opens the full form with what was typed; the typed values wait in the reader's session for that one
+  page and never appear in the address.
+- **The task page** reads in two columns: the description, the checklist (one click per item ticks or unticks it, for
+  whoever may report progress on an open task) and the files beside the properties (status, people, due date with the
+  reschedule chips, priority, linked records, routine). Below them, the **always-visible composer**: a comment (with
+  `@` mentions, D-20) for everyone who may comment, and a «تحديث إنجاز» mode for whoever may report progress; an
+  unsent draft is kept in the writer's session (until it is posted, or they sign out or the session ends). If the task
+  closes while an update is being written, posting it says so and keeps the text in the box (read-only), to copy or
+  post as a comment instead. The thread filters to *All*, *Comments* or
+  *Progress updates*. The header has one primary button (Start → Complete → Reopen) and the rest in «المزيد».
+- **The tasks board** has two views: *By assignee* (D-14, organisation-wide, as before) and *By status* (*Pending*,
+  *In progress*, *Completed this week*), which shows the tasks the reader may open. Dragging a card performs the move;
+  a move the reader may not make snaps back with the reason, and a drop on *Completed* with open checklist items shows
+  the D-25 warning first. The pill on each card does the same without dragging. The board remembers its view and the
+  «مهامي فقط» toggle for the session (`?view=status`, `?mine=1`).
+- **Keyboard** (Tasks workspace): **N** quick add, **/** search, **?** the shortcut sheet (also in the user menu);
+  the search itself is **Ctrl+K** (**⌘K** on a Mac). Single-key shortcuts are ignored while typing and can be switched
+  off on the sheet (kept on that device).
+
+**The Inbox «الوارد»** (at the top of every workspace's sidebar with the unread count — `/tasks/inbox`, `/sales/inbox`,
+`/reports/inbox`, `/admin/inbox` — and in every user menu; from the workspace screen `/app/inbox`). It opens inside the
+workspace the user is in, so the sidebar stays:
+every notice for the reader, unread first, with *All* and *Unread* tabs. Opening a notice marks it read and follows its
+link when it points into this CRM and into a workspace the reader may still enter (a notice whose workspace was since
+withdrawn only marks read); notices can be marked read or unread one by one, in bulk, or all at once. Old
+notices keep the language they were sent in. What arrives is set in *Notification preferences* (section 11).
+
+**What an administrator sees in addition:** the cancel move, the reschedule chips and the assignee choice in quick add
+on the tasks within their reach, the «المزيد» entries for assign, edit, delete and restore, and «تعديل القائمة» to
+change a checklist's items. Nothing needs configuring: there is no setting for D-27. If an employee cannot see a
+control they expect, check the task: a task handed out to them is theirs to report on, not to edit (D-14 amendment).
+
+**Installing the CRM as an app on a phone.** The CRM publishes a web manifest (`/manifest.webmanifest`, the brand icons
+under `public/icons`), so a phone can put it on the home screen; it opens without the browser bar at the workspace
+screen. There is no service worker: nothing is cached on the device, nothing works offline, and the 120-minute session
+(D-11) applies as in the browser.
+
+- *Android (Chrome or Edge):* open the CRM address, sign in, then the browser menu (⋮) → *Install app* (or *Add to Home
+  screen*).
+- *iPhone or iPad (Safari):* open the CRM address, tap *Share* → *Add to Home Screen* → *Add*.
+- In the Tasks workspace on a phone a tab bar sits at the bottom: «عملي», «المهام», «+» (quick add, only for those who
+  may add tasks), «اللوحة» and «الوارد» (with the unread count); the Inbox is the Tasks workspace's own page, so the
+  bar and the sidebar stay on it. On the board a card is dragged after a short press; a quick swipe scrolls the columns.
+- The installed app's name under the icon is «العملاء» (*CRM* in English); the manifest is always in Arabic, the
+  default language, because a phone fetches it without the user's session.
+- After a release that changes the icons, an installed app may keep the old icon until it is removed and added again.

@@ -454,8 +454,10 @@ final class TaskCommentsTest extends TestCase
             $start = mb_strpos($html, e(__('tasks.sections.thread')));
             $this->assertNotFalse($start, "{$locale}: the thread section renders");
 
-            // Only the thread itself, from its heading to the next section.
-            $thread = mb_substr($html, $start, (int) mb_strpos($html, e(__('tasks.sections.schedule')), $start) - $start);
+            // Only the thread itself, from its heading to the next section — on the
+            // two-column task page (D-27) the activity is the last section.
+            $end = mb_strpos($html, e(__('tasks.sections.schedule')), $start);
+            $thread = mb_substr($html, $start, $end === false ? null : $end - $start);
 
             $this->assertInOrder($thread, [
                 e(TaskUpdateKind::Progress->getLabel()), 'Sales Rep', '2026-09-30 09:10', 'They want five percent',

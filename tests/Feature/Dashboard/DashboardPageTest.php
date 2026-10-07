@@ -9,7 +9,6 @@ use App\Filament\Pages\SalesDashboard;
 use App\Filament\Pages\TasksDashboard;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\PipelineByStageChart;
 use App\Filament\Widgets\RevenueWonByMonthChart;
 use App\Filament\Widgets\SalesKpisWidget;
@@ -80,7 +79,7 @@ final class DashboardPageTest extends TestCase
                 ->assertSee(self::widgetName(StaleDealsWidget::class), false)
                 ->assertSee(self::widgetName(ActivityCountsWidget::class), false)
                 // D-23: the task lists moved to the Tasks workspace's home.
-                ->assertDontSee(self::widgetName(MyTasksTodayWidget::class), false)
+                ->assertDontSee('crm-my-work', false)
                 ->assertDontSee(self::widgetName(UpcomingFollowUpsWidget::class), false);
 
             Livewire::actingAs($user)->test(SalesDashboard::class)->assertOk();
@@ -91,7 +90,7 @@ final class DashboardPageTest extends TestCase
     }
 
     #[Test]
-    public function the_tasks_dashboard_renders_the_two_task_lists_for_every_seeded_role(): void
+    public function the_tasks_dashboard_renders_my_work_and_the_follow_ups_for_every_seeded_role(): void
     {
         $team = $this->makeTeam();
 
@@ -107,8 +106,9 @@ final class DashboardPageTest extends TestCase
             $this->actingAs($user)
                 ->get(TasksDashboard::getUrl())
                 ->assertOk()
-                ->assertSee(__('workspaces.pages.tasks_home.title'))
-                ->assertSee(self::widgetName(MyTasksTodayWidget::class), false)
+                // D-27: «عملي» (My Work) with its buckets, then the follow-ups list.
+                ->assertSee(__('my_work.pages.title'))
+                ->assertSee(__('enums.my_work_bucket.overdue'))
                 ->assertSee(self::widgetName(UpcomingFollowUpsWidget::class), false)
                 // Fixed windows inside the viewer's scope: no filters, and no sales widget.
                 ->assertDontSee(__('dashboard.filters.reset'))
@@ -306,7 +306,8 @@ final class DashboardPageTest extends TestCase
     public function the_widget_grid_and_every_widget_span_are_declared_per_breakpoint(): void
     {
         $this->assertSame(['default' => 1, 'md' => 2], (new SalesDashboard)->getColumns());
-        $this->assertSame(['default' => 1, 'md' => 2], (new TasksDashboard)->getColumns());
+        // D-27: My Work runs full width; the follow-ups list follows under it.
+        $this->assertSame(['default' => 1], (new TasksDashboard)->getColumns());
 
         // Full width at every breakpoint. ActivityCounts is the LAST widget
         // and has no partner: at half width it would sit beside a permanently
@@ -320,13 +321,10 @@ final class DashboardPageTest extends TestCase
             $this->assertSame(['default' => 'full', 'md' => 1], (new $widget)->getColumnSpan(), $widget);
         }
 
-        // The Tasks workspace's two lists: full width up to lg — half a
-        // tablet cannot hold a table — then paired with each other.
-        $this->assertSame([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class], (new TasksDashboard)->getWidgets());
-
-        foreach ([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class] as $widget) {
-            $this->assertSame(['default' => 'full', 'lg' => 1], (new $widget)->getColumnSpan(), $widget);
-        }
+        // The Tasks workspace's follow-ups list: full width up to lg — half a
+        // tablet cannot hold a table; in My Work's one-column grid it spans the row.
+        $this->assertSame([UpcomingFollowUpsWidget::class], (new TasksDashboard)->getWidgets());
+        $this->assertSame(['default' => 'full', 'lg' => 1], (new UpcomingFollowUpsWidget)->getColumnSpan());
     }
 
     #[Test]
@@ -345,8 +343,8 @@ final class DashboardPageTest extends TestCase
         $this->actingAs($this->userWithPermissions(null, [Permission::WorkspaceTasks]))
             ->get(TasksDashboard::getUrl())
             ->assertOk()
-            ->assertSee(__('workspaces.pages.tasks_home.title'))
-            ->assertDontSee(self::widgetName(MyTasksTodayWidget::class), false)
+            ->assertSee(__('my_work.pages.title'))
+            ->assertSee(__('my_work.empty.heading'))
             ->assertDontSee(self::widgetName(UpcomingFollowUpsWidget::class), false);
     }
 
@@ -362,7 +360,7 @@ final class DashboardPageTest extends TestCase
             ->get(PanelUrl::workspaceScreen())
             ->assertOk()
             ->assertDontSee(self::widgetName(SalesKpisWidget::class), false)
-            ->assertDontSee(self::widgetName(MyTasksTodayWidget::class), false)
+            ->assertDontSee(self::widgetName(UpcomingFollowUpsWidget::class), false)
             ->assertDontSee(self::widgetName(ActivityCountsWidget::class), false);
     }
 

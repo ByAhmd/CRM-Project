@@ -41,6 +41,12 @@ use Illuminate\Database\Eloquent\Model;
  * every task on a readable record is readable (TaskPolicy::view), and every
  * write authorises through TaskPolicy explicitly so the actions work on the
  * view page as well as the edit page.
+ *
+ * The owner keeps the Sales side as it is (D-27): the tab uses the Sales
+ * entry points — TasksTable::configureForSubjectTab(),
+ * TaskInfolist::configureForSubjectTab() and the shared TaskActions dialogs
+ * — never the Tasks-workspace ones, and SalesTaskTabsRegressionTest pins its
+ * columns, filters and actions.
  */
 abstract class BaseTasksRelationManager extends RelationManager
 {
@@ -73,12 +79,12 @@ abstract class BaseTasksRelationManager extends RelationManager
 
     public function infolist(Schema $schema): Schema
     {
-        return TaskInfolist::configure($schema);
+        return TaskInfolist::configureForSubjectTab($schema);
     }
 
     public function table(Table $table): Table
     {
-        return TasksTable::configure($table, withSubject: false)
+        return TasksTable::configureForSubjectTab($table)
             ->recordTitleAttribute('title')
             // The relation orders by due date for its other callers; the table drops
             // that order so the column sorts apply and re-adds it as the default.

@@ -88,6 +88,7 @@ final class EmailActions
     {
         return [
             Placeholder::make('mail_warning')
+                ->label(__('email.fields.mail_warning'))
                 ->hiddenLabel()
                 ->content(__('email.helpers.mail_not_configured'))
                 ->visible(fn (): bool => ! NotificationChannels::mailIsConfigured()),

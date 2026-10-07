@@ -40,8 +40,9 @@ use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\CauserResolver;
 
 /**
- * Every write to a task (decisions A-10, D-4, D-14): create, edit, start,
- * post a progress update, complete, cancel, reopen and reschedule.
+ * Every write to a task (decisions A-10, D-4, D-14, D-27): create, edit,
+ * start, post a progress update, complete, cancel, reopen (and the undo of a
+ * completion), reschedule and the quick move of an open task's due date.
  *
  * - the assignee defaults to the actor and the creator is always the actor;
  *   a task created for someone else (or for no one) needs `task.assign` and
@@ -417,15 +418,54 @@ final class TaskService
 
     public function reopen(Task $task, User $actor): Task
     {
-        $this->asCauser($actor, function () use ($task, $actor): void {
-            DB::transaction(function () use ($task, $actor): void {
+        return $this->reopenFrom($task, $actor, null);
+    }
+
+    /**
+     * The «تراجع» (undo) of a one-click completion (D-27): a reopen that
+     * holds only while the task is still completed — judged under the row
+     * lock, so an undo that arrives after someone else reopened, cancelled
+     * or deleted the task changes nothing. Who may undo is the policy's
+     * `reopen` answer, exactly as for the Reopen action. On a repeating task
+     * the occurrence the completion scheduled is withdrawn with it, unless
+     * someone has already touched it (TaskRecurrence::untouchedSuccessor()).
+     */
+    public function undoCompletion(Task $task, User $actor): Task
+    {
+        return $this->reopenFrom($task, $actor, TaskStatus::Completed);
+    }
+
+    /**
+     * Reopens a closed task; with $expected, only while it still has that
+     * status.
+     */
+    private function reopenFrom(Task $task, User $actor, ?TaskStatus $expected): Task
+    {
+        $this->asCauser($actor, function () use ($task, $actor, $expected): void {
+            DB::transaction(function () use ($task, $actor, $expected): void {
                 $current = $this->lock($task);
+
+                if ($expected !== null && $current->status !== $expected) {
+                    throw InvalidTaskTransitionException::notCompleted();
+                }
 
                 if ($current->isOpen()) {
                     throw InvalidTaskTransitionException::notClosed();
                 }
 
                 $previous = $current->status;
+                $completedAt = $current->completed_at;
+
+                // The undo puts things back as they were before the click: the
+                // next occurrence that completion scheduled is withdrawn while
+                // nobody has touched it (soft-deleted, so the ledger keeps it);
+                // completing again schedules it afresh. A plain reopen keeps
+                // it, as before, and a later completion never duplicates it.
+                $withdrawn = $expected === TaskStatus::Completed && $completedAt !== null
+                    ? $this->recurrence->untouchedSuccessor($current, $completedAt)
+                    : null;
+
+                $withdrawn?->delete();
 
                 // A reopened task is due and remindable again, so both
                 // notification stamps are re-armed with the status. Its
@@ -438,10 +478,11 @@ final class TaskService
                     $current->save();
                 });
 
-                $this->audit->record(ActivityLogEvent::TaskReopened, $current, $actor, [
+                $this->audit->record(ActivityLogEvent::TaskReopened, $current, $actor, array_filter([
                     'subject_label' => $current->title,
                     'previous_status' => $previous->value,
-                ]);
+                    'withdrawn_occurrence_id' => $withdrawn === null ? null : (int) $withdrawn->getKey(),
+                ], static fn (mixed $value): bool => $value !== null));
 
                 $this->log($current, $actor, TaskStatus::Pending, null);
             });
@@ -515,6 +556,49 @@ final class TaskService
             'checklist_renamed' => $changes['renamed'],
             'checklist_reordered' => $changes['reordered'] ? true : null,
         ], static fn (mixed $value): bool => $value !== [] && $value !== null));
+    }
+
+    /**
+     * Moves an open task to another due moment (D-27: the quick reschedule
+     * chips). The row is locked; a deleted task is refused as every write
+     * is, a completed or cancelled one keeps its date. A meeting or a call
+     * that carries a span moves with it, its start and end shifted by the
+     * same amount (or, when the task had no due date, starting at the new
+     * moment with its old length). Who may move it is the policy's `update`
+     * answer — never the handed-out assignee (D-14 amendment). The stamps
+     * are re-armed and the diff reaches the ledger as `task.updated`.
+     */
+    public function moveDue(Task $task, Carbon $dueAt, User $actor): Task
+    {
+        $this->asCauser($actor, function () use ($task, $dueAt): void {
+            DB::transaction(function () use ($task, $dueAt): void {
+                $current = $this->lock($task);
+
+                if ($current->isClosed()) {
+                    throw InvalidTaskTransitionException::notOpenForReschedule();
+                }
+
+                $startsAt = $current->starts_at;
+                $endsAt = $current->ends_at;
+
+                if (self::kindHasTimeSpan($current->kind) && $startsAt !== null) {
+                    $shift = $current->due_at !== null
+                        ? $dueAt->getTimestamp() - $current->due_at->getTimestamp()
+                        : $dueAt->getTimestamp() - $startsAt->getTimestamp();
+
+                    $startsAt = $startsAt->copy()->addSeconds($shift);
+                    $endsAt = $endsAt?->copy()->addSeconds($shift);
+                }
+
+                $this->saveRearming($current, [
+                    'due_at' => $dueAt,
+                    'starts_at' => $startsAt,
+                    'ends_at' => $endsAt,
+                ]);
+            });
+        });
+
+        return $task->refresh();
     }
 
     /**

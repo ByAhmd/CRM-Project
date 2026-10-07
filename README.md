@@ -15,7 +15,7 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
 | Step 11 — Custom fields (D-9) | ✅ done 2026-09-07 — typed custom fields on leads, contacts, accounts and deals: forms, tables, filters, import and export |
 | Step 12 — Quality pass (security, performance, localisation and RTL, theme, schema on MySQL 8.4 and MariaDB 10.4, authorisation matrix, test review) | ✅ done 2026-09-15 — steps 0–12 complete; open go-live items with their owners in [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) |
 | Step 13 — Production readiness (deployment pipeline and runbook, trusted proxies, clean install, demo data) | ✅ engineering done 2026-09-15 — deploy workflow, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/OPERATIONS.md](docs/OPERATIONS.md), production preflight, trusted proxies, scheduler heartbeat, `app:demo-data`; clean install, rollback and the whole suite proven on MySQL 8.4 and MariaDB 10.4; real database-queue import/export smoke run; EXPLAIN at 40× volume. Go-live rows that need the host or the owner stay open in [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) |
-| Owner additions after launch (D-14 … D-26) | ✅ 2026-09-21 … 2026-10-05 — see *Features* below |
+| Owner additions after launch (D-14 … D-27) | ✅ 2026-09-21 … 2026-10-07 — see *Features* below |
 
 ## Features
 
@@ -36,6 +36,15 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
   unticked items is allowed with a warning (D-25).
 - **Task threads:** comments on any task one may open (D-17); **@mentions** in a comment pull a colleague into the
   task — they may read it, its files and comments and are told at once, but never edit it (D-20).
+- **A quicker Tasks workspace (D-27, ClickUp-style):** «عملي» (My Work) as the Tasks home — the reader's tasks in
+  buckets (overdue, today, next 7 days, later, no date, completed recently); one visual language for status, priority
+  flag, assignee initials, checklist meter and relative due dates («اليوم 17:00», «متأخرة 3 أيام») on the
+  organisation's day; a one-click completion check with undo; a status pill that offers only the moves the reader may
+  make; quick add; a task list grouped by status; a two-column task page with one-click checklist ticks and an
+  always-visible comment / progress composer; a board by status with drag and drop; an **Inbox** of one's
+  notifications inside each workspace (`/tasks/inbox`, sidebar kept); a bottom tab bar on phones, the CRM installable as an app (web manifest, no service
+  worker) and keyboard shortcuts (N, /, ?). Every rule of D-14, D-17, D-20, D-22 and D-25 holds; the Sales task tabs
+  are unchanged.
 - **Routine tasks:** weekly or monthly templates set up once by the people who hand out work; on each scheduled day
   every assignee gets a task of their own, announced like any assignment (D-22, `tasks:generate-routines`, hourly);
   a routine's checklist is copied unticked into each task (D-25).
@@ -104,10 +113,10 @@ composer check              # pint --test, phpstan, phpunit — must be green be
 | [docs/ARCHITECTURE_PLAN.md](docs/ARCHITECTURE_PLAN.md) | Discovery findings, product scope, system architecture, module dependencies, implementation order, testing, security, performance, deployment, folder structure, risks, decision register |
 | [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md) | Every table, column, key, index and integrity rule, as built |
 | [docs/STOCKFLOW_COMPARISON.md](docs/STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table, reuse classification (must / should / CRM-specific / must not), conflict resolution |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Owner decisions D-1 … D-26 and architect decisions A-1 … A-26 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Owner decisions D-1 … D-27 and architect decisions A-1 … A-26 |
 | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) | Seeded roles and their default grants, record scope (own / team / all) and the guards above the permissions |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Hostinger runbook: prerequisites, first deployment, the cron line and what it drives, releases, rollback, PHP limits, backups, logs, monitoring, the deploy workflow and its secrets, the full `.env` reference |
-| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2 operations: users, roles, audit retention, deleted records, imports/exports, attachments, failed jobs, scheduler troubleshooting, settings, notification preferences, demo data, common preflight failures, backups, the weekly summary, routine tasks, task mentions and the task report, the employee dashboard |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Day-2 operations: users, roles, audit retention, deleted records, imports/exports, attachments, failed jobs, scheduler troubleshooting, settings, notification preferences, demo data, common preflight failures, backups, the weekly summary, routine tasks, task mentions and the task report, the employee dashboard, the Tasks workspace day to day, the Inbox and installing the app on a phone |
 | [docs/GoLive_Checklist.md](docs/GoLive_Checklist.md) | Go-live checklist (steps 12 and 13): every go-live item with its evidence, date, result and owner |
 | [docs/Static_Analysis_Known_False_Positives.md](docs/Static_Analysis_Known_False_Positives.md) | PHPStan level 5 without baseline or suppressions; how a genuine false positive would be recorded |
 | [docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md) | The 13 questions as asked on 2026-09-04 (historical, all resolved) |

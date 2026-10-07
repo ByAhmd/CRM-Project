@@ -40,7 +40,18 @@ final class InitialsAvatar
         return $column->prefix(static fn (Model $record): ?HtmlString => self::render((string) $record->getAttribute($attribute)));
     }
 
-    private static function render(string $name): ?HtmlString
+    /**
+     * The avatar of a name on its own (D-27: assignees on the task screens).
+     * Beside the name it repeats, it stays `aria-hidden`; standing alone
+     * ($labelled), it is an image named after the person, with the name as
+     * its tooltip. Null for a name without a letter to show.
+     */
+    public static function forName(string $name, bool $labelled = false): ?HtmlString
+    {
+        return self::render($name, $labelled);
+    }
+
+    private static function render(string $name, bool $labelled = false): ?HtmlString
     {
         $initials = self::initials($name);
 
@@ -48,9 +59,14 @@ final class InitialsAvatar
             return null;
         }
 
+        $accessibility = $labelled
+            ? sprintf('role="img" aria-label="%1$s" title="%1$s"', e(trim($name)))
+            : 'aria-hidden="true"';
+
         return new HtmlString(sprintf(
-            '<span class="crm-avatar" style="--crm-avatar-h: %d" aria-hidden="true">%s</span>',
+            '<span class="crm-avatar" style="--crm-avatar-h: %d" %s>%s</span>',
             self::hue($name),
+            $accessibility,
             e($initials),
         ));
     }

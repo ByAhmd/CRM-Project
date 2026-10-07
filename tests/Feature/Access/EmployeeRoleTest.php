@@ -20,7 +20,6 @@ use App\Filament\Resources\Tasks\RelationManagers\TaskAttachmentsRelationManager
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\PipelineByStageChart;
 use App\Filament\Widgets\RevenueWonByMonthChart;
 use App\Filament\Widgets\SalesKpisWidget;
@@ -218,15 +217,13 @@ final class EmployeeRoleTest extends TestCase
     }
 
     #[Test]
-    public function the_tasks_home_shows_the_task_widgets_and_the_sales_dashboard_stays_closed(): void
+    public function the_tasks_home_shows_my_work_and_the_follow_ups_and_the_sales_dashboard_stays_closed(): void
     {
-        // D-23: the employee enters the Tasks workspace only; its home carries the two task lists.
-        $this->actingAs($this->employee)->get(TasksDashboard::getUrl())->assertOk();
+        // D-23: the employee enters the Tasks workspace only; D-27: its home is «عملي» (My Work).
+        $this->actingAs($this->employee)->get(TasksDashboard::getUrl())->assertOk()->assertSee(__('my_work.pages.title'));
         $this->actingAs($this->employee)->get(SalesDashboard::getUrl())->assertForbidden();
 
-        foreach ([MyTasksTodayWidget::class, UpcomingFollowUpsWidget::class] as $widget) {
-            $this->assertTrue($widget::canView(), "{$widget} hides from the employee");
-        }
+        $this->assertTrue(UpcomingFollowUpsWidget::canView(), 'the follow-ups list hides from the employee');
 
         foreach ([SalesKpisWidget::class, LeadsByStatusChart::class, PipelineByStageChart::class, RevenueWonByMonthChart::class, StaleDealsWidget::class, ActivityCountsWidget::class] as $widget) {
             $this->assertFalse($widget::canView(), "{$widget} shows to the employee");

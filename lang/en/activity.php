@@ -329,6 +329,7 @@ return [
         'checklist_done' => 'Checklist items done',
         'checklist_open' => 'Checklist items not done',
         'checklist_total' => 'Checklist items',
+        'withdrawn_occurrence_id' => 'Next occurrence withdrawn',
     ],
 
     // Labels that differ for one audited model; checked before the shared attribute labels.

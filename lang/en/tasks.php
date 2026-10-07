@@ -78,6 +78,10 @@ return [
         'checklist_ticked' => 'Ticked by :name, :date',
         'checklist_ticked_at' => 'Ticked :date',
         'checklist_ticked_by' => 'Ticked by',
+        'checklist_meter' => '{0} No checklist items|{1} :done of 1 checklist item done|[2,*] :done of :total checklist items done',
+        'priority_flag' => 'Priority: :priority',
+        'due_shortcut' => 'Due',
+        'due_on' => 'Date',
     ],
 
     'placeholders' => [
@@ -103,6 +107,9 @@ return [
         'checklist_frozen' => 'The task is closed, so its checklist no longer changes.',
         'checklist_tick' => 'Tick the steps that are done; untick a step that is not.',
         'checklist_complete_anyway' => 'You can still complete the task: the number left open is recorded and the assigner is told.',
+        'change_status' => 'Now: :status. Choose what happens next.',
+        'reschedule_time' => 'The day changes and the task keeps its time; a task without one is due at 17:00.',
+        'quick_add_assignee' => 'The task is yours unless you choose a colleague.',
     ],
 
     'filters' => [
@@ -113,6 +120,8 @@ return [
         'due_from' => 'Due from',
         'due_until' => 'Due until',
         'trashed' => 'Deleted',
+        'mine' => 'My tasks only',
+        'no_due' => 'No due date',
     ],
 
     'actions' => [
@@ -143,6 +152,16 @@ return [
         'checklist_heading' => 'Tick off the checklist',
         'checklist_submit' => 'Save',
         'add_checklist_item' => 'Add an item',
+        'change_status' => 'Change status',
+        'change_status_heading' => 'Change the status',
+        'quick_complete' => 'Mark as complete',
+        'undo' => 'Undo',
+        'reschedule' => 'Reschedule',
+        'reschedule_heading' => 'Move the due date',
+        'reschedule_submit' => 'Move',
+        'quick_add' => 'Quick add',
+        'quick_add_heading' => 'New task',
+        'more_options' => 'More options',
     ],
 
     'confirmations' => [
@@ -179,12 +198,14 @@ return [
         'mention_body' => ':by mentioned you in a comment on ":task": :comment',
         'completed_checklist_open' => '{1} Its only checklist item was not done.|[2,*] Not done: :count of its :total checklist items.',
         'checklist_saved' => 'Checklist updated',
+        'rescheduled' => 'Now due :due',
     ],
 
     'validation' => [
         'not_open' => 'Only a pending or in-progress task can be completed or cancelled.',
         'not_pending' => 'Only a pending task can be started.',
         'update_not_open' => 'Updates can be posted only on a pending or in-progress task.',
+        'update_not_allowed' => 'You may no longer post progress updates on this task. Your text is kept in the box; you can copy it or post a comment instead.',
         'update_body_required' => 'Write what happened with the task.',
         'update_body_too_long' => 'An update may be at most :max characters.',
         'comment_body_required' => 'Write the comment.',
@@ -198,6 +219,9 @@ return [
         'checklist_too_many' => 'A checklist may hold at most :max items.',
         'checklist_frozen' => 'The task is completed, cancelled or deleted, so its checklist can no longer change.',
         'checklist_not_open' => 'Only the checklist of a pending or in-progress task can be ticked.',
+        'reschedule_not_open' => 'Only a pending or in-progress task can be moved to another day.',
+        'undo_not_completed' => 'The task is no longer completed, so there is nothing to undo.',
+        'undo_unavailable' => 'This completion can no longer be undone here: the task was removed or is no longer yours to reopen.',
     ],
 
     'empty' => [
@@ -209,10 +233,183 @@ return [
         'deleted_author_named' => ':name (deleted account)',
     ],
 
+    'due' => [
+        'today' => 'Today :time',
+        'tomorrow' => 'Tomorrow',
+        'yesterday' => 'Yesterday',
+        'overdue' => '{1} 1 day overdue|[2,*] :count days overdue',
+        'none' => 'No date',
+        'weekdays' => [
+            'sunday' => 'Sunday',
+            'monday' => 'Monday',
+            'tuesday' => 'Tuesday',
+            'wednesday' => 'Wednesday',
+            'thursday' => 'Thursday',
+            'friday' => 'Friday',
+            'saturday' => 'Saturday',
+        ],
+    ],
+
+    // The task list of the Tasks workspace (D-27): status groups, the completion check, friendly empty states.
+    'list_ux' => [
+        'meta' => [
+            'repeats' => 'Repeats :frequency',
+        ],
+        'columns' => [
+            'check' => 'Done',
+            'due' => 'Due',
+        ],
+        'groups' => [
+            'status' => 'Status',
+        ],
+        'actions' => [
+            'full_form' => 'Full form',
+        ],
+        'helpers' => [
+            'mark_complete' => 'Complete the task: :task',
+        ],
+        'empty' => [
+            'my' => [
+                'heading' => 'Nothing is waiting for you',
+                'description' => 'No open task is assigned to you. Add one with quick add to keep the next step in sight.',
+                // For a reader who may not add tasks (no quick add on the page).
+                'description_view' => 'No open task is assigned to you. Tasks handed to you appear here as soon as they are assigned.',
+            ],
+            'today' => [
+                'heading' => 'Nothing due today',
+                'description' => 'No open task falls due today. Add one if something needs doing before the day ends.',
+                'description_view' => 'No open task falls due today. The Upcoming tab shows what comes next.',
+            ],
+            'overdue' => [
+                'heading' => 'Nothing overdue',
+                'description' => 'Every open task is on time. Add the next one with quick add.',
+                'description_view' => 'Every open task is on time.',
+            ],
+            'upcoming' => [
+                'heading' => 'Nothing coming up',
+                'description' => 'No open task is due after today. Plan the next step with quick add.',
+                'description_view' => 'No open task is due after today. The All tab shows every task you may open.',
+            ],
+            'completed' => [
+                'heading' => 'No completed tasks yet',
+                'description' => 'Completed tasks gather here. The check at the start of a row completes a task in one click.',
+                'description_view' => 'Completed tasks gather here as they are done.',
+            ],
+            'all' => [
+                'heading' => 'No tasks yet',
+                'description' => 'Add the first task or follow-up to keep the next step in sight.',
+                'description_view' => 'Tasks you may open appear here as soon as they are added.',
+            ],
+            'filtered' => [
+                'heading' => 'No tasks match',
+                'description' => 'Nothing matches this search or these filters. Clear them to see more, or add a task.',
+                'description_view' => 'Nothing matches this search or these filters. Clear them to see more.',
+            ],
+        ],
+    ],
+
+    // The tasks board (D-14, D-27): by assignee or by status, «My tasks only», drag and drop.
+    'board_ux' => [
+        'views' => [
+            'label' => 'Board view',
+            'assignee' => 'By assignee',
+            'status' => 'By status',
+        ],
+        'columns' => [
+            'this_week' => 'this week',
+            'count' => '{0} No tasks|{1} :count task|[2,*] :count tasks',
+        ],
+        'helpers' => [
+            'status_view' => 'The tasks you may open, by status. Drag a card to another column to change its status, or use the status button on the card.',
+        ],
+        'actions' => [
+            'change_status' => 'Change the status of :task (now :status)',
+            'show_everyone' => 'Show everyone’s tasks',
+        ],
+        'empty' => [
+            'column' => 'No tasks here.',
+            'column_mine' => 'None of your tasks here.',
+            'board_mine' => 'You have no open tasks.',
+        ],
+        'notifications' => [
+            'refused' => 'The card was not moved',
+            'not_a_column' => 'A task can be dropped only on a column of the by-status view.',
+            'not_found' => 'This task is not available to you.',
+            'stale' => 'This task changed in the meantime and is now :status; the board shows it as it is.',
+            'no_move' => 'There is no direct move from :from to :to.',
+            'not_allowed' => 'You may not make this move (:move) on this task.',
+        ],
+    ],
+
     'recurrence' => [
         'daily' => '{1} Every day|[2,*] Every :count days',
         'weekly' => '{1} Every week|[2,*] Every :count weeks',
         'monthly' => '{1} Every month|[2,*] Every :count months',
+    ],
+
+    // The task page of the Tasks workspace (D-27): two columns, inline checklist, composer.
+    'page_ux' => [
+        'sections' => [
+            'properties' => 'Properties',
+            'details' => 'More details',
+        ],
+        'fields' => [
+            'routine' => 'Routine task',
+        ],
+        'actions' => [
+            'more' => 'More',
+            'start_with_note' => 'Start with a note',
+            'complete_with_note' => 'Complete with a note',
+            'edit_checklist' => 'Edit the list',
+        ],
+        'composer' => [
+            'mode' => 'Post as',
+            'comment' => 'Comment',
+            'progress' => 'Progress update',
+            'progress_placeholder' => 'What happened with the task?',
+            'draft_kept' => 'Your draft is kept while you stay signed in.',
+        ],
+        'filters' => [
+            'label' => 'Show',
+            'all' => 'All',
+            'comments' => 'Comments',
+            'updates' => 'Progress updates',
+        ],
+        'helpers' => [
+            'checklist_view_only' => 'The list is ticked by the assignee and whoever may update the task.',
+        ],
+        'empty' => [
+            'thread_comments' => 'No comments yet.',
+            'thread_updates' => 'No progress updates yet.',
+        ],
+        'notifications' => [
+            'checklist_refused' => 'You cannot tick this checklist.',
+        ],
+    ],
+
+    // D-27: the Tasks phone bar (below md).
+    'tab_bar' => [
+        'label' => 'Tasks workspace',
+        'my_work' => 'My work',
+        'tasks' => 'Tasks',
+        'add' => 'Add',
+        'board' => 'Board',
+        'inbox' => 'Inbox',
+        'unread' => '{0} no unread notifications|{1} :count unread notification|[2,*] :count unread notifications',
+    ],
+
+    // D-27: the keyboard of the Tasks workspace and its sheet.
+    'shortcuts' => [
+        'title' => 'Keyboard shortcuts',
+        'close' => 'Close',
+        'quick_add' => 'Add a task',
+        'search' => 'Focus the search',
+        'search_anywhere' => 'Search, even while typing',
+        'sheet' => 'Show these shortcuts',
+        'single_keys' => 'Single-key shortcuts',
+        'single_keys_help' => 'Turn them off if they get in the way of a screen reader or speech input. The choice is kept on this device.',
+        'search_hint' => 'Ctrl+K',
+        'search_hint_mac' => '⌘K',
     ],
 
     'pages' => [

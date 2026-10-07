@@ -14,6 +14,7 @@ return [
 
     'fields' => [
         'keep' => 'Record to keep',
+        'duplicate_warning' => 'Possible duplicate',
     ],
 
     'helpers' => [

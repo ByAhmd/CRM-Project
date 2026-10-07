@@ -9,6 +9,7 @@ use App\Enums\WorkspacePanel;
 use App\Filament\Pages\AdminHome;
 use App\Filament\Pages\Calendar;
 use App\Filament\Pages\DealBoard;
+use App\Filament\Pages\Inbox;
 use App\Filament\Pages\NotificationPreferences;
 use App\Filament\Pages\Reports\ActivityReportPage;
 use App\Filament\Pages\Reports\ConversionFunnelReportPage;
@@ -208,6 +209,8 @@ final class RoleMatrixWalkProbeTest extends TestCase
             [TasksBoard::getUrl(), self::EVERYONE],
             [Calendar::getUrl(), self::EVERYONE],
             [NotificationPreferences::getUrl(), self::EVERYONE],
+            // D-27: the Inbox, every user's own notifications, in the home panel.
+            [Inbox::getUrl(), self::EVERYONE],
             [(string) Filament::getPanel(WorkspacePanel::HOME)->getProfileUrl(), self::EVERYONE],
             [GeneralSettings::getUrl(), self::SETTINGS],
             [ActivityReportPage::getUrl(), self::ALL],

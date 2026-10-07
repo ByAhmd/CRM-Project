@@ -129,6 +129,7 @@ final class CustomFieldForm
                     ->visible(fn (Get $get, ?CustomField $record): bool => self::type($get, $record)?->hasOptions() ?? false)
                     ->schema([
                         Repeater::make('options')
+                            ->label(__('custom_fields.sections.options'))
                             ->hiddenLabel()
                             ->schema([
                                 TextInput::make('value')

@@ -115,6 +115,31 @@ return [
         'cancelled' => 'ملغاة',
     ],
 
+    'task_transition' => [
+        'start' => 'بدء',
+        'complete' => 'إكمال',
+        'reopen' => 'إعادة فتح',
+        'cancel' => 'إلغاء المهمة',
+    ],
+
+    'due_shortcut' => [
+        'today' => 'اليوم',
+        'tomorrow' => 'غداً',
+        'next_week' => 'الأسبوع القادم',
+        'pick' => 'تاريخ آخر',
+        'none' => 'بلا تاريخ',
+    ],
+
+    // D-27: the buckets of My Work, in page order.
+    'my_work_bucket' => [
+        'overdue' => 'متأخرة',
+        'today' => 'اليوم',
+        'next_7_days' => 'الأيام السبعة القادمة',
+        'later' => 'لاحقاً',
+        'no_date' => 'بلا تاريخ',
+        'completed_recently' => 'أُنجزت مؤخراً',
+    ],
+
     'task_update_kind' => [
         'progress' => 'تحديث',
         'comment' => 'تعليق',

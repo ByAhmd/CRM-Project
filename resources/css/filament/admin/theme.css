@@ -171,8 +171,12 @@ html.dark {
     box-shadow: var(--shadow-crm);
 }
 
-/* Solid primary buttons use the 700 shade: the 600 default fails AA on white text. */
-.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
+/* Solid primary buttons use the 700 shade: the 600 default fails AA on white text.
+   A toggle button is a <label> carrying the same colour classes whether or not it
+   is chosen (Filament fills it only after `input:checked +`), so labels take the
+   solid shade only when their input is checked — an unchosen chip stays neutral. */
+.fi-btn.fi-color-primary[class*='fi-bg-color-']:not(label),
+input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
     background-color: var(--color-700);
 }
 
@@ -302,6 +306,902 @@ html.dark {
 .fi-fo-rich-editor span[data-type='mention'] {
     unicode-bidi: plaintext;
 }
+
+/* ---------------------------------------------------------------------------
+ | Tasks visual language (D-27)
+ |
+ | The cues every Tasks-workspace screen shares (App\Filament\Support\TaskVisuals,
+ | the <x-task.*> components): the priority flag, the checklist meter and
+ | the relative due date. The status pill is Filament's own badge in the
+ | TaskStatus colour, so it needs nothing here. Every pair below holds WCAG
+ | AA on the card in its theme — text 4.5:1 (the due words), icons and the
+ | meter fill 3:1 — and the words carry the meaning, never the colour alone
+ | («متأخرة 3 أيام», «اليوم 17:00», a flag named for screen readers).
+ | Logical properties only, so RTL and LTR need no exception; nothing moves.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-due-overdue: var(--danger-700);
+    /* Due today is a mustard yellow, a clearly different hue from the high flag's
+       orange beside it: #a16207 holds 4.9:1 on the card, 4.6:1 on --crm-bg. */
+    --crm-due-today: #a16207;
+    --crm-due-closed: var(--crm-muted);
+    --crm-flag-urgent: var(--danger-600);
+    --crm-flag-high: #c2410c;
+    --crm-flag-muted: var(--crm-muted);
+    --crm-meter-track: var(--crm-border);
+    --crm-meter-fill: var(--crm-accent-text);
+    --crm-meter-done: var(--success-700);
+}
+
+.dark {
+    --crm-due-overdue: var(--danger-400);
+    /* #facc15: 11:1 on the dark card, yellow beside the orange high flag. */
+    --crm-due-today: #facc15;
+    --crm-flag-urgent: var(--danger-400);
+    --crm-flag-high: #fb923c;
+    --crm-meter-track: var(--crm-border-2);
+    --crm-meter-done: var(--success-400);
+}
+
+.crm-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    vertical-align: middle;
+    color: var(--crm-flag-muted);
+}
+
+.crm-flag--urgent {
+    color: var(--crm-flag-urgent);
+}
+
+.crm-flag--high {
+    color: var(--crm-flag-high);
+}
+
+.crm-flag-icon {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+}
+
+.crm-flag-label {
+    color: var(--crm-text-2);
+}
+
+.crm-meter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    vertical-align: middle;
+}
+
+.crm-meter-track {
+    display: inline-block;
+    inline-size: 3rem;
+    block-size: 0.375rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background-color: var(--crm-meter-track);
+}
+
+.crm-meter-fill {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background-color: var(--crm-meter-fill);
+}
+
+.crm-meter--done .crm-meter-fill {
+    background-color: var(--crm-meter-done);
+}
+
+.crm-meter-text {
+    font-size: 0.75rem;
+    color: var(--crm-text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.crm-due {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.crm-due--overdue {
+    color: var(--crm-due-overdue);
+    font-weight: 600;
+}
+
+.crm-due--today {
+    color: var(--crm-due-today);
+    font-weight: 600;
+}
+
+.crm-due--closed {
+    color: var(--crm-due-closed);
+}
+
+/* The unassigned avatar: an empty dashed ring, the same size as a person's. */
+.crm-avatar--empty {
+    border: 1px dashed var(--crm-border-2);
+    background-color: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+ | Task list and tasks board (D-27)
+ |
+ | The completion check (TaskVisuals::completionCheck; list and My Work): an empty ring
+ | the reader clicks to complete, a filled check once completed, a muted
+ | mark otherwise — the icon is decoration, the visually hidden words beside
+ | it say what the button does. The board's status pill is a real button
+ | (the keyboard and touch alternative to dragging) with a chevron. Icons
+ | hold 3:1 on the card in both themes; on coarse pointers both controls
+ | offer the 44px hit area. Logical properties only; nothing here moves —
+ | the drag animation is SortableJS's, switched off in the view for readers
+ | who ask for reduced motion.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-check-idle: var(--crm-muted);
+    /* The same "done" green as the checklist meter (Tasks visual language). */
+    --crm-check-done: var(--crm-meter-done);
+}
+
+/* The title column never shrinks below a readable line: a wrapping cell beside
+   no-wrap cells is the one the table squeezes, down to a word per line (the
+   owner's screenshot, 2026-10-07). Beyond the minimum it wraps; the muted line
+   under it (kind · record · repeats) stays within the same width. */
+.fi-ta-table th.crm-ta-col-title,
+.fi-ta-table td.crm-ta-col-title {
+    min-inline-size: 14rem;
+}
+
+/* Below 2xl the priority flag and the assignee's avatar stand alone (ClickUp's
+   list): the words are visually hidden, never removed, so screen readers still
+   read them and the cell's tooltip shows them. */
+@media (width < 96rem) {
+    .fi-ta-table td.crm-ta-compact .crm-flag-label,
+    .fi-ta-table td.crm-ta-compact .crm-ta-assignee-name {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+    }
+}
+
+.crm-task-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--crm-check-idle);
+}
+
+.crm-task-check-icon {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+}
+
+.crm-task-check--done {
+    color: var(--crm-check-done);
+}
+
+.fi-ta-col:not(:disabled):hover .crm-task-check--open {
+    color: var(--crm-check-done);
+}
+
+.crm-board-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    border-radius: 0.5rem;
+    color: var(--crm-text-2);
+}
+
+.crm-board-pill:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-board-pill-chevron {
+    inline-size: 1rem;
+    block-size: 1rem;
+}
+
+.crm-board-card--draggable:focus-within {
+    border-color: var(--crm-accent-text);
+}
+
+@media (pointer: coarse) {
+    .crm-task-check,
+    .crm-board-pill {
+        min-block-size: 2.75rem;
+        min-inline-size: 2.75rem;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ | Task page (D-27)
+ |
+ | ViewTask in two columns (TaskInfolist::configure()). From lg the content
+ | and, below it, the activity take the start columns while the properties
+ | fill the end column across both rows; the second row is the flexible one,
+ | so a long properties column never pushes the activity down. Below lg the
+ | three stack in source order — content, properties, activity — so the
+ | composer is reached before the thread. The grid item is Filament's
+ | wrapper around each group, hence the :has() selectors.
+ | The checklist box is a real checkbox button (role=checkbox, aria-checked)
+ | whose state the server's re-render settles; a ticked box holds a check
+ | and its text is struck through, so the state never rests on colour. The
+ | thread filter is a row of pressed / not-pressed buttons. Icons and box
+ | borders hold 3:1, text 4.5:1 on the card in both themes; coarse pointers
+ | get a 44px hit area. Logical properties only; nothing moves.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-checklist-box: var(--crm-muted);
+    /* The same "done" green as the checklist meter (Tasks visual language). */
+    --crm-checklist-done: var(--crm-meter-done);
+    --crm-checklist-tick: var(--crm-on-accent);
+}
+
+.dark {
+    --crm-checklist-tick: var(--crm-card);
+}
+
+@media (min-width: 64rem) {
+    .crm-task-page > .fi-grid {
+        grid-template-rows: auto 1fr;
+        align-items: start;
+    }
+
+    .crm-task-page > .fi-grid > :has(> .crm-task-page__aside) {
+        grid-row: span 2;
+    }
+}
+
+.crm-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    vertical-align: middle;
+}
+
+.crm-checklist__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-checklist__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding-block: 0.375rem;
+}
+
+.crm-checklist__box {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-block-start: 0.125rem;
+    border: 2px solid var(--crm-checklist-box);
+    border-radius: 0.375rem;
+    background-color: transparent;
+    color: var(--crm-checklist-tick);
+}
+
+button.crm-checklist__box {
+    cursor: pointer;
+}
+
+button.crm-checklist__box:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-checklist__tick {
+    inline-size: 1rem;
+    block-size: 1rem;
+    visibility: hidden;
+}
+
+.crm-checklist__box[aria-checked='true'],
+.crm-checklist__box[data-state='done'] {
+    border-color: var(--crm-checklist-done);
+    background-color: var(--crm-checklist-done);
+}
+
+.crm-checklist__box[aria-checked='true'] .crm-checklist__tick,
+.crm-checklist__box[data-state='done'] .crm-checklist__tick {
+    visibility: visible;
+}
+
+.crm-checklist__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-inline-size: 0;
+}
+
+.crm-checklist__text {
+    color: var(--crm-text);
+    overflow-wrap: anywhere;
+}
+
+.crm-checklist__item:has(.crm-checklist__box[aria-checked='true'], .crm-checklist__box[data-state='done']) .crm-checklist__text {
+    color: var(--crm-muted);
+    text-decoration: line-through;
+}
+
+.crm-checklist__meta {
+    font-size: 0.75rem;
+    color: var(--crm-muted);
+}
+
+.crm-checklist__note {
+    margin-block-start: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--crm-text-2);
+}
+
+.crm-thread-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.crm-thread-filter__button {
+    border: 1px solid var(--crm-border-2);
+    border-radius: 9999px;
+    padding-block: 0.25rem;
+    padding-inline: 0.75rem;
+    background-color: transparent;
+    font-size: 0.875rem;
+    color: var(--crm-text-2);
+}
+
+.crm-thread-filter__button[aria-pressed='true'] {
+    border-color: var(--crm-accent-text);
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+    font-weight: 600;
+}
+
+.crm-thread-filter__button:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-composer__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-block-start: 0.75rem;
+}
+
+.crm-composer__hint {
+    font-size: 0.75rem;
+    color: var(--crm-muted);
+}
+
+@media (pointer: coarse) {
+    button.crm-checklist__box::before {
+        content: '';
+        position: absolute;
+        inset: -0.75rem;
+    }
+
+    .crm-thread-filter__button {
+        min-block-size: 2.75rem;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ | My Work, the Tasks phone bar and the shortcut sheet (D-27)
+ |
+ | «عملي» (My Work, resources/views/filament/pages/my-work.blade.php): the
+ | bucket chips, the folding buckets and the task rows, which wrap their
+ | properties under the title on a phone. The Tasks phone bar
+ | (filament/partials/tasks-tab-bar, in Tasks and on the Inbox page): fixed
+ | at the bottom below md (48rem), 44px tabs, and the page keeps room under
+ | its last row; from md up it is not shown. The safe-area insets read 0
+ | under Filament's viewport (no viewport-fit=cover), where an installed
+ | iPhone app keeps the page above the home indicator by itself; they only
+ | take effect if the viewport ever covers the whole screen. The shortcut
+ | sheet (filament/partials/tasks-shortcuts): a native <dialog>. Colours are
+ | the theme's tokens, so both themes hold AA; logical properties only, so
+ | RTL and LTR need no exception; nothing here moves.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-tab-bar-bg: var(--crm-card);
+    --crm-tab-bar-text: var(--crm-text-2);
+    --crm-tab-bar-current: var(--crm-accent-text);
+    /* White on danger-600 holds 4.8:1, in both themes. */
+    --crm-tab-bar-badge-bg: var(--danger-600);
+    --crm-tab-bar-badge-text: var(--crm-on-accent);
+    --crm-tab-bar-block-size: 4rem;
+}
+
+.crm-my-work {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.crm-my-work-summary-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-my-work-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 2.25rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--crm-border);
+    border-radius: 9999px;
+    background-color: var(--crm-card);
+    color: var(--crm-text-2);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.crm-my-work-chip:hover {
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+}
+
+.crm-my-work-chip:focus-visible,
+.crm-my-work-bucket-summary:focus-visible,
+.crm-my-work-title:focus-visible,
+.crm-my-work-more:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-my-work-chip--empty {
+    color: var(--crm-muted);
+}
+
+.crm-my-work-chip--overdue:not(.crm-my-work-chip--empty) {
+    border-color: var(--crm-due-overdue);
+    color: var(--crm-due-overdue);
+}
+
+.crm-my-work-chip--today:not(.crm-my-work-chip--empty) {
+    border-color: var(--crm-due-today);
+    color: var(--crm-due-today);
+}
+
+.crm-my-work-chip-icon,
+.crm-my-work-bucket-icon {
+    flex: none;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+}
+
+.crm-my-work-count {
+    min-inline-size: 1.5rem;
+    padding-inline: 0.375rem;
+    border-radius: 9999px;
+    background-color: var(--crm-table-header);
+    color: var(--crm-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.crm-my-work-bucket {
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+}
+
+.crm-my-work-bucket-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 2.75rem;
+    padding-inline: 1rem;
+    cursor: pointer;
+    color: var(--crm-text);
+}
+
+.crm-my-work-bucket--overdue .crm-my-work-bucket-icon {
+    color: var(--crm-due-overdue);
+}
+
+.crm-my-work-bucket--today .crm-my-work-bucket-icon {
+    color: var(--crm-due-today);
+}
+
+.crm-my-work-bucket--completed_recently .crm-my-work-bucket-icon {
+    color: var(--crm-meter-done);
+}
+
+.crm-my-work-bucket-heading {
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+.crm-my-work-bucket-empty {
+    padding-inline: 1rem;
+    padding-block: 0 0.875rem;
+    color: var(--crm-muted);
+    font-size: 0.875rem;
+}
+
+.crm-my-work-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-block-start: 1px solid var(--crm-border);
+}
+
+.crm-my-work-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.5rem;
+    row-gap: 0.375rem;
+    padding-block: 0.5rem;
+    padding-inline: 0.5rem 1rem;
+}
+
+.crm-my-work-row + .crm-my-work-row {
+    border-block-start: 1px solid var(--crm-border);
+}
+
+.crm-my-work-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 2.25rem;
+}
+
+.crm-my-work-main {
+    min-inline-size: 0;
+}
+
+.crm-my-work-title {
+    display: block;
+    overflow-wrap: anywhere;
+    color: var(--crm-text);
+    font-weight: 600;
+}
+
+.crm-my-work-title:hover {
+    color: var(--crm-accent-text);
+    text-decoration: underline;
+}
+
+.crm-my-work-row--closed .crm-my-work-title {
+    color: var(--crm-muted);
+    font-weight: 500;
+}
+
+.crm-my-work-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    margin-block-start: 0.125rem;
+    color: var(--crm-muted);
+    font-size: 0.8125rem;
+}
+
+.crm-my-work-props {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.crm-my-work-due {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.875rem;
+}
+
+.crm-my-work-no-date {
+    color: var(--crm-muted);
+}
+
+.crm-my-work-assigner {
+    display: inline-flex;
+}
+
+.crm-my-work-assigner .crm-avatar {
+    margin-inline-end: 0;
+}
+
+.crm-my-work-more {
+    display: block;
+    padding-inline: 1rem;
+    padding-block: 0.625rem;
+    border-block-start: 1px solid var(--crm-border);
+    color: var(--crm-accent-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* From md up a row reads in one line: check, title, then its properties. */
+@media (min-width: 48rem) {
+    .crm-my-work-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .crm-my-work-props {
+        grid-column: auto;
+        justify-content: flex-end;
+    }
+}
+
+/* Touch: every control on My Work and the board's «مهامي فقط» is at least 44px (D-27). */
+@media (pointer: coarse) {
+    .crm-my-work-props .fi-badge,
+    .crm-my-work-due .fi-link,
+    .crm-my-work-chip,
+    .crm-board-mine {
+        min-block-size: 2.75rem;
+    }
+
+    .crm-my-work-check {
+        min-inline-size: 2.75rem;
+    }
+
+    .crm-my-work-check .fi-icon-btn {
+        inline-size: 2.75rem;
+        block-size: 2.75rem;
+        margin: 0;
+    }
+
+    .crm-my-work-more {
+        display: flex;
+        align-items: center;
+        min-block-size: 2.75rem;
+    }
+}
+
+/* The Tasks phone bar: below md only. */
+.crm-tab-bar {
+    display: none;
+}
+
+@media (max-width: 47.99rem) {
+    .crm-tab-bar {
+        position: fixed;
+        inset-inline: 0;
+        inset-block-end: 0;
+        z-index: 20;
+        display: block;
+        padding-block-end: env(safe-area-inset-bottom, 0px);
+        border-block-start: 1px solid var(--crm-border);
+        background-color: var(--crm-tab-bar-bg);
+    }
+
+    /* Room under the page's last row, so the bar never covers it — wherever the bar is drawn. */
+    .fi-body:has(.crm-tab-bar) .fi-main {
+        padding-block-end: calc(var(--crm-tab-bar-block-size) + env(safe-area-inset-bottom, 0px) + 1rem);
+    }
+}
+
+.crm-tab-bar-list {
+    display: flex;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.crm-tab-bar-item {
+    flex: 1 1 0;
+    min-inline-size: 0;
+}
+
+.crm-tab-bar-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.125rem;
+    min-block-size: 2.75rem;
+    block-size: var(--crm-tab-bar-block-size);
+    padding-inline: 0.25rem;
+    color: var(--crm-tab-bar-text);
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.crm-tab-bar-link[aria-current="page"] {
+    color: var(--crm-tab-bar-current);
+}
+
+.crm-tab-bar-link:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: -2px;
+}
+
+.crm-tab-bar-icon-ctn {
+    position: relative;
+    display: inline-flex;
+}
+
+.crm-tab-bar-icon {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+}
+
+.crm-tab-bar-link--add .crm-tab-bar-icon-ctn {
+    padding: 0.25rem;
+    border-radius: 9999px;
+    background-color: var(--crm-accent-text);
+    color: var(--crm-card);
+}
+
+.crm-tab-bar-badge {
+    position: absolute;
+    inset-block-start: -0.375rem;
+    inset-inline-end: -0.625rem;
+    min-inline-size: 1.125rem;
+    padding-inline: 0.25rem;
+    border-radius: 9999px;
+    background-color: var(--crm-tab-bar-badge-bg);
+    color: var(--crm-tab-bar-badge-text);
+    font-size: 0.625rem;
+    line-height: 1.125rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.crm-tab-bar-label {
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The shortcut sheet. */
+.crm-shortcuts-sheet {
+    inline-size: min(28rem, calc(100% - 2rem));
+    margin: auto;
+    padding: 1.25rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+    color: var(--crm-text);
+    box-shadow: var(--shadow-crm);
+}
+
+.crm-shortcuts-sheet::backdrop {
+    background-color: color-mix(in oklab, var(--crm-text) 45%, transparent);
+}
+
+.crm-shortcuts-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-block-end: 1rem;
+}
+
+.crm-shortcuts-title {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.crm-shortcuts-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    border-radius: var(--radius-crm-sm);
+    color: var(--crm-text-2);
+}
+
+.crm-shortcuts-close:hover {
+    background-color: var(--crm-accent-soft);
+}
+
+.crm-shortcuts-close:focus-visible,
+.crm-shortcuts-toggle input:focus-visible {
+    outline: 2px solid var(--crm-accent-text);
+    outline-offset: 2px;
+}
+
+.crm-shortcuts-close-icon {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+}
+
+.crm-shortcuts-list {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.crm-shortcuts-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.crm-shortcuts-row dt {
+    min-inline-size: 4.5rem;
+}
+
+.crm-shortcuts-row dd {
+    margin: 0;
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
+}
+
+.crm-kbd {
+    display: inline-block;
+    min-inline-size: 1.75rem;
+    padding-inline: 0.375rem;
+    border: 1px solid var(--crm-border-2);
+    border-block-end-width: 2px;
+    border-radius: 0.375rem;
+    background-color: var(--crm-table-header);
+    color: var(--crm-text);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.5rem;
+    text-align: center;
+}
+
+.crm-shortcuts-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 2.75rem;
+    margin-block-start: 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.crm-shortcuts-toggle-keys {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.crm-shortcuts-toggle input {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    accent-color: var(--crm-accent-text);
+}
+
+.crm-shortcuts-help {
+    color: var(--crm-muted);
+    font-size: 0.8125rem;
+}
+
+/* d27-my-work:end */
 
 /* ---------------------------------------------------------------------------
  | Calendar (D-12)
@@ -534,8 +1434,11 @@ html.dark {
    container's clipping; the stacking is settled here. The open state is the
    trigger's aria-expanded, which the dropdown keeps in sync. The selector is
    one class stronger than the motion layer's `.fi-ta-row:hover` (declared
-   later in this file) so it wins while the pointer is on the menu. */
-.fi-ta-table .fi-ta-row:has([aria-expanded='true']) {
+   later in this file) so it wins while the pointer is on the menu. Only a
+   dropdown trigger counts: a collapsible status group (D-27) is also
+   aria-expanded while open, and lifting its header row put it over the
+   sticky column headers (the owner's screenshot, 2026-10-07). */
+.fi-ta-table .fi-ta-row:not(.fi-ta-group-header):has(.fi-dropdown-trigger > [aria-expanded='true']) {
     position: relative;
     z-index: 6;
 }
@@ -1056,7 +1959,7 @@ a.crm-employee-list-title:focus-visible,
        escapes the container. The transition goes too, so the menu is never
        positioned against a half-finished lift and then left behind. One
        class stronger than the hover rule above. */
-    .fi-ta-table .fi-ta-row:has([aria-expanded='true']) {
+    .fi-ta-table .fi-ta-row:not(.fi-ta-group-header):has(.fi-dropdown-trigger > [aria-expanded='true']) {
         transform: none;
         transition: none;
     }
@@ -1066,7 +1969,8 @@ a.crm-employee-list-title:focus-visible,
     .fi-btn:hover { transform: translateY(-1px); }
     .fi-btn:active { transform: translateY(0) scale(0.96); }
 
-    .fi-btn.fi-color-primary[class*='fi-bg-color-']:hover {
+    .fi-btn.fi-color-primary[class*='fi-bg-color-']:not(label):hover,
+    input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-']:hover {
         box-shadow: 0 8px 20px -6px color-mix(in srgb, var(--primary-600) 55%, transparent);
     }
 

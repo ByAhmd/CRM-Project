@@ -7,7 +7,9 @@ namespace App\Services\Tasks;
 use App\Enums\TaskStatus;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Settings\OrganisationCalendar;
 use App\Services\Settings\SettingsRepository;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +38,15 @@ use Illuminate\Support\Facades\DB;
  * The header stats fold "today" and "this week" in the organisation timezone
  * in PHP (A-19): the bounds are computed here and the SQL compares only the
  * raw stored columns, never a SQL date function.
+ *
+ * The by-status view (D-27) is NOT part of that exception: it is where a
+ * reader moves tasks, so it reads only the tasks the reader may open — the
+ * caller hands in TaskResource's readable query — in three columns,
+ * Pending · In progress · Completed this week (the organisation's week);
+ * cancelled tasks stay off the board. Each column shows its first
+ * CARDS_PER_STATUS cards and counts the rest: two queries per column,
+ * whatever the number of cards. «مهامي فقط» (mine only) narrows either view
+ * to one assignee.
  */
 final class TaskBoardFeed
 {
@@ -45,13 +56,24 @@ final class TaskBoardFeed
     /** The most cards the whole board renders in one response. */
     public const int MAX_TASKS = 200;
 
+    /** The most cards one by-status column shows; the rest becomes a "+n more" counter. */
+    public const int CARDS_PER_STATUS = 50;
+
+    /** The by-status columns, in board order; cancelled tasks are not on the board (D-27). */
+    public const array STATUS_COLUMNS = [
+        TaskStatus::Pending,
+        TaskStatus::InProgress,
+        TaskStatus::Completed,
+    ];
+
     public function __construct(
         private readonly SettingsRepository $settings,
+        private readonly OrganisationCalendar $calendar,
     ) {}
 
     /**
      * The organisation-wide header figures: open and in-progress totals,
-     * what is overdue right now, what falls due during the organisation's
+     * what was due before the organisation's today, what falls due during the organisation's
      * today, and what was completed since the organisation's week began.
      *
      * @return array{open: int, in_progress: int, overdue: int, due_today: int, completed_this_week: int}
@@ -64,7 +86,8 @@ final class TaskBoardFeed
         return [
             'open' => Task::query()->open()->count(),
             'in_progress' => Task::query()->where('status', TaskStatus::InProgress->value)->count(),
-            'overdue' => Task::query()->open()->whereNotNull('due_at')->where('due_at', '<', $now)->count(),
+            // Overdue: due before the organisation's today began — the meaning My Work, the list and the due words share (D-27).
+            'overdue' => Task::query()->open()->whereNotNull('due_at')->where('due_at', '<', $this->calendar->stored($this->calendar->today()))->count(),
             'due_today' => Task::query()->open()->dueBetween(
                 $this->settings->startOfOrganisationDay($today),
                 $this->settings->endOfOrganisationDay($today),
@@ -81,16 +104,19 @@ final class TaskBoardFeed
      * unassigned bucket last, each carrying its earliest-due cards and the
      * count left behind — cut to the board-wide card budget.
      *
+     * With an assignee («مهامي فقط», D-27) the board holds that one column.
+     *
      * @return array{columns: list<array{assignee: User|null, tasks: list<Task>, total: int, more: int}>, truncated: bool}
      */
-    public function board(): array
+    public function board(?User $assignee = null): array
     {
-        $totals = $this->openTotalsPerAssignee();
+        $assigneeId = $assignee === null ? null : (int) $assignee->getKey();
+        $totals = $this->openTotalsPerAssignee($assigneeId);
 
         /** @var array<string, array{key: string, assignee: User|null, tasks: list<Task>}> $buckets */
         $buckets = [];
 
-        foreach ($this->topTasksPerAssignee() as $task) {
+        foreach ($this->topTasksPerAssignee($assigneeId) as $task) {
             $key = (string) ($task->assignee_id ?? '');
 
             if (! array_key_exists($key, $buckets)) {
@@ -148,10 +174,67 @@ final class TaskBoardFeed
         return ['columns' => $columns, 'truncated' => $truncated];
     }
 
-    /** The organisation timezone, for showing a stored moment as the organisation reads it. */
-    public function timezone(): string
+    /**
+     * The by-status view (D-27): the readable tasks in the STATUS_COLUMNS
+     * order — the open columns by due date (no date last), the completed
+     * column newest first and limited to the organisation's current week —
+     * each with its first CARDS_PER_STATUS cards, their checklist counts
+     * (D-25) and its total. The readable query brings the assignee and the
+     * subject relations the cards and their policy checks read.
+     *
+     * @param  Builder<Task>  $readable  TaskResource::getEloquentQuery() — never an unscoped query
+     * @return list<array{status: TaskStatus, tasks: list<Task>, total: int, more: int}>
+     */
+    public function byStatus(Builder $readable, ?User $assignee = null): array
     {
-        return $this->settings->timezone();
+        $columns = [];
+
+        foreach (self::STATUS_COLUMNS as $status) {
+            $query = (clone $readable)->where('tasks.status', $status->value);
+
+            if ($assignee !== null) {
+                $query->where('tasks.assignee_id', $assignee->getKey());
+            }
+
+            if ($status === TaskStatus::Completed) {
+                $query->where('tasks.completed_at', '>=', $this->calendar->stored($this->calendar->startOfWeek()));
+            }
+
+            $total = (clone $query)->count();
+
+            $cards = TaskChecklist::withCounts($query);
+
+            if ($status === TaskStatus::Completed) {
+                $cards->orderByDesc('tasks.completed_at')->orderByDesc('tasks.id');
+            } else {
+                $cards->orderByRaw('`tasks`.`due_at` IS NULL')->orderBy('tasks.due_at')->orderBy('tasks.id');
+            }
+
+            $tasks = array_values($cards->limit(self::CARDS_PER_STATUS)->get()->all());
+
+            $columns[] = [
+                'status' => $status,
+                'tasks' => $tasks,
+                'total' => $total,
+                'more' => max(0, $total - count($tasks)),
+            ];
+        }
+
+        return $columns;
+    }
+
+    /**
+     * Whether the task has a card on the by-status view: an open status
+     * column, or completed since the organisation's week began.
+     */
+    public function isOnStatusBoard(Task $task): bool
+    {
+        if (! in_array($task->status, self::STATUS_COLUMNS, true)) {
+            return false;
+        }
+
+        return $task->status !== TaskStatus::Completed
+            || ($task->completed_at !== null && $task->completed_at->greaterThanOrEqualTo($this->calendar->stored($this->calendar->startOfWeek())));
     }
 
     /**
@@ -167,11 +250,12 @@ final class TaskBoardFeed
      *
      * @return EloquentCollection<int, Task>
      */
-    private function topTasksPerAssignee(): EloquentCollection
+    private function topTasksPerAssignee(?int $assigneeId): EloquentCollection
     {
         $ranked = DB::table('tasks')
             ->whereNull('deleted_at')
             ->whereIn('status', Task::openStatusValues())
+            ->when($assigneeId !== null, static fn ($query) => $query->where('assignee_id', $assigneeId))
             ->select('id')
             ->selectRaw('ROW_NUMBER() OVER (PARTITION BY `assignee_id` ORDER BY `due_at` IS NULL, `due_at`, `id`) AS `bucket_position`');
 
@@ -211,12 +295,13 @@ final class TaskBoardFeed
      *
      * @return array<string, int>
      */
-    private function openTotalsPerAssignee(): array
+    private function openTotalsPerAssignee(?int $assigneeId): array
     {
         $totals = [];
 
         $rows = Task::query()
             ->open()
+            ->when($assigneeId !== null, static fn (Builder $query): Builder => $query->where('assignee_id', $assigneeId))
             ->toBase()
             ->selectRaw('`assignee_id`, COUNT(*) AS `total`')
             ->groupBy('assignee_id')

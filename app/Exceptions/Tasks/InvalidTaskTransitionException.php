@@ -7,8 +7,8 @@ namespace App\Exceptions\Tasks;
 use RuntimeException;
 
 /**
- * A task status change — or a comment, or a checklist tick — the service
- * refuses (decisions A-10, D-17, D-25).
+ * A task status change — or a comment, a checklist tick or a quick
+ * reschedule — the service refuses (decisions A-10, D-17, D-25, D-27).
  */
 final class InvalidTaskTransitionException extends RuntimeException
 {
@@ -47,5 +47,17 @@ final class InvalidTaskTransitionException extends RuntimeException
     public static function checklistNotOpen(): self
     {
         return new self(__('tasks.validation.checklist_not_open'));
+    }
+
+    /** Only an open task is moved to another day; a closed one keeps its date (D-27). */
+    public static function notOpenForReschedule(): self
+    {
+        return new self(__('tasks.validation.reschedule_not_open'));
+    }
+
+    /** The undo of a completion finds the task no longer completed (D-27). */
+    public static function notCompleted(): self
+    {
+        return new self(__('tasks.validation.undo_not_completed'));
     }
 }

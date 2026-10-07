@@ -115,6 +115,31 @@ return [
         'cancelled' => 'Cancelled',
     ],
 
+    'task_transition' => [
+        'start' => 'Start',
+        'complete' => 'Complete',
+        'reopen' => 'Reopen',
+        'cancel' => 'Cancel task',
+    ],
+
+    'due_shortcut' => [
+        'today' => 'Today',
+        'tomorrow' => 'Tomorrow',
+        'next_week' => 'Next week',
+        'pick' => 'Pick a date',
+        'none' => 'No date',
+    ],
+
+    // D-27: the buckets of My Work, in page order.
+    'my_work_bucket' => [
+        'overdue' => 'Overdue',
+        'today' => 'Today',
+        'next_7_days' => 'Next 7 days',
+        'later' => 'Later',
+        'no_date' => 'No date',
+        'completed_recently' => 'Completed recently',
+    ],
+
     'task_update_kind' => [
         'progress' => 'Update',
         'comment' => 'Comment',

@@ -7,6 +7,7 @@ namespace App\Providers\Filament\Concerns;
 use App\Enums\NavigationGroup;
 use App\Enums\WorkspacePanel;
 use App\Filament\Pages\Calendar;
+use App\Filament\Pages\InboxPage;
 use App\Filament\Pages\NotificationPreferences;
 use App\Http\Middleware\AuthenticateWorkspace;
 use App\Http\Middleware\KeepOutOfSearchEngines;
@@ -73,6 +74,14 @@ trait ConfiguresCrmPanel
                 PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
                 static fn (): View => view('filament.partials.workspace-switcher'),
             )
+            // Install as an app (D-27): the web manifest, the theme colour and
+            // the home-screen icon in every panel's head (the landing page
+            // shares the home panel's). Invisible tags; no service worker, so
+            // nothing private is ever cached on the device.
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                static fn (): View => view('filament.partials.app-install'),
+            )
             ->darkMode()
             ->defaultThemeMode(ThemeMode::System)
             ->brandName(static fn (): string => (string) __('app.name'))
@@ -87,6 +96,12 @@ trait ConfiguresCrmPanel
                 'profile' => static fn (Action $action): Action => $action
                     ->label(static fn (): string => EditProfile::getLabel())
                     ->url(static fn (): ?string => Filament::getPanel(WorkspacePanel::HOME)->getProfileUrl()),
+                // The Inbox (D-27) of the panel the reader is in: inside a workspace it
+                // opens with that workspace's sidebar, never a dead end.
+                Action::make('inbox')
+                    ->label(static fn (): string => __('inbox.navigation.label'))
+                    ->icon(Heroicon::OutlinedInbox)
+                    ->url(static fn (): string => InboxPage::urlForCurrentPanel()),
                 Action::make('notificationPreferences')
                     ->label(static fn (): string => __('notifications.navigation.label'))
                     ->icon(Heroicon::OutlinedBellAlert)

@@ -10,7 +10,6 @@ use App\Enums\LeadStatusKind;
 use App\Enums\TaskKind;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
-use App\Filament\Widgets\MyTasksTodayWidget;
 use App\Filament\Widgets\PipelineByStageChart;
 use App\Filament\Widgets\RevenueWonByMonthChart;
 use App\Filament\Widgets\SalesKpisWidget;
@@ -62,8 +61,6 @@ final class DashboardWidgetsTest extends TestCase
     private Deal $staleDeal;
 
     private Task $dueToday;
-
-    private Task $overdue;
 
     private Task $followUp;
 
@@ -287,27 +284,6 @@ final class DashboardWidgetsTest extends TestCase
     // --- Tables ---
 
     #[Test]
-    public function my_tasks_today_lists_the_viewer_overdue_and_due_tasks_with_counts(): void
-    {
-        Livewire::actingAs($this->rep)
-            ->test(MyTasksTodayWidget::class)
-            ->assertSee(__('dashboard.tables.my_tasks_today'))
-            ->assertSee(__('dashboard.tables.my_tasks_today_description', ['today' => 1, 'overdue' => 1]))
-            ->assertCanSeeTableRecords([$this->overdue, $this->dueToday])
-            ->assertCanNotSeeTableRecords([$this->followUp, $this->managerMeeting])
-            ->assertSee($this->overdue->title)
-            ->assertSee($this->dueToday->title)
-            ->assertDontSee($this->followUp->title)
-            ->assertOk();
-
-        Livewire::actingAs($this->manager)
-            ->test(MyTasksTodayWidget::class)
-            ->assertSee(__('dashboard.empty.tasks'))
-            ->assertDontSee($this->overdue->title)
-            ->assertOk();
-    }
-
-    #[Test]
     public function upcoming_follow_ups_span_the_viewer_reach(): void
     {
         Livewire::actingAs($this->rep)
@@ -361,7 +337,6 @@ final class DashboardWidgetsTest extends TestCase
             LeadsByStatusChart::class,
             PipelineByStageChart::class,
             RevenueWonByMonthChart::class,
-            MyTasksTodayWidget::class,
             UpcomingFollowUpsWidget::class,
             StaleDealsWidget::class,
             ActivityCountsWidget::class,
@@ -394,7 +369,6 @@ final class DashboardWidgetsTest extends TestCase
         $this->assertFalse(PipelineByStageChart::canView());
         $this->assertFalse(RevenueWonByMonthChart::canView());
         $this->assertFalse(StaleDealsWidget::canView());
-        $this->assertFalse(MyTasksTodayWidget::canView());
         $this->assertFalse(UpcomingFollowUpsWidget::canView());
         $this->assertFalse(ActivityCountsWidget::canView());
 
@@ -439,7 +413,7 @@ final class DashboardWidgetsTest extends TestCase
         );
 
         $this->dueToday = Task::factory()->create(['assignee_id' => $this->rep->getKey(), 'title' => 'Send the quote', 'due_at' => now()->setTime(15, 0)]);
-        $this->overdue = Task::factory()->create(['assignee_id' => $this->rep->getKey(), 'title' => 'Chase the invoice', 'due_at' => now()->subDay()]);
+        Task::factory()->create(['assignee_id' => $this->rep->getKey(), 'title' => 'Chase the invoice', 'due_at' => now()->subDay()]);
         $this->followUp = Task::factory()->create(['assignee_id' => $this->rep->getKey(), 'title' => 'Follow up on the demo', 'kind' => TaskKind::FollowUp, 'due_at' => now()->addDays(3)]);
         $this->managerMeeting = Task::factory()->create(['assignee_id' => $this->manager->getKey(), 'title' => 'Quarterly review meeting', 'kind' => TaskKind::Meeting, 'due_at' => now()->addDays(2)]);
 

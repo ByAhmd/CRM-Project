@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 a home panel plus four workspace panels (D-23). Engineering standard inherited from the Stockflow (ZonKSA)
 project and adapted; the authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-26 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-27 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -56,6 +56,13 @@ Models + Observers → integrity guards. No business logic in Filament classes, 
   another workspace goes through `Support\Filament\PanelUrl::forReader()` and renders as plain text when it returns
   null — links never dead-end. A moved `/admin/...` address gets a row in `Support\Http\LegacyAdminRedirects`.
   Non-panel routes that need the panel's look or auth carry `panel:app`.
+- Tasks workspace (D-27): screens draw a task only through the shared presentation helpers —
+  `Filament\Support\TaskVisuals` (status pill, priority flag, avatar, checklist meter, relative due, completion check;
+  columns and entries) or the `<x-task.*>` Blade components — on the organisation clock
+  (`Services\Settings\OrganisationCalendar`, `RelativeDueDates`; never the server day, never SQL `DATE()`). Every new
+  task control is a `TaskActions` action (below its D-27 marker) authorised by the `TaskPolicy` verb and writing only
+  through `TaskService`; a page without a table record resolves the task from the reader's readable query. The Sales
+  task tabs use `TasksTable::configureForSubjectTab()` / `TaskInfolist::configureForSubjectTab()` and stay as they are.
 - Authorisation: policy per model using `Policies\Concerns\ChecksPermissions` (explicit `deleteAny`,
   `restoreAny`, `forceDeleteAny`; `forceDelete` = false); `App\Enums\Permission` keys; record scope through
   `Services\Access\RecordVisibilityResolver`; every custom action `->authorize()`d; every bulk action
@@ -131,7 +138,11 @@ redirects from the old `/admin/...` addresses (D-23) · a public bilingual landi
 panels kept out of search engines (D-24) · task checklists: written with `update`, ticked with `progress` while
 open, completion with unticked items allowed with a warning, copied unticked by routines and recurrence (D-25) ·
 an employee dashboard in Reports (`/reports/employee`): one employee's task work, reach by the reader's task visibility
-all/team/own, a task's thread text and link only where the reader may open the task, read-only (D-26).
+all/team/own, a task's thread text and link only where the reader may open the task, read-only (D-26) · a ClickUp-style
+Tasks workspace: My Work home in buckets, one visual language (status, flag, avatar, meter, relative dates on the
+organisation day), one-click completion check with undo, status pill with only the allowed moves, quick add, list grouped
+by status, two-column task page with one-click checklist and an always-visible composer, board by status with drag, Inbox
+page, phone tab bar, installable web app without service worker, keys N, / and ?; the Sales task tabs unchanged (D-27).
 
 ## 6. QA checklist before any commit
 

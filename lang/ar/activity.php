@@ -329,6 +329,7 @@ return [
         'checklist_done' => 'بنود قائمة التحقق المُنجزة',
         'checklist_open' => 'بنود قائمة التحقق غير المُنجزة',
         'checklist_total' => 'بنود قائمة التحقق',
+        'withdrawn_occurrence_id' => 'التكرار التالي المسحوب',
     ],
 
     // Labels that differ for one audited model; checked before the shared attribute labels.

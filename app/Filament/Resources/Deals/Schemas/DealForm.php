@@ -189,6 +189,7 @@ final class DealForm
                 Section::make(__('deals.sections.line_items'))
                     ->schema([
                         Repeater::make('products')
+                            ->label(__('deals.sections.line_items'))
                             ->hiddenLabel()
                             ->relationship()
                             // Live so adding or removing a line re-renders the whole form and
