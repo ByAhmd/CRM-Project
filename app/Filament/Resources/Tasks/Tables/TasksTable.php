@@ -184,6 +184,15 @@ final class TasksTable
                     ->toggle()
                     ->query(static fn (Builder $query): Builder => $query->where('tasks.assignee_id', auth()->id())),
 
+                // The tasks the reader handed out to someone else — My Work's «أسندتُها» view (D-27 amendment).
+                Filter::make('handed_out_by_me')
+                    ->label(__('tasks.filters.handed_out_by_me'))
+                    ->toggle()
+                    ->query(static fn (Builder $query): Builder => $query
+                        ->where('tasks.assigned_by', auth()->id())
+                        ->whereNotNull('tasks.assignee_id')
+                        ->where('tasks.assignee_id', '!=', auth()->id())),
+
                 Filter::make('no_due')
                     ->label(__('tasks.filters.no_due'))
                     ->toggle()

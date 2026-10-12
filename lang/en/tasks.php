@@ -121,6 +121,7 @@ return [
         'due_until' => 'Due until',
         'trashed' => 'Deleted',
         'mine' => 'My tasks only',
+        'handed_out_by_me' => 'Handed out by me',
         'no_due' => 'No due date',
     ],
 

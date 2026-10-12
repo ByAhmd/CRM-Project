@@ -140,6 +140,12 @@ return [
         'completed_recently' => 'Completed recently',
     ],
 
+    'my_work_view' => [
+        'mine' => 'Mine',
+        'delegated' => 'Handed out',
+        'team' => 'Team',
+    ],
+
     'task_update_kind' => [
         'progress' => 'Update',
         'comment' => 'Comment',

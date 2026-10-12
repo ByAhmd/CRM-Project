@@ -278,7 +278,9 @@ final class MyWorkTest extends TestCase
     {
         $colleague = $this->employee();
         $foreign = $this->taskAssignedTo($colleague, TaskStatus::Pending, ['due_at' => '2026-10-07 12:00:00']);
-        // Even a task the reader may open (an administrator) is not theirs on My Work.
+        // Even a task the reader may open (an administrator) is not theirs in «مهامي»: a row action
+        // resolves its task inside the view on screen only (the team view, where an administrator
+        // may act on the team's tasks under TaskPolicy, is MyWorkViewsTest's).
         $readable = $this->taskAssignedTo($colleague, TaskStatus::Pending, ['due_at' => '2026-10-07 12:00:00']);
 
         foreach (['quickComplete', 'changeStatus', 'reschedule'] as $action) {
@@ -288,6 +290,7 @@ final class MyWorkTest extends TestCase
                 ->assertActionNotMounted($action);
 
             Livewire::actingAs($this->admin)
+                ->withQueryParams(['view' => 'mine'])
                 ->test(TasksDashboard::class)
                 ->call('mountAction', $action, ['task' => $readable->getKey()])
                 ->assertActionNotMounted($action);

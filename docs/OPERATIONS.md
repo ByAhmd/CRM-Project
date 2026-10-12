@@ -491,8 +491,12 @@ contact, account and deal pages keep their columns, menus and dialogs.
 
 **What an employee sees** (and anyone else in the Tasks workspace):
 
-- **«عملي» (My Work)** is the Tasks home (`/tasks`): the reader's own tasks in buckets — *Overdue*, *Today*, *Next 7
-  days*, *Later*, *No date* — and *Completed recently* (the last seven days), with a count per bucket at the top. A
+- **«عملي» (My Work)** is the Tasks home (`/tasks`): tasks in buckets — *Overdue*, *Today*, *Next 7
+  days*, *Later*, *No date* — and *Completed recently* (the last seven days), with a count per bucket at the top, in
+  up to three views chosen by the tabs above them: **«مهامي»** (assigned to you), **«أسندتُها»** (what you handed out to
+  others — for those who hand out tasks) and **«الفريق»** (every task you may see — for managers and administrators);
+  outside «مهامي» each row shows who the task is for. Someone with no open task of their own opens on «الفريق», so an
+  administrator who hands work out sees the team's tasks at once (and the task list opens on «الكل» for them). A
   bucket shows its first 15 tasks and links to the task list narrowed to that bucket's tasks (the matching tab with
   «مهامي فقط» and the bucket's days) for the rest. Each row has the completion
   check, the status pill, the due date in words («اليوم 17:00», «غداً», «متأخرة 3 أيام» — red when overdue, amber

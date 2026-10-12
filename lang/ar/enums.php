@@ -140,6 +140,12 @@ return [
         'completed_recently' => 'أُنجزت مؤخراً',
     ],
 
+    'my_work_view' => [
+        'mine' => 'مهامي',
+        'delegated' => 'أسندتُها',
+        'team' => 'الفريق',
+    ],
+
     'task_update_kind' => [
         'progress' => 'تحديث',
         'comment' => 'تعليق',

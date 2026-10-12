@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Tasks\Pages;
 
+use App\Enums\MyWorkView;
 use App\Enums\TaskStatus;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\TaskActions;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\Settings\OrganisationCalendar;
+use App\Services\Tasks\MyWorkFeed;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -81,9 +84,17 @@ final class ListTasks extends ListRecords
         ];
     }
 
+    /**
+     * «مهامي» for a reader with open work of their own (or who sees no one
+     * else's), otherwise «الكل»: the same rule that opens My Work on the team's
+     * tasks, so whoever hands work out never opens the list on an empty tab
+     * (D-27 amendment, the owner's report 2026-10-12).
+     */
     public function getDefaultActiveTab(): string
     {
-        return 'my';
+        $reader = auth()->user();
+
+        return ! $reader instanceof User || app(MyWorkFeed::class)->resolveView($reader, null) === MyWorkView::Mine ? 'my' : 'all';
     }
 
     /**

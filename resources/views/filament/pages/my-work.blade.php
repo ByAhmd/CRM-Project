@@ -1,4 +1,5 @@
 @php
+    use App\Enums\MyWorkView;
     use App\Filament\Pages\TasksDashboard;
     use App\Filament\Resources\Tasks\TaskResource;
     use App\Filament\Support\InitialsAvatar;
@@ -7,7 +8,8 @@
 @endphp
 
 {{--
-    «عملي» (My Work), the Tasks home (D-27). The reader's own tasks in the
+    «عملي» (My Work), the Tasks home (D-27). The view's tasks — the reader's
+    own, the ones they handed out, or the team's — in the
     MyWorkFeed buckets, each a <details> so a bucket folds without
     JavaScript; wire:ignore.self keeps the reader's folding across the
     re-render that follows an action (the rows inside still update). Every
@@ -18,6 +20,22 @@
 --}}
 <x-filament-panels::page>
     <div class="crm-my-work">
+        {{-- Whose tasks: one's own, the ones handed out, the team's (D-27 amendment,
+             2026-10-12) — tabs only for a reader offered more than one view. --}}
+        @if (count($views) > 1)
+            <x-filament::tabs :label="__('my_work.helpers.views')" class="crm-my-work-views">
+                @foreach ($views as $option)
+                    <x-filament::tabs.item
+                        :active="$option === $shownView"
+                        :icon="$option->getIcon()"
+                        wire:click="showView('{{ $option->value }}')"
+                    >
+                        {{ $option->getLabel() }}
+                    </x-filament::tabs.item>
+                @endforeach
+            </x-filament::tabs>
+        @endif
+
         <nav class="crm-my-work-summary" aria-label="{{ __('my_work.helpers.summary') }}">
             <ul class="crm-my-work-summary-list" role="list">
                 @foreach ($sections as $section)
@@ -43,8 +61,16 @@
             <x-filament::empty-state
                 :icon="Heroicon::OutlinedCheckBadge"
                 icon-color="success"
-                :heading="__('my_work.empty.heading')"
-                :description="$canAddTasks ? __('my_work.empty.description_add') : ($boardUrl !== null ? __('my_work.empty.description_board') : __('my_work.empty.description'))"
+                :heading="match ($shownView) {
+                    MyWorkView::Mine => __('my_work.empty.heading'),
+                    MyWorkView::Delegated => __('my_work.empty.delegated_heading'),
+                    MyWorkView::Team => __('my_work.empty.team_heading'),
+                }"
+                :description="match ($shownView) {
+                    MyWorkView::Mine => $canAddTasks ? __('my_work.empty.description_add') : ($boardUrl !== null ? __('my_work.empty.description_board') : __('my_work.empty.description')),
+                    MyWorkView::Delegated => __('my_work.empty.delegated_description'),
+                    MyWorkView::Team => __('my_work.empty.team_description'),
+                }"
                 class="crm-my-work-empty"
             >
                 <x-slot name="footer">
@@ -134,6 +160,8 @@
                                 $subject = $task->subjectLabel();
                                 $meter = TaskVisuals::checklistMeterFor($task);
                                 $assigner = $task->assigned_by !== null && $task->assigned_by !== $task->assignee_id ? $task->assigner : null;
+                                // Outside «مهامي» the row is someone else's: it names who it is for instead.
+                                $forOthers = $shownView !== MyWorkView::Mine;
                             @endphp
 
                             <li
@@ -188,7 +216,19 @@
                                         @endif
                                     </span>
 
-                                    @if ($assigner !== null)
+                                    @if ($forOthers)
+                                        @php
+                                            $assigneeLabel = $task->assignee !== null
+                                                ? __('my_work.fields.assigned_to', ['name' => $task->assignee->name])
+                                                : __('my_work.fields.unassigned');
+                                        @endphp
+                                        <span
+                                            class="crm-my-work-assignee"
+                                            role="img"
+                                            aria-label="{{ $assigneeLabel }}"
+                                            title="{{ $assigneeLabel }}"
+                                        >{{ TaskVisuals::avatar($task->assignee?->name) }}<span class="crm-my-work-assignee-name" aria-hidden="true">{{ $task->assignee?->name ?? __('my_work.fields.unassigned') }}</span></span>
+                                    @elseif ($assigner !== null)
                                         <span
                                             class="crm-my-work-assigner"
                                             role="img"
@@ -203,7 +243,7 @@
 
                     @if ($section->more() > 0 && $listUrl !== null)
                         <a
-                            href="{{ TasksDashboard::listUrlFor($bucket) }}"
+                            href="{{ TasksDashboard::listUrlFor($bucket, $shownView) }}"
                             wire:navigate
                             class="crm-my-work-more"
                         >{{ trans_choice('my_work.actions.show_more', $section->more(), ['count' => $section->more()]) }}</a>

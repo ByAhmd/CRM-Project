@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Enums\MyWorkBucket;
+use App\Enums\MyWorkView;
 use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\TaskActions;
@@ -19,6 +20,7 @@ use Filament\Actions\Action;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Support\Icons\Heroicon;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 
 /**
  * «عملي» (My Work), the home page of the Tasks workspace (decision D-27,
@@ -35,10 +37,18 @@ use Livewire\Attributes\On;
  * add is the page's primary action. Below the buckets the follow-ups coming
  * up across the reader's reach stay, as on the D-23 home.
  *
+ * Three views (MyWorkView, amended 2026-10-12): the reader's own tasks, the
+ * ones they handed out («أسندتُها»), and the team's in their reach («الفريق»),
+ * as tabs for whoever is offered more than one. The view lives in the address
+ * (?view=), is checked against the views the reader is offered (a forged one
+ * falls back), and when none is asked for the reader opens on their own work —
+ * or on the team's when they have none, so an administrator who hands work out
+ * never lands on an empty home (the owner's report, 2026-10-12).
+ *
  * The page presents only: the row actions resolve their task from the id the
- * browser sends through MyWorkFeed::find() — the reader's own tasks, inside
- * their scope — and each action authorises itself through TaskPolicy and
- * writes through TaskService.
+ * browser sends through MyWorkFeed::find() — a task of the current view,
+ * inside the reader's scope — and each action authorises itself through
+ * TaskPolicy and writes through TaskService.
  */
 final class TasksDashboard extends BaseDashboard
 {
@@ -47,6 +57,10 @@ final class TasksDashboard extends BaseDashboard
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedHome;
 
     protected string $view = 'filament.pages.my-work';
+
+    /** The view asked for in the address; resolved against the reader's views by currentView(). */
+    #[Url(as: 'view')]
+    public ?string $workView = null;
 
     public static function getNavigationLabel(): string
     {
@@ -60,7 +74,25 @@ final class TasksDashboard extends BaseDashboard
 
     public function getSubheading(): string
     {
-        return __('my_work.pages.subheading');
+        return match ($this->currentView()) {
+            MyWorkView::Mine => __('my_work.pages.subheading'),
+            MyWorkView::Delegated => __('my_work.pages.subheading_delegated'),
+            MyWorkView::Team => __('my_work.pages.subheading_team'),
+        };
+    }
+
+    /** Shows another view; one the reader is not offered falls back (currentView()). */
+    public function showView(string $view): void
+    {
+        $this->workView = $view;
+    }
+
+    /** The view on screen: the one asked for when the reader is offered it, otherwise their default. */
+    public function currentView(): MyWorkView
+    {
+        $reader = auth()->user();
+
+        return $reader instanceof User ? app(MyWorkFeed::class)->resolveView($reader, $this->workView) : MyWorkView::Mine;
     }
 
     /**
@@ -126,7 +158,8 @@ final class TasksDashboard extends BaseDashboard
     protected function getViewData(): array
     {
         $reader = auth()->user();
-        $sections = $reader instanceof User ? app(MyWorkFeed::class)->sections($reader) : [];
+        $view = $this->currentView();
+        $sections = $reader instanceof User ? app(MyWorkFeed::class)->sections($reader, $view) : [];
         $open = array_sum(array_map(
             static fn (MyWorkSection $section): int => $section->bucket->holdsOpenWork() ? $section->total : 0,
             $sections,
@@ -134,6 +167,8 @@ final class TasksDashboard extends BaseDashboard
 
         return [
             'sections' => $sections,
+            'shownView' => $view,
+            'views' => $reader instanceof User ? app(MyWorkFeed::class)->views($reader) : [MyWorkView::Mine],
             'reader' => $reader,
             'hasOpenWork' => $open > 0,
             'canAddTasks' => $reader instanceof User && $reader->can('create', Task::class),
@@ -144,15 +179,20 @@ final class TasksDashboard extends BaseDashboard
 
     /**
      * Where a bucket's «عرض … أخرى» link leads: the task list narrowed to
-     * the same set the bucket counts — the reader's own tasks («مهامي فقط»)
-     * on the matching tab, bounded to the bucket's days on the organisation
-     * calendar where the tab alone is wider (Next 7 days, Later, No date).
-     * Completed recently opens the reader's completed tasks.
+     * the same set the bucket counts — the view's tasks (the reader's own
+     * with «مهامي فقط», the ones they handed out with «أسندتُها أنا», the team's
+     * with neither) on the matching tab, bounded to the bucket's days on the
+     * organisation calendar where the tab alone is wider (Next 7 days, Later,
+     * No date). Completed recently opens the completed tab.
      */
-    public static function listUrlFor(MyWorkBucket $bucket): string
+    public static function listUrlFor(MyWorkBucket $bucket, MyWorkView $view = MyWorkView::Mine): string
     {
         $today = app(OrganisationCalendar::class)->today();
-        $mine = ['mine' => ['isActive' => true]];
+        $mine = match ($view) {
+            MyWorkView::Mine => ['mine' => ['isActive' => true]],
+            MyWorkView::Delegated => ['handed_out_by_me' => ['isActive' => true]],
+            MyWorkView::Team => [],
+        };
 
         [$tab, $filters] = match ($bucket) {
             MyWorkBucket::Overdue => ['overdue', $mine],
@@ -176,6 +216,6 @@ final class TasksDashboard extends BaseDashboard
     {
         $reader = auth()->user();
 
-        return $reader instanceof User ? app(MyWorkFeed::class)->find($reader, $arguments['task'] ?? null) : null;
+        return $reader instanceof User ? app(MyWorkFeed::class)->find($reader, $arguments['task'] ?? null, $this->currentView()) : null;
     }
 }

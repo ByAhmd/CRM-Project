@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Services\Tasks;
 
 use App\Enums\MyWorkBucket;
+use App\Enums\MyWorkView;
+use App\Enums\Permission;
 use App\Enums\TaskStatus;
+use App\Enums\VisibilityLevel;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
@@ -15,9 +18,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * What «عملي» (My Work), the Tasks home, lists (decision D-27): the reader's
- * own tasks — those assigned to them, inside their visibility scope (D-4) —
- * in buckets on the organisation calendar (A-19, A-20):
+ * What «عملي» (My Work), the Tasks home, lists (decision D-27): in one of
+ * three views (MyWorkView, amended 2026-10-12) — the reader's own tasks
+ * (assigned to them), the tasks they handed out to someone else («أسندتُها»,
+ * `assigned_by` the reader), or every task inside their reach («الفريق»,
+ * offered at the team and all levels only) — always inside the reader's
+ * visibility scope (D-4), in buckets on the organisation calendar (A-19, A-20):
  *
  * - Overdue: open and due before the start of today;
  * - Today: open and due at any moment of today, passed or not (the same
@@ -51,6 +57,51 @@ final class MyWorkFeed
     /** The relations a My Work row shows: who handed the task out, and the record it is linked to. */
     private const RELATIONS = ['assigner', 'lead', 'contact', 'account', 'deal'];
 
+    /**
+     * The views the reader is offered, in tab order: their own tasks always;
+     * the ones they handed out when they may hand tasks out (D-14) or have
+     * done so; everyone's when their task visibility reaches beyond their own
+     * (team or all — at `own` the team view would only repeat «مهامي»).
+     *
+     * @return list<MyWorkView>
+     */
+    public function views(User $reader): array
+    {
+        $views = [MyWorkView::Mine];
+
+        if ($reader->can(Permission::TaskAssign->value) || $this->scope($reader, MyWorkView::Delegated)->exists()) {
+            $views[] = MyWorkView::Delegated;
+        }
+
+        if (in_array($this->visibility->levelFor($reader, Task::class), [VisibilityLevel::Team, VisibilityLevel::All], true)) {
+            $views[] = MyWorkView::Team;
+        }
+
+        return $views;
+    }
+
+    /**
+     * The view a reader lands on: the one asked for when it is offered,
+     * otherwise their own tasks when they have open work, otherwise the team's
+     * (or what they handed out) — so someone who hands work out never opens on
+     * an empty page while the team is busy (the owner's report, 2026-10-12).
+     */
+    public function resolveView(User $reader, ?string $asked): MyWorkView
+    {
+        $offered = $this->views($reader);
+        $view = is_string($asked) ? MyWorkView::tryFrom($asked) : null;
+
+        if ($view !== null && in_array($view, $offered, true)) {
+            return $view;
+        }
+
+        if (count($offered) === 1 || $this->scope($reader, MyWorkView::Mine)->whereIn('tasks.status', Task::openStatusValues())->exists()) {
+            return MyWorkView::Mine;
+        }
+
+        return in_array(MyWorkView::Team, $offered, true) ? MyWorkView::Team : MyWorkView::Delegated;
+    }
+
     public function __construct(
         private readonly RecordVisibilityResolver $visibility,
         private readonly OrganisationCalendar $calendar,
@@ -62,13 +113,13 @@ final class MyWorkFeed
      *
      * @return list<MyWorkSection>
      */
-    public function sections(User $reader): array
+    public function sections(User $reader, MyWorkView $view = MyWorkView::Mine): array
     {
         $bounds = $this->bounds();
-        $counts = $this->counts($reader, $bounds);
+        $counts = $this->counts($reader, $view, $bounds);
         $tasks = array_fill_keys(array_map(static fn (MyWorkBucket $bucket): string => $bucket->value, MyWorkBucket::cases()), []);
 
-        foreach ($this->heads($reader, $bounds) as $task) {
+        foreach ($this->heads($reader, $view, $bounds) as $task) {
             $bucket = (string) $task->getAttribute('my_work_bucket');
 
             if (array_key_exists($bucket, $tasks)) {
@@ -83,12 +134,13 @@ final class MyWorkFeed
     }
 
     /**
-     * One of the reader's own tasks by id — what an action on a My Work row
-     * resolves its record from (the id arrives from the browser and is
-     * trusted for nothing) — with its checklist counts, or null when the
-     * task is not the reader's, is out of their scope, deleted or absent.
+     * One task of the view by id — what an action on a My Work row resolves
+     * its record from (the id arrives from the browser and is trusted for
+     * nothing) — with its checklist counts, or null when the task is not in
+     * the view, is out of the reader's scope, deleted or absent. The action
+     * still asks TaskPolicy whether the reader may make the move.
      */
-    public function find(User $reader, mixed $id): ?Task
+    public function find(User $reader, mixed $id, MyWorkView $view = MyWorkView::Mine): ?Task
     {
         $key = is_int($id) || (is_string($id) && ctype_digit($id)) ? (int) $id : 0;
 
@@ -96,7 +148,7 @@ final class MyWorkFeed
             return null;
         }
 
-        $task = TaskChecklist::withCounts($this->own($reader)->whereKey($key))->first();
+        $task = TaskChecklist::withCounts($this->scope($reader, $view)->whereKey($key))->first();
 
         return $task instanceof Task ? $task : null;
     }
@@ -125,12 +177,12 @@ final class MyWorkFeed
      * @param  array{today: Carbon, tomorrow: Carbon, horizon: Carbon, recent: Carbon}  $bounds
      * @return array<string, int>
      */
-    private function counts(User $reader, array $bounds): array
+    private function counts(User $reader, MyWorkView $view, array $bounds): array
     {
         [$bucket, $bindings] = $this->bucketExpression($bounds);
         $counts = array_fill_keys(array_map(static fn (MyWorkBucket $case): string => $case->value, MyWorkBucket::cases()), 0);
 
-        $rows = $this->listed($reader, $bounds)
+        $rows = $this->listed($reader, $view, $bounds)
             ->toBase()
             ->selectRaw($bucket.' AS `bucket`, COUNT(*) AS `total`', $bindings)
             ->groupBy('bucket')
@@ -151,12 +203,12 @@ final class MyWorkFeed
      * @param  array{today: Carbon, tomorrow: Carbon, horizon: Carbon, recent: Carbon}  $bounds
      * @return list<Task>
      */
-    private function heads(User $reader, array $bounds): array
+    private function heads(User $reader, MyWorkView $view, array $bounds): array
     {
         [$bucket, $bindings] = $this->bucketExpression($bounds);
         [$order, $orderBindings] = $this->orderExpression();
 
-        $ranked = $this->listed($reader, $bounds)
+        $ranked = $this->listed($reader, $view, $bounds)
             ->toBase()
             ->select('tasks.id')
             ->selectRaw($bucket.' AS `bucket`', $bindings)
@@ -172,17 +224,19 @@ final class MyWorkFeed
         $tasks = TaskChecklist::withCounts(
             Task::query()
                 ->joinSub($heads, 'heads', 'heads.id', '=', 'tasks.id')
-                ->with(self::RELATIONS)
+                ->with($view === MyWorkView::Mine ? self::RELATIONS : [...self::RELATIONS, 'assignee'])
                 ->select('tasks.*')
                 ->addSelect('heads.bucket AS my_work_bucket'),
         )
             ->orderByRaw($order, $orderBindings)
             ->get();
 
-        foreach ($tasks as $task) {
-            // Every task here is the reader's own: the row's avatar and any
-            // policy check reading the assignee need no query.
-            $task->setRelation('assignee', $reader);
+        if ($view === MyWorkView::Mine) {
+            foreach ($tasks as $task) {
+                // Every task here is the reader's own: the row and any policy
+                // check reading the assignee need no query.
+                $task->setRelation('assignee', $reader);
+            }
         }
 
         return array_values($tasks->all());
@@ -195,9 +249,9 @@ final class MyWorkFeed
      * @param  array{today: Carbon, tomorrow: Carbon, horizon: Carbon, recent: Carbon}  $bounds
      * @return Builder<Task>
      */
-    private function listed(User $reader, array $bounds): Builder
+    private function listed(User $reader, MyWorkView $view, array $bounds): Builder
     {
-        return $this->own($reader)->where(static function (Builder $query) use ($bounds): void {
+        return $this->scope($reader, $view)->where(static function (Builder $query) use ($bounds): void {
             $query->whereIn('tasks.status', Task::openStatusValues())
                 ->orWhere(static function (Builder $completed) use ($bounds): void {
                     $completed->where('tasks.status', TaskStatus::Completed->value)
@@ -207,14 +261,23 @@ final class MyWorkFeed
     }
 
     /**
-     * The reader's own tasks inside their visibility scope.
+     * The view's tasks inside the reader's visibility scope: their own
+     * (assigned to them), the ones they handed out to someone else, or every
+     * task in reach.
      *
      * @return Builder<Task>
      */
-    private function own(User $reader): Builder
+    private function scope(User $reader, MyWorkView $view): Builder
     {
-        return $this->visibility->visible($reader, Task::query())
-            ->where('tasks.assignee_id', $reader->getKey());
+        $query = $this->visibility->visible($reader, Task::query());
+
+        return match ($view) {
+            MyWorkView::Mine => $query->where('tasks.assignee_id', $reader->getKey()),
+            MyWorkView::Delegated => $query->where('tasks.assigned_by', $reader->getKey())
+                ->whereNotNull('tasks.assignee_id')
+                ->where('tasks.assignee_id', '!=', $reader->getKey()),
+            MyWorkView::Team => $query,
+        };
     }
 
     /**
