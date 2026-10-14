@@ -1,0 +1,894 @@
+<title>دليل استخدام نظام إدارة العملاء</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+/* Layout: the whole-system tutorial in the CRM's own identity («فيروز»), the same tokens and chips as
+   employee-quick-start.ar.html. A cover sheet, then six parts; each part opens on a new A4 page in print,
+   holds a two-column grid of short sections, and no section splits across pages. */
+:root {
+    --bg: #f2f7f8;
+    --sheet: #ffffff;
+    --ink: #10262c;
+    --muted: #4d6670;
+    --line: #d5e3e7;
+    --accent: #0e7490;
+    --accent-soft: #e3f2f6;
+    --chip-ink: #0b5a70;
+    --warn-soft: #fff6e5;
+    --warn-ink: #7a4b00;
+    --due-red: #b91c1c;
+    --due-amber: #a16207;
+    --font: 'Tajawal', 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0d1619; --sheet: #141f23; --ink: #e4eef1; --muted: #9db3bb; --line: #26363c;
+        --accent: #38b2cf; --accent-soft: #16323a; --chip-ink: #9fe0ef; --warn-soft: #33270f; --warn-ink: #f5cf8a;
+        --due-red: #f87171; --due-amber: #facc15;
+        color-scheme: dark;
+    }
+}
+:root[data-theme="dark"] {
+    --bg: #0d1619; --sheet: #141f23; --ink: #e4eef1; --muted: #9db3bb; --line: #26363c;
+    --accent: #38b2cf; --accent-soft: #16323a; --chip-ink: #9fe0ef; --warn-soft: #33270f; --warn-ink: #f5cf8a;
+    --due-red: #f87171; --due-amber: #facc15;
+    color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.7;
+    padding-inline: 16px;
+    padding-block: 24px;
+}
+.sheet {
+    max-width: 960px;
+    margin-inline: auto;
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px 24px;
+    padding: 26px 28px 20px;
+    border-bottom: 3px solid var(--accent);
+}
+h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.25;
+    text-wrap: balance;
+}
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 64ch; }
+.stamp {
+    color: var(--muted);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+/* A part: its title band, a one-line orientation, then the grid of sections. */
+.part { border-top: 1px solid var(--line); }
+.part-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: center;
+    padding: 18px 28px 14px;
+    background: var(--accent-soft);
+    border-bottom: 1px solid var(--line);
+}
+.part-num {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 12px;
+    background: var(--accent);
+    color: var(--sheet);
+    font-size: 1.3rem;
+    font-weight: 800;
+}
+h2 {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.3;
+    color: var(--ink);
+}
+.part-head p { margin: 0; color: var(--muted); }
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+}
+section {
+    padding: 16px 28px 18px;
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+}
+.grid > section:not(.wide) { border-inline-end: 1px solid var(--line); }
+.grid > section.end { border-inline-end: 0; }
+.grid > section.wide { grid-column: 1 / -1; border-inline-end: 0; }
+h3 {
+    margin: 0 0 6px;
+    font-size: 1.08rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+h3 small { color: var(--muted); font-weight: 500; font-size: 0.85em; }
+p { margin: 0 0 6px; }
+ul, ol { margin: 0; padding-inline-start: 1.25em; display: grid; gap: 4px; }
+ol.steps { list-style: none; padding: 0; counter-reset: step; gap: 7px; margin-block-end: 6px; }
+ol.steps > li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 1.8rem minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+}
+ol.steps > li::before {
+    content: counter(step);
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--sheet);
+    font-weight: 800;
+}
+/* The sales journey, numbered like the steps but laid out in one row. */
+ol.flow {
+    list-style: none;
+    padding: 0;
+    counter-reset: flow;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-block: 4px 2px;
+}
+ol.flow > li {
+    counter-increment: flow;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px 2px 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-weight: 700;
+}
+ol.flow > li::before {
+    content: counter(flow);
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--sheet);
+    font-size: 0.85em;
+}
+/* The app's own button and menu names, set like the buttons they are. */
+.ui {
+    display: inline-block;
+    padding: 0 0.45em;
+    border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--chip-ink);
+    font-weight: 700;
+    font-size: 0.92em;
+    line-height: 1.55;
+    white-space: nowrap;
+}
+/* Keys on the keyboard: Latin, always left-to-right. */
+.key {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 0 0.4em;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--sheet);
+    color: var(--ink);
+    font-family: Consolas, 'Segoe UI', monospace;
+    font-weight: 700;
+    font-size: 0.88em;
+    line-height: 1.5;
+    text-align: center;
+    white-space: nowrap;
+    unicode-bidi: isolate;
+}
+.mention {
+    padding: 0 0.3em;
+    border-radius: 5px;
+    background: var(--accent-soft);
+    color: var(--chip-ink);
+    font-weight: 700;
+    unicode-bidi: plaintext;
+}
+.note {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--warn-soft);
+    color: var(--warn-ink);
+    font-size: 0.93rem;
+}
+.muted { color: var(--muted); }
+.due-red, .due-amber { font-weight: 700; white-space: nowrap; }
+.due-red { color: var(--due-red); }
+.due-amber { color: var(--due-amber); }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+th, td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--line);
+    text-align: start;
+    vertical-align: top;
+}
+th { color: var(--muted); font-weight: 700; font-size: 0.9em; }
+tr { break-inside: avoid; }
+td:first-child { font-weight: 700; white-space: nowrap; }
+td.wrap { white-space: normal; }
+ol.toc { padding-inline-start: 1.4em; gap: 6px; }
+ol.toc li::marker { color: var(--accent); font-weight: 800; }
+footer {
+    padding: 14px 28px 18px;
+    border-top: 3px solid var(--accent);
+    font-weight: 700;
+    text-align: center;
+}
+@media (max-width: 700px) {
+    header, section, footer, .part-head { padding-inline: 18px; }
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .grid > section:not(.wide) { border-inline-end: 0; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.25rem; }
+    td:first-child { white-space: normal; }
+    .ui { white-space: normal; }
+}
+@page { size: A4; margin: 9mm 10mm; }
+@media print {
+    body { background: #ffffff; padding: 0; font-size: 9.6pt; line-height: 1.45; }
+    .sheet { border: 0; border-radius: 0; max-width: none; overflow: visible; }
+    header { padding: 0 0 10px; }
+    h1 { font-size: 1.8rem; }
+    .part { break-before: page; border-top: 0; }
+    .part-head { padding: 8px 12px; break-after: avoid; }
+    .part-num { width: 2.2rem; height: 2.2rem; font-size: 1.1rem; }
+    h2 { font-size: 1.3rem; }
+    section { padding: 6px 12px 7px; break-inside: avoid; }
+    h3 { margin-bottom: 4px; }
+    ul { gap: 2px; }
+    ol.steps { gap: 4px; }
+    ol.steps > li { grid-template-columns: 1.55rem minmax(0, 1fr); gap: 8px; }
+    ol.steps > li::before { width: 1.55rem; height: 1.55rem; }
+    .note { margin-top: 5px; padding: 5px 10px; }
+    th, td { padding: 3px 6px; }
+    footer { padding: 8px 12px 0; }
+}
+</style>
+
+<main class="sheet" dir="rtl" lang="ar">
+
+    <!-- الغلاف -->
+    <header>
+        <div>
+            <h1>دليل استخدام نظام إدارة العملاء</h1>
+            <p class="lede">نظام واحد تعمل فيه الشركة كلها: <b>المبيعات</b> من أول تواصل مع العميل المحتمل حتى الصفقة المكسوبة، و<b>المهام</b> التي تُسند وتُتابع حتى تكتمل، و<b>التقارير</b> التي تقيس الأداء، و<b>الإدارة</b> التي يضبط منها مدير النظام الحسابات والإعدادات. يشرح هذا الدليل كل مساحة في خطوات قصيرة.</p>
+        </div>
+        <span class="stamp">الإصدار: أكتوبر 2026</span>
+    </header>
+
+    <div class="grid">
+        <section>
+            <h3>محتويات الدليل</h3>
+            <ol class="toc">
+                <li><b>البداية</b>: الدعوة، تسجيل الدخول، التنقل، حسابك، الإشعارات، الهاتف. <span class="muted">للجميع</span></li>
+                <li><b>المهام</b>: «عملي»، القائمة، الإضافة السريعة، صفحة المهمة، اللوحة، التقويم. <span class="muted">للجميع</span></li>
+                <li><b>المبيعات</b>: العملاء المحتملون، الصفقات، جهات الاتصال والحسابات، الأنشطة، البريد. <span class="muted">لفريق المبيعات</span></li>
+                <li><b>التقارير</b>: تشغيل التقارير وتصديرها، «لوحة الموظف». <span class="muted">للمديرين وفريق المبيعات</span></li>
+                <li><b>الإدارة</b>: المستخدمون، الأدوار، الفرق، الإعدادات، النسخ الاحتياطية. <span class="muted">لمدير النظام</span></li>
+                <li><b>مرجع سريع</b>: أين أجد كل شيء، الاختصارات، ثلاث عادات.</li>
+            </ol>
+        </section>
+
+        <section class="end">
+            <h3>أي مساحة تدخل؟ <small>(الأدوار الافتراضية)</small></h3>
+            <table>
+                <thead><tr><th>الدور</th><th>المساحات</th></tr></thead>
+                <tbody>
+                    <tr><td>موظف</td><td>المهام</td></tr>
+                    <tr><td class="wrap">مندوب مبيعات، مدير المبيعات، دعم، قراءة فقط</td><td>المبيعات، المهام، التقارير</td></tr>
+                    <tr><td class="wrap">مدير النظام، مدير النظام الأعلى</td><td>المساحات الأربع، ومعها الإدارة</td></tr>
+                </tbody>
+            </table>
+            <p class="note">ما تراه داخل كل مساحة يتبع صلاحيات دورك، فقد ترى عناصر أقل مما يصفه الدليل. ونطاق السجلات: المندوب يرى سجلاته، ومدير المبيعات سجلات فريقه، ومدير النظام كل السجلات.</p>
+        </section>
+
+        <section class="wide">
+            <h3>كيف تقرأ هذا الدليل</h3>
+            <ul>
+                <li>الكلمة المؤطرة مثل <span class="ui">دخول</span> هي اسم زر أو قائمة كما يظهر في النظام بالضبط.</li>
+                <li>السهم ← يدل على الطريق إلى الشاشة، مثل: <span class="ui">المهام</span> ← <span class="ui">عملي</span>. والمفاتيح تظهر هكذا: <span class="key" dir="ltr">N</span>.</li>
+                <li>«رابط النظام» هو العنوان الذي يصلك في رسالة الدعوة، احفظه في المفضلة.</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- 1. البداية -->
+    <div class="part">
+        <div class="part-head">
+            <span class="part-num">1</span>
+            <h2>البداية</h2>
+            <p>من رسالة الدعوة إلى أول مساحة عمل، وكل ما في قائمة حسابك.</p>
+        </div>
+        <div class="grid">
+            <section>
+                <h3>الدعوة وتعيين كلمة المرور</h3>
+                <ol class="steps">
+                    <li><div>يضيفك مدير النظام فتصلك رسالة «دعوة للانضمام إلى نظام إدارة العملاء». لا تسجيل ذاتي.</div></li>
+                    <li><div>اضغط <span class="ui">تعيين كلمة المرور</span> خلال 60 دقيقة، واكتب كلمة المرور مرتين: 12 حرفاً على الأقل، فيها حرف كبير وحرف صغير ورقم.</div></li>
+                    <li><div>بعد «تم تغيير كلمة المرور.» سجّل الدخول ببريدك وكلمة مرورك.</div></li>
+                </ol>
+                <p class="note">انتهى الرابط؟ اطلب رابطاً جديداً من رابط نسيان كلمة المرور في صفحة الدخول.</p>
+            </section>
+
+            <section class="end">
+                <h3>تسجيل الدخول</h3>
+                <ol class="steps">
+                    <li><div>افتح رابط النظام واضغط <span class="ui">تسجيل الدخول</span>.</div></li>
+                    <li><div>أدخل بريدك وكلمة المرور. إن فعّلت التحقق بخطوتين فأدخل الرمز المكوّن من 6 أرقام.</div></li>
+                    <li><div>تصل إلى <span class="ui">لوحة التحكم</span>، أو مباشرة إلى الصفحة التي فتحت رابطها من بريد أو إشعار.</div></li>
+                </ol>
+                <p class="muted">تنتهي الجلسة بعد 120 دقيقة بلا نشاط. الحساب «موقوف» لا يستطيع الدخول.</p>
+            </section>
+
+            <section class="wide">
+                <h3>«لوحة التحكم» والتنقل بين المساحات</h3>
+                <p>تحت «اختر مساحة العمل» أربع بطاقات: <span class="ui">المبيعات</span> <span class="ui">المهام</span> <span class="ui">التقارير</span> <span class="ui">الإدارة</span>. اضغط <span class="ui">دخول</span> على البطاقة لتفتح المساحة. البطاقة التي عليها قفل وعبارة «غير متاح لحسابك» مغلقة لدورك، فاطلبها من مدير النظام إن احتجتها.</p>
+                <ul>
+                    <li><b>مبدّل المساحة:</b> زر في الشريط العلوي باسم المساحة الحالية، ينقلك إلى مساحة أخرى أو إلى <span class="ui">لوحة التحكم</span>. واسم النظام أعلى الصفحة يعيدك إليها أيضاً.</li>
+                    <li><b>البحث:</b> <span class="key" dir="ltr">Ctrl+K</span> (أو <span class="key" dir="ltr">⌘K</span> على ماك) أو حقل البحث بجانب المبدّل، في المبيعات والمهام فقط، ولا يجد إلا ما يحق لك فتحه.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>قائمة حسابك</h3>
+                <p>أحرف اسمك أو صورتك أعلى الصفحة، في كل مساحة:</p>
+                <ul>
+                    <li><span class="ui">الملف الشخصي</span>: الاسم، وكلمة المرور (الجديدة وتأكيدها ثم الحالية)، ثم <span class="ui">حفظ التغييرات</span>.</li>
+                    <li><b>اللغة:</b> الخيار <span class="ui" dir="ltr">English</span> يقلب الواجهة إلى الإنجليزية، ويُحفظ اختيارك في حسابك.</li>
+                    <li><b>المظهر:</b> أزرار الفاتح والداكن. الافتراضي يتبع جهازك.</li>
+                    <li><span class="ui">تفضيلات الإشعارات</span> و<span class="ui">الوارد</span>.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>التحقق بخطوتين <small>(اختياري، وننصح به)</small></h3>
+                <ol class="steps">
+                    <li><div><span class="ui">الملف الشخصي</span> ← قسم <span class="ui">المصادقة الثنائية (2FA)</span>.</div></li>
+                    <li><div>بجانب <span class="ui">تطبيق المصادقة الثنائية</span> اضغط <span class="ui">إعداد</span>، وامسح الرمز بتطبيق المصادقة، وأدخل الأرقام الستة، ثم <span class="ui">تفعيل تطبيق المصادقة</span>.</div></li>
+                    <li><div>احفظ رموز الاسترداد بـ<span class="ui">نسخ</span> أو <span class="ui">تنزيل</span>. تظهر مرة واحدة، وتلزمك إن فقدت هاتفك.</div></li>
+                </ol>
+                <p class="muted">أو <span class="ui">رموز التحقق عبر البريد الإلكتروني</span> ← <span class="ui">إعداد</span>. و<span class="ui">إيقاف</span> يلغي أي طريقة.</p>
+            </section>
+
+            <section>
+                <h3>«الوارد»</h3>
+                <ul>
+                    <li>في أعلى الشريط الجانبي لكل مساحة مع عدد غير المقروء، وفي قائمة حسابك. التبويبان <span class="ui">الكل</span> و<span class="ui">غير المقروءة</span>.</li>
+                    <li>اضغط الإشعار لتفتح المهمة أو السجل، فيُعلَّم مقروءاً. و<span class="ui">تعليم الكل كمقروء</span> يصفّي القائمة دفعة واحدة.</li>
+                    <li>الجرس أعلى كل صفحة يعرض الإشعارات نفسها ويتحدّث كل 30 ثانية تقريباً.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>«تفضيلات الإشعارات»</h3>
+                <ol class="steps">
+                    <li><div>قائمة حسابك ← <span class="ui">تفضيلات الإشعارات</span>. لا تظهر إلا الأحداث التي يتلقاها دورك.</div></li>
+                    <li><div>لكل حدث مفتاحان: <span class="ui">داخل التطبيق</span> (الجرس) و<span class="ui">عبر البريد الإلكتروني</span>، ثم <span class="ui">حفظ</span>.</div></li>
+                </ol>
+                <p class="note">البريد مطفأ افتراضياً إلا لأربعة: «إسناد سجل إليّ»، «إشارة زميل إليّ في تعليق على مهمة»، «الملخص الأسبوعي للمهام»، «فشل النسخ الاحتياطي الأسبوعي».</p>
+            </section>
+
+            <section class="wide">
+                <h3>ثبّت النظام على هاتفك</h3>
+                <ul>
+                    <li><b>أندرويد (Chrome أو Edge):</b> افتح رابط النظام وسجّل الدخول، ثم القائمة ⋮ ← تثبيت التطبيق (أو الإضافة إلى الشاشة الرئيسية).</li>
+                    <li><b>آيفون وآيباد (Safari):</b> مشاركة ← إضافة إلى الشاشة الرئيسية ← إضافة.</li>
+                    <li>الأيقونة «العملاء» تفتح لوحة التحكم بلا شريط المتصفح، ولا تعمل دون إنترنت ولا تخزّن شيئاً على الهاتف. وداخل المهام شريط سفلي: <span class="ui">عملي</span> <span class="ui">المهام</span> <span class="ui">إضافة</span> <span class="ui">اللوحة</span> <span class="ui">الوارد</span>.</li>
+                </ul>
+            </section>
+        </div>
+    </div>
+
+    <!-- 2. المهام -->
+    <div class="part">
+        <div class="part-head">
+            <span class="part-num">2</span>
+            <h2>المهام</h2>
+            <p>المساحة التي يدخلها الجميع. في أعلى الشريط الجانبي <span class="ui">عملي</span>، وتحته مجموعة «المهام»: <span class="ui">المهام</span> <span class="ui">لوحة المهام</span> <span class="ui">المهام الدورية</span> <span class="ui">التقويم</span>.</p>
+        </div>
+        <div class="grid">
+            <section class="wide">
+                <h3>«عملي»: صفحتك الرئيسية</h3>
+                <p><b>طرق العرض الثلاث:</b> <span class="ui">مهامي</span> مهامك أنت · <span class="ui">أسندتُها</span> ما سلّمته لغيرك (لمن يسند المهام) · <span class="ui">الفريق</span> كل من في نطاقك (مدير المبيعات والدعم والقراءة فقط ومدير النظام). المندوب والموظف يرون «مهامي» فقط.</p>
+                <p><b>المجموعات:</b> متأخرة · اليوم · الأيام السبعة القادمة · لاحقاً · بلا تاريخ · أُنجزت مؤخراً. والموعد بالكلمات: <span class="due-red">متأخرة يومين</span> بالأحمر، و<span class="due-amber">اليوم 17:00</span> بالأصفر، ثم «غداً».</p>
+                <ol class="steps">
+                    <li><div><b>الدائرة</b> أول الصف تُكمل المهمة بنقرة واحدة، و<span class="ui">تراجع</span> في رسالة «اكتملت المهمة» يلغي ذلك.</div></li>
+                    <li><div><b>شارة الحالة</b> (مثل <span class="ui">قيد الانتظار</span>) تعرض الانتقالات المسموحة لك فقط: <span class="ui">بدء</span> <span class="ui">إكمال</span> <span class="ui">إعادة فتح</span> <span class="ui">إلغاء المهمة</span>.</div></li>
+                    <li><div><b>الموعد</b> يفتح «نقل موعد الاستحقاق»: اختر <span class="ui">اليوم</span> أو <span class="ui">غداً</span> أو <span class="ui">الأسبوع القادم</span> أو <span class="ui">تاريخ آخر</span> ثم <span class="ui">نقل</span> (للمهام التي يحق لك تعديلها).</div></li>
+                </ol>
+                <p class="muted">«اليوم» و«متأخرة» تتبعان ساعة المؤسسة لا ساعة جهازك. وأسفل الصفحة «المتابعات القادمة» من مكالمات واجتماعات.</p>
+            </section>
+
+            <section>
+                <h3>قائمة «المهام»</h3>
+                <ul>
+                    <li>التبويبات: <span class="ui">مهامي</span> <span class="ui">مستحقة اليوم</span> <span class="ui">متأخرة</span> <span class="ui">قادمة</span> <span class="ui">مكتملة</span> <span class="ui">الكل</span>.</li>
+                    <li>الصفوف مجمّعة حسب الحالة: «قيد التنفيذ» ثم «قيد الانتظار»، و«مكتملة» و«ملغاة» مطويتان.</li>
+                    <li>المرشحات: <span class="ui">مهامي فقط</span> <span class="ui">أسندتُها أنا</span>، والحالة والأولوية والمكلَّف والموعد.</li>
+                    <li>قائمة <span class="ui">الإجراءات</span> في الصف: <span class="ui">نشر تحديث</span> <span class="ui">قائمة التحقق</span> <span class="ui">تعليق</span> <span class="ui">إسناد</span> وغيرها. حدّد عدة صفوف ثم <span class="ui">إكمال</span> لإكمالها معاً.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>«إضافة سريعة»</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">إضافة سريعة</span> أو المفتاح <span class="key" dir="ltr">N</span> أو <span class="ui">إضافة</span> في الهاتف. تُفتح نافذة «مهمة جديدة».</div></li>
+                    <li><div>اكتب <span class="ui">العنوان</span> في سطر، واختر <span class="ui">موعد الاستحقاق</span> و<span class="ui">الأولوية</span>. من يسند المهام يختار <span class="ui">المكلَّف</span> أيضاً.</div></li>
+                    <li><div><span class="ui">إضافة المهمة</span>. تحتاج وصفاً أو سجلاً مرتبطاً أو تكراراً أو قائمة تحقق؟ <span class="ui">خيارات أكثر</span>.</div></li>
+                </ol>
+                <p class="muted">الافتراضي: المهمة لك، بلا تاريخ، أولوية متوسطة. دور «قراءة فقط» لا يضيف مهام.</p>
+            </section>
+
+            <section class="wide">
+                <h3>صفحة المهمة</h3>
+                <p>العمود الرئيسي: الوصف و«قائمة التحقق» و«المرفقات»، ثم «سير العمل والتعليقات». واللوحة الجانبية <span class="ui">الخصائص</span>: الحالة والأولوية والمكلَّف ومن أسندها وتاريخ الاستحقاق.</p>
+                <ol class="steps">
+                    <li><div><b>الزر الرئيسي</b> أعلى الصفحة يتغير مع الحالة: <span class="ui">بدء</span> لمهمة قيد الانتظار، و<span class="ui">إكمال</span> لمهمة قيد التنفيذ، و<span class="ui">إعادة فتح</span> لمهمة مغلقة.</div></li>
+                    <li><div><span class="ui">المزيد</span> فيه البقية: <span class="ui">بدء مع ملاحظة</span> <span class="ui">إكمال مع ملاحظة</span> <span class="ui">نشر تحديث</span> <span class="ui">قائمة التحقق</span> <span class="ui">تعليق</span> <span class="ui">إلغاء المهمة</span> <span class="ui">إسناد</span>.</div></li>
+                    <li><div>لتغيير الموعد استخدم أزرار <span class="ui">تغيير الموعد</span>، لمن يحق له تعديل المهمة.</div></li>
+                    <li><div>يمكنك الإكمال وفي قائمة التحقق بنود غير مؤشّرة: يظهر تحذير بعدد الباقي أولاً، ويُبلَّغ من أسند المهمة.</div></li>
+                </ol>
+                <p class="note"><b>مهمة أُسندت إليك:</b> أنت تبدؤها وتنشر تحديثاتها وتؤشّر على قائمة تحققها وتكملها. أما تفاصيلها وموعدها وبنود قائمتها وإلغاؤها فتبقى عند من أسندها.</p>
+            </section>
+
+            <section>
+                <h3>«سير العمل والتعليقات»</h3>
+                <ol class="steps">
+                    <li><div>في صندوق الكتابة اختر <span class="ui">تعليق</span> أو <span class="ui">تحديث إنجاز</span>.</div></li>
+                    <li><div>للتعليق: اكتب، وللإشارة إلى زميل اكتب <b>@</b> واختر اسمه (<span class="mention">@سارة</span>)، ثم <span class="ui">نشر التعليق</span> أو <span class="key" dir="ltr">Ctrl+Enter</span>.</div></li>
+                    <li><div>للتحديث: اكتب ما حدث ثم <span class="ui">نشر التحديث</span>، فيُنبَّه من أسند المهمة.</div></li>
+                </ol>
+                <p class="muted">التعليق لا يُعدَّل ولا يُحذف بعد نشره. والزميل المُشار إليه ينضم إلى المهمة: يقرؤها ويفتح ملفاتها ويعلّق، ولا يعدّلها.</p>
+            </section>
+
+            <section class="end">
+                <h3>قائمة التحقق والمرفقات</h3>
+                <ul>
+                    <li>نقرة على مربع البند تؤشّر عليه وتُحفظ فوراً، والعدّاد يعرض المُنجز من الكل، مثل <span dir="ltr">2/5</span>.</li>
+                    <li><span class="ui">تعديل القائمة</span> لمن يحق له تعديل المهمة: <span class="ui">إضافة بند</span> ثم حفظ، حتى 50 بنداً. وقائمة المهمة المغلقة لا تتغير.</li>
+                    <li>الملفات: <span class="ui">رفع ملف</span> ← اختر <span class="ui">الملف</span> ← <span class="ui">رفع</span>، و<span class="ui">تنزيل</span> لتحميله. هنا يسلّم الموظف الملف الذي طلبته المهمة.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>«لوحة المهام»</h3>
+                <ul>
+                    <li><span class="ui">حسب المكلَّف</span>: عمود لكل شخص وعمود «غير مُسندة»، مع عدّادات المفتوحة والمتأخرة والمستحقة اليوم. تعرض مهام المؤسسة المفتوحة كلها.</li>
+                    <li><span class="ui">حسب الحالة</span>: اسحب البطاقة بين «قيد الانتظار» و«قيد التنفيذ» و«مكتملة» لتغيير حالتها. النقل غير المسموح يعود مكانه مع السبب.</li>
+                    <li><span class="ui">مهامي فقط</span> يضيّق اللوحة إلى مهامك. وعلى الهاتف اضغط البطاقة مطوّلاً قليلاً قبل السحب.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>«المهام الدورية» <small>(لمن يسند المهام)</small></h3>
+                <ol class="steps">
+                    <li><div>زر الإضافة: <span class="ui">العنوان</span> و<span class="ui">الأولوية</span> و<span class="ui">نشطة</span>.</div></li>
+                    <li><div><span class="ui">التكرار</span>: <span class="ui">أسبوعياً</span> مع يوم الأسبوع، أو <span class="ui">شهرياً</span> مع يوم الشهر (من 1 إلى 28)، ثم <span class="ui">وقت الاستحقاق</span>.</div></li>
+                    <li><div><span class="ui">المكلَّفون</span>: لكل واحد مهمته في يومها، ويُنبَّه كأي إسناد. أضف <span class="ui">قائمة التحقق</span> إن لزم، ثم احفظ.</div></li>
+                </ol>
+                <p class="muted"><span class="ui">إيقاف مؤقت</span> و<span class="ui">استئناف</span> من قائمة الإجراءات. حذف المهمة الدورية لا يحذف المهام التي أنشأتها.</p>
+            </section>
+
+            <section>
+                <h3>«التقويم»</h3>
+                <ul>
+                    <li>العرض: <span class="ui">شهر</span> <span class="ui">أسبوع</span> <span class="ui">يوم</span> <span class="ui">قائمة</span>، والتنقل: <span class="ui">السابق</span> <span class="ui">التالي</span> <span class="ui">اليوم</span>.</li>
+                    <li>انقر يوماً فارغاً لـ<span class="ui">إضافة مهمة</span>، وانقر مهمة لتعديلها، واسحبها إلى يوم آخر لنقل موعدها.</li>
+                    <li>الاجتماعات والمكالمات تظهر لمن يرى أنشطة المبيعات، ولا تُنقل من هنا.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>اختصارات لوحة المفاتيح</h3>
+                <table>
+                    <tbody>
+                        <tr><td><span class="key" dir="ltr">N</span></td><td>إضافة سريعة</td></tr>
+                        <tr><td><span class="key" dir="ltr">/</span></td><td>الانتقال إلى البحث</td></tr>
+                        <tr><td><span class="key" dir="ltr">Ctrl+K</span></td><td>البحث حتى أثناء الكتابة</td></tr>
+                        <tr><td><span class="key" dir="ltr">?</span></td><td>عرض كل الاختصارات</td></tr>
+                    </tbody>
+                </table>
+                <p class="muted">المفاتيح المفردة لا تعمل أثناء الكتابة في حقل، ويمكن إيقافها بخيار «الاختصارات بمفتاح واحد».</p>
+            </section>
+        </div>
+    </div>
+
+    <!-- 3. المبيعات -->
+    <div class="part">
+        <div class="part-head">
+            <span class="part-num">3</span>
+            <h2>المبيعات</h2>
+            <p>الشريط الجانبي: «المبيعات» (العملاء المحتملون، الصفقات، لوحة الصفقات، المنتجات) · «جهات الاتصال» (جهات الاتصال، الحسابات) · «الأنشطة» · «الإعدادات» · «النظام».</p>
+        </div>
+        <div class="grid">
+            <section class="wide">
+                <h3>رحلة البيع في النظام</h3>
+                <ol class="flow">
+                    <li>عميل محتمل</li>
+                    <li>تأهيل بملاحظة</li>
+                    <li>تحويل إلى جهة اتصال وحساب وصفقة</li>
+                    <li>مراحل مسار المبيعات</li>
+                    <li>مكسوبة أو مفقودة</li>
+                </ol>
+                <p><b>«لوحة المعلومات»</b> هي الصفحة الرئيسية للمبيعات: حدّد <span class="ui">الفترة</span> (من وإلى، والافتراضي الشهر الحالي) و<span class="ui">مسار المبيعات</span>، ويختار المديرون <span class="ui">المسؤول</span> أو <span class="ui">الفريق</span>. البطاقات: عملاء محتملون جدد، نسبة التحويل، صفقات مفتوحة، مسار المبيعات المرجّح، مكسوبة، مفقودة، نسبة الفوز. وجدول «صفقات راكدة» يعرض الصفقات المفتوحة بلا نشاط منذ 14 يوماً.</p>
+            </section>
+
+            <section>
+                <h3>«العملاء المحتملون»</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">إضافة عميل محتمل</span>: «الاسم الأول» و«اسم العائلة» إلزاميان، ثم الشركة والمصدر والأولوية والبريد والهاتف.</div></li>
+                    <li><div>إن ظهر «قد يكون هذا السجل مكرراً لـ:» فراجع السجل المذكور أولاً. التحذير لا يمنع الحفظ.</div></li>
+                    <li><div><span class="ui">إضافة</span>. والمسؤول أنت تلقائياً.</div></li>
+                </ol>
+                <p class="muted">التبويبات <span class="ui">المفتوحون</span> <span class="ui">المؤهلون</span> <span class="ui">غير المؤهلين</span> <span class="ui">المحوّلون</span> <span class="ui">الكل</span>. وعمود «التقييم» من 0 إلى 100 يُحسب تلقائياً.</p>
+            </section>
+
+            <section class="end">
+                <h3>التأهيل: «تغيير الحالة»</h3>
+                <ol class="steps">
+                    <li><div>افتح العميل المحتمل ← <span class="ui">تغيير الحالة</span>.</div></li>
+                    <li><div>اختر الحالة الجديدة. الحالات الافتراضية: «جديد»، «تم التواصل»، «مؤهل»، «غير مؤهل»، «محوّل».</div></li>
+                    <li><div>عند اختيار «مؤهل» تصبح <span class="ui">ملاحظة</span> إلزامية: اكتب سبب التأهيل، ثم <span class="ui">تغيير الحالة</span>.</div></li>
+                </ol>
+                <p class="muted">الحالة لا تتغير من نموذج التعديل، و«محوّل» لا تُختار يدوياً بل تأتي من التحويل. ويمكن تغيير حالة عدة صفوف معاً من الإجراءات الجماعية.</p>
+            </section>
+
+            <section class="wide">
+                <h3>«تحويل» العميل المحتمل المؤهل</h3>
+                <ol class="steps">
+                    <li><div>افتح عميلاً محتملاً حالته «مؤهل» ← <span class="ui">تحويل</span>. الحقول مملوءة مسبقاً من بياناته.</div></li>
+                    <li><div><b>الحساب:</b> <span class="ui">إنشاء حساب جديد</span> أو <span class="ui">ربط بحساب موجود</span> أو <span class="ui">بدون حساب (فرد)</span>. <b>جهة الاتصال:</b> <span class="ui">إنشاء جهة اتصال جديدة</span> أو <span class="ui">ربط بجهة اتصال موجودة</span>، ويقترح النظام جهة بالبريد نفسه إن وُجدت.</div></li>
+                    <li><div><b>الصفقة:</b> فعّل <span class="ui">إنشاء صفقة</span> واملأ عنوانها ومسار المبيعات والمبلغ وتاريخ الإغلاق المتوقع، ثم <span class="ui">تحويل</span>.</div></li>
+                </ol>
+                <p class="muted">تبدأ الصفقة في المرحلة الأولى من مسار المبيعات، ومسؤولها هو مسؤول العميل المحتمل. وبعد التحويل يصبح العميل المحتمل للقراءة فقط.</p>
+            </section>
+
+            <section>
+                <h3>«الصفقات»</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">إضافة صفقة</span>: العنوان والحساب وجهة الاتصال الرئيسية، ثم مسار المبيعات ومرحلة مفتوحة.</div></li>
+                    <li><div>«المبلغ» و«الاحتمالية (%)» (فارغة تعني احتمالية المرحلة) و«تاريخ الإغلاق المتوقع» و«فئة التوقع».</div></li>
+                    <li><div><span class="ui">إضافة بند</span>: اختر المنتج والكمية والخصم، فيُحسب المبلغ من البنود تلقائياً.</div></li>
+                </ol>
+                <p class="muted">التبويبات <span class="ui">المفتوحة</span> <span class="ui">المكسوبة</span> <span class="ui">المفقودة</span> <span class="ui">الكل</span>.</p>
+            </section>
+
+            <section class="end">
+                <h3>المراحل والفوز والخسارة</h3>
+                <ul>
+                    <li><span class="ui">تغيير المرحلة</span> لنقل الصفقة بين المراحل المفتوحة.</li>
+                    <li><span class="ui">تسجيل الفوز</span> أو <span class="ui">تسجيل الخسارة</span> مع <span class="ui">سبب الإغلاق</span> (إلزامي)، وللخسارة «ملاحظات الخسارة».</li>
+                    <li><span class="ui">إعادة فتح</span> لصفقة أُغلقت بالخطأ.</li>
+                    <li>أول صفقة مكسوبة لحساب «عميل مرتقب» تجعله «عميل» تلقائياً وتملأ «عميل منذ».</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>«لوحة الصفقات»</h3>
+                <ul>
+                    <li>اختر <span class="ui">مسار المبيعات</span>: عمود لكل مرحلة مع عدد الصفقات والإجمالي.</li>
+                    <li>اسحب البطاقة إلى مرحلة أخرى. والإسقاط في عمود الفوز أو الخسارة يفتح نافذة لاختيار سبب الإغلاق.</li>
+                    <li>عمودا الفوز والخسارة يعرضان ما أُغلق خلال آخر 90 يوماً، والبطاقة المغلقة لا تُسحب.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>«جهات الاتصال» و«الحسابات»</h3>
+                <ul>
+                    <li>لكل جهة اتصال شركة واحدة على الأكثر، ولكل شركة «جهة الاتصال الرئيسية» واحدة. و«لغة المراسلة» تحدد لغة البريد إليها.</li>
+                    <li>تبويبات الحسابات: <span class="ui">عميل مرتقب</span> <span class="ui">عميل</span> <span class="ui">شريك</span> <span class="ui">أخرى</span>. يبدأ كل حساب «عميل مرتقب».</li>
+                    <li>المكررات: حدّد سجلين ← <span class="ui">دمج المكررات</span> ← <span class="ui">السجل الذي يُحتفظ به</span> ← <span class="ui">دمج</span> (لمدير المبيعات ومدير النظام).</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>«الأنشطة» و«الخط الزمني»</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">تسجيل نشاط</span>: «النوع» و«وقت الحدوث» و«الموضوع» في سطر واحد.</div></li>
+                    <li><div>اربطه بعميل محتمل أو جهة اتصال أو حساب أو صفقة. من صفحة السجل يُربط تلقائياً.</div></li>
+                    <li><div><span class="ui">تسجيل</span>.</div></li>
+                </ol>
+                <p class="muted">النشاط لا يُعدَّل بعد تسجيله. و«الخط الزمني» في كل سجل يجمع الأنشطة والملاحظات والمهام والمرفقات وتغييرات الحالة والمرحلة والإسناد.</p>
+            </section>
+
+            <section class="end">
+                <h3>«الملاحظات» والإشارة إلى زميل</h3>
+                <ul>
+                    <li>تبويب <span class="ui">الملاحظات</span> في صفحة السجل ← <span class="ui">إضافة ملاحظة</span>، حتى 5000 حرف.</li>
+                    <li>اختر الزملاء من حقل <span class="ui">الإشارة إلى</span> (لا بكتابة @)، فيصل كلاً منهم إشعار.</li>
+                    <li><span class="ui">مثبتة</span> تبقي الملاحظة أعلى القائمة.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>«إرسال بريد» بقالب</h3>
+                <ol class="steps">
+                    <li><div>من عميل محتمل أو جهة اتصال: <span class="ui">إرسال بريد</span>. حقل «إلى» مملوء ببريد السجل.</div></li>
+                    <li><div>اختر <span class="ui">القالب</span> و<span class="ui">اللغة</span>، فيُملأ الموضوع والرسالة. وراجع <span class="ui">معاينة</span>.</div></li>
+                    <li><div><span class="ui">إرسال</span>. ويُسجَّل البريد نشاطاً على السجل تلقائياً.</div></li>
+                </ol>
+                <p class="muted">القوالب يعدّها مدير النظام من «الإعدادات» ← «قوالب البريد»، بالعربية والإنجليزية، مع وسوم دمج مثل <span dir="ltr">{{contact.first_name}}</span>.</p>
+            </section>
+
+            <section class="end">
+                <h3>«إسناد» <small>(مدير المبيعات ومدير النظام)</small></h3>
+                <ul>
+                    <li><span class="ui">إسناد</span> ← اختر <span class="ui">المسؤول</span> ← <span class="ui">إسناد</span>. أو حدّد عدة سجلات ثم <span class="ui">إسناد</span> من الإجراءات الجماعية.</li>
+                    <li>يصل المسؤولَ الجديد إشعار «إسناد سجل إليّ»، ويظهر التغيير في الخط الزمني.</li>
+                    <li>المندوب لا يعيد إسناد سجلاته، وكل سجل جديد يُنشئه يكون باسمه.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>الاستيراد <small>(مدير المبيعات ومدير النظام)</small></h3>
+                <ol class="steps">
+                    <li><div><span class="ui">استيراد …</span> (مثل «استيراد العملاء المحتملين») أعلى القائمة ← <span class="ui">تنزيل مثال لملف CSV</span> واملأه.</div></li>
+                    <li><div>ارفع ملف CSV أو xlsx (حتى 5000 صف)، وطابق <span class="ui">الأعمدة</span>، واختر <span class="ui">تخطي المكرر</span> أو <span class="ui">تحديث المكرر</span>، ثم <span class="ui">استيراد</span>.</div></li>
+                    <li><div>«النظام» ← <span class="ui">عمليات الاستيراد</span> ← <span class="ui">عرض</span> ← <span class="ui">تنزيل الصفوف المرفوضة</span> لتصحيحها وإعادة رفعها.</div></li>
+                </ol>
+            </section>
+
+            <section class="end">
+                <h3>التصدير <small>(كل أدوار المبيعات، ضمن نطاقها)</small></h3>
+                <ol class="steps">
+                    <li><div>طبّق المرشحات ثم <span class="ui">تصدير …</span> (مثل «تصدير الصفقات»)، أو حدّد صفوفاً ثم <span class="ui">تصدير المحدد</span>.</div></li>
+                    <li><div>اختر <span class="ui">الأعمدة</span> ثم <span class="ui">تصدير</span>، وانتظر إشعار «اكتمل التصدير».</div></li>
+                    <li><div>«النظام» ← <span class="ui">عمليات التصدير</span> ← <span class="ui">تنزيل CSV</span> أو <span class="ui">تنزيل Excel</span>.</div></li>
+                </ol>
+                <p class="muted">حتى 20000 صف، ويُحذف الملف بعد 30 يوماً.</p>
+            </section>
+        </div>
+    </div>
+
+    <!-- 4. التقارير -->
+    <div class="part">
+        <div class="part-head">
+            <span class="part-num">4</span>
+            <h2>التقارير</h2>
+            <p><span class="ui">كل التقارير</span> في أعلى الشريط الجانبي يعرض بطاقة لكل تقرير يحق لك فتحه. والأرقام كلها ضمن نطاقك.</p>
+        </div>
+        <div class="grid">
+            <section class="wide">
+                <h3>تشغيل أي تقرير وتصديره</h3>
+                <ol class="steps">
+                    <li><div>في «عوامل التصفية» اختر <span class="ui">من</span> و<span class="ui">إلى</span> (الافتراضي الشهر الحالي)، و<span class="ui">المسؤول</span> أو «الجميع ضمن نطاقي»، ثم <span class="ui">الفريق</span> و<span class="ui">مسار المبيعات</span> و<span class="ui">تجميع حسب</span> حيث تظهر.</div></li>
+                    <li><div><span class="ui">تشغيل التقرير</span>: يظهر «الرسم البياني» ثم جدول «التفاصيل» وسطر «الإجمالي».</div></li>
+                    <li><div><span class="ui">تصدير</span> ← <span class="ui">تنزيل CSV</span> أو <span class="ui">تنزيل Excel</span>: الملف بالصفوف والإجمالي نفسها المعروضة.</div></li>
+                    <li><div><span class="ui">إعادة الضبط</span> تعيدك إلى الشهر الحالي ونطاقك كاملاً.</div></li>
+                </ol>
+                <p class="note">شغّل التقرير قبل التصدير، فالتصدير يأخذ آخر عوامل تصفية شُغّلت. وأقصى فترة في المرة الواحدة 731 يوماً.</p>
+            </section>
+
+            <section class="wide">
+                <h3>أي تقرير يجيب عن سؤالك؟</h3>
+                <table>
+                    <thead><tr><th>التقرير</th><th>يجيب عن</th></tr></thead>
+                    <tbody>
+                        <tr><td>تقرير العملاء المحتملين</td><td>كم عميلاً محتملاً أُنشئ وكم أُهّل وحُوّل، حسب الحالة أو المصدر أو المسؤول.</td></tr>
+                        <tr><td>قمع التحويل</td><td>كم عميلاً وصل كل مرحلة («جديد»، «قيد المتابعة»، «مؤهل»، «محوّل»)، وأين نخسر أكثر.</td></tr>
+                        <tr><td>تقرير مسار المبيعات</td><td>الصفقات المفتوحة الآن في كل مرحلة: العدد والمبلغ والمبلغ المرجّح ومتوسط العمر بالأيام.</td></tr>
+                        <tr><td>أداء المبيعات</td><td>لكل مسؤول: المكسوبة والمفقودة ونسبة الفوز ومتوسط حجم الصفقة ودورة البيع.</td></tr>
+                        <tr><td>تقرير الأنشطة</td><td>المكالمات والاجتماعات والرسائل والملاحظات، لكل مسؤول أو يوم أو أسبوع.</td></tr>
+                        <tr><td>أداء المصادر</td><td>أي مصدر يأتي بعملاء يتحولون إلى صفقات مكسوبة، وبأي مبلغ.</td></tr>
+                        <tr><td>تقرير الفوز والخسارة</td><td>المكسوبة والمفقودة شهراً بشهر، وحصة كل سبب إغلاق.</td></tr>
+                        <tr><td>تقرير التوقعات</td><td>الصفقات المفتوحة للأشهر الستة القادمة حسب فئة التوقع، ومعها «متجاوزة الموعد».</td></tr>
+                        <tr><td>أداء المهام</td><td>لكل مكلَّف: المكتملة في الوقت والمتأخرة ونسبة الإكمال ومتوسط مدة الإنجاز.</td></tr>
+                        <tr><td>لوحة الموظف</td><td>صورة كاملة لعمل موظف واحد في المهام.</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section>
+                <h3>«لوحة الموظف»</h3>
+                <ol class="steps">
+                    <li><div>اختر الشخص من حقل <span class="ui">الموظف</span>، أو اضغط اسمه في «أداء المهام».</div></li>
+                    <li><div>«الآن»: المفتوحة والمتأخرة والمستحقة اليوم. «الأداء»: المكتملة هذا الأسبوع وهذا الشهر، ونسبة الإكمال في الوقت، ومتوسط مدة الإنجاز.</div></li>
+                    <li><div>تحتها: المكتملة أسبوعياً لثمانية أسابيع، والمهام المتأخرة والمتوقفة، و«آخر النشاط».</div></li>
+                </ol>
+                <p class="muted">يظهر لك الموظفون حسب نطاقك: مدير المبيعات يرى فريقه، والمندوب نفسه. والصفحة للعرض فقط.</p>
+            </section>
+
+            <section class="end">
+                <h3>«الملخص الأسبوعي للمهام»</h3>
+                <p>يصل لمن يسند المهام كل خميس الساعة 22:30، بالبريد وفي الجرس: المهام المكتملة والمُسندة هذا الأسبوع، والمتأخرة والمتوقفة، وجدول لكل مكلَّف فيه المفتوحة والمتأخرة والمكتملة.</p>
+                <p class="muted">لإيقاف بريده: «تفضيلات الإشعارات» ← قسم «الملخص الأسبوعي».</p>
+            </section>
+        </div>
+    </div>
+
+    <!-- 5. الإدارة -->
+    <div class="part">
+        <div class="part-head">
+            <span class="part-num">5</span>
+            <h2>الإدارة</h2>
+            <p>لمدير النظام ومدير النظام الأعلى. <span class="ui">نظرة عامة</span> يجمع شاشات مجموعتي «الإعدادات» و«النظام». و«الأدوار والصلاحيات» و«النسخ الاحتياطية» لمدير النظام الأعلى افتراضياً.</p>
+        </div>
+        <div class="grid">
+            <section>
+                <h3>«المستخدمون»: دعوة زميل</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">دعوة مستخدم</span>: الاسم والبريد والجوال ولغة الواجهة.</div></li>
+                    <li><div>في <span class="ui">الصلاحيات والفريق</span> اختر <span class="ui">الأدوار</span> و<span class="ui">الفريق</span>، ثم <span class="ui">إضافة</span>.</div></li>
+                    <li><div>الحالة «بانتظار قبول الدعوة» حتى يعيّن المدعو كلمة مروره. انتهى الرابط؟ <span class="ui">الإجراءات</span> ← <span class="ui">إعادة إرسال الدعوة</span>.</div></li>
+                </ol>
+                <p class="note">لإيقاف حساب: <span class="ui">تعديل</span> ← <span class="ui">الحالة</span> «موقوف» ← <span class="ui">حفظ التغييرات</span>. أوقِف ولا تحذف، فيبقى تاريخه.</p>
+            </section>
+
+            <section class="end">
+                <h3>«الأدوار والصلاحيات»</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">إضافة دور</span> أو <span class="ui">تعديل</span>: المعرّف والاسم بالعربية والإنجليزية.</div></li>
+                    <li><div><span class="ui">مساحات العمل</span>: علّم المساحات التي يدخلها الدور.</div></li>
+                    <li><div><span class="ui">الصلاحيات</span>: علّم المسموح. نطاق الرؤية: «عرض سجلاته» ثم «عرض سجلات فريقه» ثم «عرض كل السجلات».</div></li>
+                </ol>
+                <p class="note">أعطِ الدور المساحة وصلاحيات شاشاتها معاً. ودور «مدير النظام الأعلى» مقفل.</p>
+            </section>
+
+            <section>
+                <h3>«الفرق»</h3>
+                <ul>
+                    <li><span class="ui">إضافة فريق</span>: الاسم بالعربية والإنجليزية ثم <span class="ui">إضافة</span>.</li>
+                    <li>الأعضاء يُضافون من «المستخدمون» باختيار <span class="ui">الفريق</span> لكل مستخدم، ولكل مستخدم فريق واحد.</li>
+                    <li>ثم <span class="ui">تعديل</span> الفريق واختر <span class="ui">مدير الفريق</span> من أعضائه. ومدير المبيعات يرى سجلات فريقه فقط.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>«الإعدادات العامة»</h3>
+                <ul>
+                    <li>اسم المنشأة، و<span class="ui">العملة</span> (مثل «ريال سعودي (SAR)»)، و<span class="ui">المنطقة الزمنية</span>، و<span class="ui">بداية الأسبوع</span>، ثم <span class="ui">حفظ</span>.</li>
+                    <li>اختر العملة قبل إدخال الصفقات، فتغييرها لا يحوّل المبالغ.</li>
+                    <li>المنطقة وبداية الأسبوع تحددان «اليوم» و«هذا الأسبوع».</li>
+                </ul>
+            </section>
+
+            <section class="wide">
+                <h3>القوائم</h3>
+                <p>من مجموعة «الإعدادات»: «حالات العملاء المحتملين»، «مصادر العملاء المحتملين»، «القطاعات»، «الوسوم»، «المنافسون»، «أسباب الإغلاق» (سبب فوز أو سبب خسارة)، «أنواع الأنشطة». لكل عنصر اسم بالعربية والإنجليزية، ويُرتَّب بحقل «الترتيب» أو بسحب الصفوف. لإخفاء عنصر مستعمل أطفئ <span class="ui">نشط</span> بدل حذفه: يبقى على السجلات القديمة ويختفي من الاختيارات الجديدة.</p>
+            </section>
+
+            <section>
+                <h3>«مسارات المبيعات» والمراحل</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">إضافة مسار مبيعات</span>. يبدأ بثلاث مراحل: «التأهيل» و«مكسوبة» و«مفقودة».</div></li>
+                    <li><div><span class="ui">تعديل</span> ← <span class="ui">إضافة مرحلة</span>: الاسم و«النوع» («مفتوحة» أو «مكسوبة» أو «مفقودة») و«احتمال الإغلاق».</div></li>
+                    <li><div>اسحب المراحل لترتيبها، واجعل إحدى المفتوحة «المرحلة الافتراضية».</div></li>
+                </ol>
+                <p class="muted">من «احتمال الإغلاق» يُحسب المبلغ المرجّح. والمسار الذي فيه صفقات لا يُحذف، بل يُطفأ «نشط».</p>
+            </section>
+
+            <section class="end">
+                <h3>«الحقول المخصصة»</h3>
+                <ol class="steps">
+                    <li><div><span class="ui">إضافة حقل مخصص</span> ← <span class="ui">يطبق على</span>: العملاء المحتملون أو جهات الاتصال أو الحسابات أو الصفقات.</div></li>
+                    <li><div>«المفتاح» والمسمّيان و«النوع» (نص قصير، تاريخ، اختيار واحد…). وللاختيارات <span class="ui">إضافة خيار</span>.</div></li>
+                    <li><div>«إلزامي» و«قابل للتصفية» و«متاح كعمود» ثم <span class="ui">إضافة</span>. يظهر الحقل في نموذج السجل.</div></li>
+                </ol>
+                <p class="muted">«المفتاح» لا يتغير بعد الإنشاء، والحقل الذي يحمل قيماً لا يُحذف: أطفئ «نشط».</p>
+            </section>
+
+            <section>
+                <h3>«تقييم العملاء المحتملين»</h3>
+                <ul>
+                    <li><span class="ui">إضافة قاعدة تقييم</span>: «نوع القاعدة» ثم الهدف و«النقاط» (السالبة تخفض التقييم).</li>
+                    <li>التقييم مجموع نقاط القواعد النشطة المنطبقة، بين 0 و100، ويُعاد حسابه عند الحفظ وكل يوم.</li>
+                </ul>
+            </section>
+
+            <section class="end">
+                <h3>«سجل التدقيق»</h3>
+                <ul>
+                    <li>من فعل ماذا ومتى. للقراءة فقط، ويُحفظ 730 يوماً.</li>
+                    <li>المرشحات: الفترة، والقسم (مثل «تسجيل الدخول»)، والحدث، والمستخدم. و<span class="ui">التفاصيل</span> يعرض كل تغيير «من … إلى …».</li>
+                </ul>
+            </section>
+
+            <section class="wide">
+                <h3>«النسخ الاحتياطية» <small>(لمدير النظام الأعلى)</small></h3>
+                <ul>
+                    <li>نسخة تلقائية كل خميس الساعة 22:00، ويُحتفظ بأحدث 8 نسخ. وإن فشلت نسخة يصلك إشعار «فشل النسخ الاحتياطي الأسبوعي».</li>
+                    <li>قبل عمل كبير مثل استيراد واسع: <span class="ui">نسخ احتياطي الآن</span> ثم أكّد، وحدّث الصفحة بعد دقيقة.</li>
+                    <li>للتنزيل: <span class="ui">قاعدة البيانات</span> أو <span class="ui">الملفات</span> في سطر النسخة، واحفظ الملف في مكان آمن. وكل تنزيل يُسجَّل في سجل التدقيق.</li>
+                </ul>
+            </section>
+        </div>
+    </div>
+
+    <!-- 6. مرجع سريع -->
+    <div class="part">
+        <div class="part-head">
+            <span class="part-num">6</span>
+            <h2>مرجع سريع</h2>
+            <p>صفحة واحدة تحتفظ بها بجانبك.</p>
+        </div>
+        <div class="grid">
+            <section class="wide">
+                <h3>أين أجد…؟</h3>
+                <table>
+                    <thead><tr><th>أريد أن…</th><th>اذهب إلى</th></tr></thead>
+                    <tbody>
+                        <tr><td>أبدأ يومي</td><td><span class="ui">المهام</span> ← <span class="ui">عملي</span></td></tr>
+                        <tr><td>أضيف مهمة</td><td><span class="ui">إضافة سريعة</span> أو <span class="key" dir="ltr">N</span></td></tr>
+                        <tr><td>أعرف من يحمل ماذا</td><td><span class="ui">لوحة المهام</span> ← <span class="ui">حسب المكلَّف</span></td></tr>
+                        <tr><td>أسجّل عميلاً محتملاً</td><td><span class="ui">المبيعات</span> ← <span class="ui">العملاء المحتملون</span> ← <span class="ui">إضافة عميل محتمل</span></td></tr>
+                        <tr><td>أحوّل عميلاً مؤهلاً</td><td>صفحة العميل المحتمل ← <span class="ui">تحويل</span></td></tr>
+                        <tr><td>أنقل صفقة أو أغلقها</td><td><span class="ui">لوحة الصفقات</span>، أو صفحة الصفقة ← <span class="ui">تسجيل الفوز</span> / <span class="ui">تسجيل الخسارة</span></td></tr>
+                        <tr><td>أسجّل مكالمة أو اجتماعاً</td><td>صفحة السجل ← تبويب «الأنشطة» ← <span class="ui">تسجيل نشاط</span></td></tr>
+                        <tr><td>أرسل بريداً بقالب</td><td>صفحة العميل المحتمل أو جهة الاتصال ← <span class="ui">إرسال بريد</span></td></tr>
+                        <tr><td>أصدّر قائمة</td><td><span class="ui">تصدير …</span>، ثم «النظام» ← <span class="ui">عمليات التصدير</span></td></tr>
+                        <tr><td>أعرف أداء موظف</td><td><span class="ui">التقارير</span> ← <span class="ui">لوحة الموظف</span></td></tr>
+                        <tr><td>أغيّر ما يصلني</td><td>قائمة حسابك ← <span class="ui">تفضيلات الإشعارات</span></td></tr>
+                        <tr><td>أفعّل التحقق بخطوتين</td><td>قائمة حسابك ← <span class="ui">الملف الشخصي</span></td></tr>
+                        <tr><td>أدعو زميلاً</td><td><span class="ui">الإدارة</span> ← <span class="ui">المستخدمون</span> ← <span class="ui">دعوة مستخدم</span></td></tr>
+                        <tr><td>أعدّل صلاحيات دور</td><td><span class="ui">الإدارة</span> ← <span class="ui">الأدوار والصلاحيات</span></td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section>
+                <h3>الاختصارات</h3>
+                <table>
+                    <tbody>
+                        <tr><td><span class="key" dir="ltr">Ctrl+K</span></td><td>البحث (في المبيعات والمهام)</td></tr>
+                        <tr><td><span class="key" dir="ltr">N</span></td><td>مهمة جديدة</td></tr>
+                        <tr><td><span class="key" dir="ltr">/</span></td><td>الانتقال إلى البحث</td></tr>
+                        <tr><td><span class="key" dir="ltr">?</span></td><td>كل الاختصارات</td></tr>
+                        <tr><td><span class="key" dir="ltr">Ctrl+Enter</span></td><td>نشر التعليق أو التحديث</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="end">
+                <h3>ثلاث عادات تجعل النظام يعمل</h3>
+                <ol class="steps">
+                    <li><div>كل عمل يُسند ويُتابع في النظام، لا شفهياً ولا في المحادثات الجانبية.</div></li>
+                    <li><div>سجّل كل مكالمة واجتماع، وحدّث مرحلة الصفقة وتاريخ إغلاقها، فتصدق التقارير والتوقعات.</div></li>
+                    <li><div>انشر تحديثاً في المهمة الطويلة مرة في اليوم على الأقل، وإن عرفت أنك ستتأخر فاكتب السبب قبل الموعد.</div></li>
+                </ol>
+            </section>
+        </div>
+    </div>
+
+    <footer>لأي سؤال تواصل مع مدير النظام.</footer>
+</main>
