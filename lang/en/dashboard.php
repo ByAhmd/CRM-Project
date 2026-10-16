@@ -72,7 +72,7 @@ return [
             'kind' => 'Kind',
             'due_at' => 'Due',
             'subject' => 'Related to',
-            'assignee' => 'Assignee',
+            'assignees' => 'Assignees',
             'account' => 'Account',
             'stage' => 'Stage',
             'amount' => 'Amount',

@@ -21,6 +21,7 @@ use App\Filament\Resources\Tasks\RelationManagers\TaskAttachmentsRelationManager
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\Tables\TasksTable;
+use App\Filament\Support\TaskVisuals;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
@@ -121,12 +122,17 @@ final class TaskResource extends Resource
     }
 
     /**
+     * The readable tasks with what every screen of them shows: every
+     * assignee (Task::ASSIGNEE_RELATIONS, D-28 — the list, the task page, the
+     * by-status board and the calendar's modals read them) and the linked
+     * records, each one query for the whole page.
+     *
      * @return Builder<Task>
      */
     public static function getEloquentQuery(): Builder
     {
         return self::constrainToReadable(parent::getEloquentQuery())
-            ->with(['assignee', 'lead', 'contact', 'account', 'deal']);
+            ->with([...Task::ASSIGNEE_RELATIONS, 'lead', 'contact', 'account', 'deal']);
     }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder
@@ -167,18 +173,25 @@ final class TaskResource extends Resource
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
-        return self::constrainToReadable(parent::getGlobalSearchEloquentQuery())->with(['assignee']);
+        return self::constrainToReadable(parent::getGlobalSearchEloquentQuery())->with(Task::ASSIGNEE_RELATIONS);
     }
 
     /**
+     * The result's details: who holds the task — every assignee of a shared
+     * one, the first one first (D-28), under «المكلَّفون» — its due moment and
+     * its status. The search query loads the assignees with its rows.
+     *
      * @return array<string, string>
      */
     public static function getGlobalSearchResultDetails(Model $record): array
     {
         assert($record instanceof Task);
 
+        $record->loadMissing(Task::ASSIGNEE_RELATIONS);
+        $holders = TaskVisuals::assigneeNames($record);
+
         return array_filter([
-            __('tasks.fields.assignee') => $record->assignee?->name,
+            (count(TaskVisuals::assigneesOf($record)) > 1 ? __('tasks.fields.assignees') : __('tasks.fields.assignee')) => $holders === '' ? null : $holders,
             __('tasks.fields.due_at') => $record->due_at?->format('Y-m-d H:i'),
             __('tasks.fields.status') => $record->status->getLabel(),
         ]);
@@ -228,7 +241,8 @@ final class TaskResource extends Resource
 
     /**
      * The actor's open tasks due by the end of the organisation's today (its
-     * calendar, never the server's day), or null when the actor may not list
+     * calendar, never the server's day) — the ones they hold, as the first
+     * assignee or sharing them (D-28) — or null when the actor may not list
      * tasks at all.
      *
      * @return Builder<Task>|null
@@ -245,7 +259,7 @@ final class TaskResource extends Resource
 
         return Task::query()
             ->whereIn('tasks.status', Task::openStatusValues())
-            ->where('tasks.assignee_id', $user->getKey())
+            ->assignedTo($user)
             ->where('tasks.due_at', '<', $calendar->dayRange($calendar->today())[1]);
     }
 }

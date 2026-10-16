@@ -14,7 +14,8 @@ use Illuminate\Support\Collection;
 
 /**
  * Task performance page (module 23): completed, on-time, late, open and
- * overdue tasks per assignee, with the average time to finish (D-21).
+ * overdue tasks per assignee, with the average time to finish (D-21); a
+ * shared task is on the line of each of its assignees (D-28).
  * Presentation only — TaskPerformanceReport owns the figures. Each
  * employee's name opens their employee dashboard (D-26) when the reader may
  * open it for them; the unassigned line and anyone out of reach stay text.

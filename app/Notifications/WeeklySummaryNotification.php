@@ -172,6 +172,10 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
     }
 
     /**
+     * One listed task: its title (a link only where the reader may open it),
+     * who holds it — the first assignee, and how many others on a shared
+     * task (D-28) — and the line's detail.
+     *
      * @return array{title: string, url: ?string, assignee: string, detail: string}
      */
     private function line(User $notifiable, WeeklySummaryTask $task, string $detail): array
@@ -181,7 +185,9 @@ final class WeeklySummaryNotification extends Notification implements ShouldQueu
             'url' => in_array($task->id, $this->readableTaskIds, true)
                 ? PanelUrl::forReader($notifiable, TaskResource::class, static fn (): string => TaskResource::getUrl('view', ['record' => $task->id]))
                 : null,
-            'assignee' => $task->assigneeName ?? __('weekly_summary.fields.unassigned'),
+            'assignee' => $task->assigneeName === null
+                ? __('weekly_summary.fields.unassigned')
+                : trans_choice('weekly_summary.mail.assignee_and_others', $task->otherAssignees, ['name' => $task->assigneeName]),
             'detail' => $detail,
         ];
     }

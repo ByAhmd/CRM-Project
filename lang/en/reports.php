@@ -53,7 +53,7 @@ return [
         ],
         'tasks' => [
             'title' => 'Task performance',
-            'description' => 'Tasks completed per assignee in the period, on time or late, how long they took on average, what is still open and what is overdue now.',
+            'description' => 'Tasks completed per assignee in the period, on time or late, how long they took on average, what is still open and what is overdue now. A task shared by several employees counts for each of them.',
         ],
         'employee' => [
             'title' => 'Employee dashboard',

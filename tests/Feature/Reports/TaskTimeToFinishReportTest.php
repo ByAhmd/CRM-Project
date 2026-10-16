@@ -11,8 +11,6 @@ use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Access\RecordAssignmentService;
-use App\Services\Access\RecordVisibilityResolver;
-use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
 use App\Services\Statistics\Reports\TaskPerformanceReport;
 use App\Services\Tasks\TaskService;
@@ -80,8 +78,8 @@ final class TaskTimeToFinishReportTest extends TestCase
     {
         $this->handOutAndFinish();
 
-        $rows = $this->report()->rows($this->admin, $this->filters());
-        $totals = $this->report()->totals($rows);
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin));
+        $totals = app(TaskPerformanceReport::class)->totals($rows);
 
         $this->assertSame([$this->repA->name, $this->repB->name], $rows->map(fn (ReportRow $row): string => $row->label)->all());
         $this->assertSame(3, $this->row($rows, $this->repA)->value('completed'));
@@ -108,7 +106,7 @@ final class TaskTimeToFinishReportTest extends TestCase
         $this->travelTo(Carbon::parse('2026-09-07 13:00:00'));
         $this->tasks->complete($task, $this->repB);
 
-        $rows = $this->report()->rows($this->admin, $this->filters());
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin));
 
         $this->assertSame([$this->repB->name], $rows->map(fn (ReportRow $row): string => $row->label)->all());
         $this->assertSame(1, $this->row($rows, $this->repB)->value('completed'));
@@ -131,7 +129,7 @@ final class TaskTimeToFinishReportTest extends TestCase
 
         $this->assertTrue($done->refresh()->assigned_at?->greaterThan($done->completed_at), 'the fixture reassigns after completion');
 
-        $rows = $this->report()->rows($this->admin, $this->filters());
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin));
 
         $this->assertSame(2, $this->row($rows, $this->repB)->value('completed'));
         $this->assertSame(2 * 86400, $this->row($rows, $this->repB)->value('finish_seconds'), 'the reassigned task adds zero, not minus one day');
@@ -160,13 +158,13 @@ final class TaskTimeToFinishReportTest extends TestCase
         $this->travelTo(Carbon::parse('2026-09-20 09:00:00'));
         $this->tasks->cancel($cancelled, $this->admin);
 
-        $september = $this->row($this->report()->rows($this->admin, $this->filters()), $this->repA);
+        $september = $this->row(app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin)), $this->repA);
 
         $this->assertSame(1, $september->value('completed'));
         $this->assertSame(6 * 3600, $september->value('finish_seconds'));
         $this->assertSame(6 * 3600, $september->value('avg_time_to_finish'));
 
-        $augustRow = $this->row($this->report()->rows($this->admin, $this->filters(['from' => '2026-08-01', 'to' => '2026-08-31'])), $this->repA);
+        $augustRow = $this->row(app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin, ['from' => '2026-08-01', 'to' => '2026-08-31'])), $this->repA);
 
         $this->assertSame(10 * 86400, $augustRow->value('avg_time_to_finish'), 'the August report averages the August completion alone');
     }
@@ -189,7 +187,7 @@ final class TaskTimeToFinishReportTest extends TestCase
         $this->tasks->complete($dropped, $this->admin);
         $this->tasks->complete($kept, $this->repA);
 
-        $rows = $this->report()->rows($this->admin, $this->filters());
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin));
         $unassigned = $rows->last();
 
         $this->assertInstanceOf(ReportRow::class, $unassigned);
@@ -199,17 +197,17 @@ final class TaskTimeToFinishReportTest extends TestCase
         $this->assertSame(2 * 2 * 86400, $unassigned->value('finish_seconds'), 'both unassigned tasks count from their creation, two days each');
         $this->assertSame(2 * 86400, $unassigned->value('avg_time_to_finish'));
 
-        $totals = $this->report()->totals($rows);
+        $totals = app(TaskPerformanceReport::class)->totals($rows);
 
         $this->assertSame(3, $totals->value('completed'));
         $this->assertSame(3 * 2 * 86400, $totals->value('finish_seconds'));
         $this->assertSame(2 * 86400, $totals->value('avg_time_to_finish'));
 
         // A rep sees neither the unassigned line nor its tasks (D-4).
-        $rep = $this->report()->rows($this->repA, $this->filters(viewer: $this->repA));
+        $rep = app(TaskPerformanceReport::class)->rows($this->repA, $this->taskReportFilters($this->repA));
 
         $this->assertSame([$this->repA->name], $rep->map(fn (ReportRow $row): string => $row->label)->all());
-        $this->assertSame(2 * 86400, $this->report()->totals($rep)->value('finish_seconds'));
+        $this->assertSame(2 * 86400, app(TaskPerformanceReport::class)->totals($rep)->value('finish_seconds'));
     }
 
     #[Test]
@@ -218,8 +216,8 @@ final class TaskTimeToFinishReportTest extends TestCase
         $this->travelTo(Carbon::parse('2026-09-01 09:00:00'));
         $this->tasks->create(['title' => 'Still on it', 'assignee_id' => $this->repA->getKey(), 'due_at' => '2026-09-30 10:00:00'], $this->admin);
 
-        $rows = $this->report()->rows($this->admin, $this->filters());
-        $totals = $this->report()->totals($rows);
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin));
+        $totals = app(TaskPerformanceReport::class)->totals($rows);
 
         $this->assertSame(ReportRow::NOT_MEASURED, $this->row($rows, $this->repA)->value('avg_time_to_finish'));
         $this->assertSame(ReportRow::NOT_MEASURED, $totals->value('avg_time_to_finish'));
@@ -231,16 +229,16 @@ final class TaskTimeToFinishReportTest extends TestCase
     {
         $this->handOutAndFinish();
 
-        $repA = $this->report()->rows($this->repA, $this->filters(viewer: $this->repA));
-        $repB = $this->report()->rows($this->repB, $this->filters(viewer: $this->repB));
-        $manager = $this->report()->rows($this->manager, $this->filters(viewer: $this->manager));
+        $repA = app(TaskPerformanceReport::class)->rows($this->repA, $this->taskReportFilters($this->repA));
+        $repB = app(TaskPerformanceReport::class)->rows($this->repB, $this->taskReportFilters($this->repB));
+        $manager = app(TaskPerformanceReport::class)->rows($this->manager, $this->taskReportFilters($this->manager));
 
         $this->assertSame([$this->repA->name], $repA->map(fn (ReportRow $row): string => $row->label)->all());
-        $this->assertSame(180000, $this->report()->totals($repA)->value('avg_time_to_finish'), 'rep A never sees rep B\'s tasks (D-4)');
+        $this->assertSame(180000, app(TaskPerformanceReport::class)->totals($repA)->value('avg_time_to_finish'), 'rep A never sees rep B\'s tasks (D-4)');
         $this->assertSame([$this->repB->name], $repB->map(fn (ReportRow $row): string => $row->label)->all());
-        $this->assertSame(37800, $this->report()->totals($repB)->value('avg_time_to_finish'));
+        $this->assertSame(37800, app(TaskPerformanceReport::class)->totals($repB)->value('avg_time_to_finish'));
         $this->assertSame([$this->repA->name], $manager->map(fn (ReportRow $row): string => $row->label)->all());
-        $this->assertSame(180000, $this->report()->totals($manager)->value('avg_time_to_finish'));
+        $this->assertSame(180000, app(TaskPerformanceReport::class)->totals($manager)->value('avg_time_to_finish'));
     }
 
     #[Test]
@@ -389,24 +387,5 @@ final class TaskTimeToFinishReportTest extends TestCase
         $this->assertInstanceOf(ReportRow::class, $row, "no report line for {$assignee->name}");
 
         return $row;
-    }
-
-    private function report(): TaskPerformanceReport
-    {
-        return app(TaskPerformanceReport::class);
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function filters(array $data = [], ?User $viewer = null): ReportFilters
-    {
-        return ReportFilters::resolve(
-            $data + ['from' => '2026-09-01', 'to' => '2026-09-30'],
-            $viewer ?? $this->admin,
-            app(RecordVisibilityResolver::class),
-            Task::permissionGroup(),
-            'Asia/Riyadh',
-        );
     }
 }

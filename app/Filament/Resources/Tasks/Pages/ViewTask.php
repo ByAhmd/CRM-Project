@@ -43,9 +43,10 @@ use Livewire\Attributes\On;
  * one click through `tickChecklistItem` (the policy's `tickChecklist`, then
  * TaskService), filters the thread (all · comments · progress updates) and
  * re-renders when the composer or the undo changed the task
- * (TaskActions::CHANGED_EVENT). The thread, its authors and mentions, the
- * checklist with who ticked it, the assigner, the creator, the routine and
- * the series are loaded with the record, so the page costs a fixed number
+ * (TaskActions::CHANGED_EVENT). Every assignee (D-28), the thread, its
+ * authors and mentions, the checklist with who ticked it, the assigner, the
+ * creator, the routine and the series are loaded with the record and again
+ * before every later render (rendering()), so the page costs a fixed number
  * of queries whatever their length.
  */
 final class ViewTask extends ViewRecord
@@ -58,6 +59,8 @@ final class ViewTask extends ViewRecord
 
     /** @var list<string> */
     private const array RELATIONS = [
+        // Every assignee (D-28): the properties list them, the policy checks read them.
+        ...Task::ASSIGNEE_RELATIONS,
         'updates.author',
         'updates.mentions.user',
         'checklistItems.completer',
@@ -83,6 +86,24 @@ final class ViewTask extends ViewRecord
         $record = parent::resolveRecord($key);
 
         return $record instanceof Task ? $record->loadMissing(self::RELATIONS) : $record;
+    }
+
+    /**
+     * Every later request on the page (a status move, the thread filter, an
+     * action's modal) restores the record from its key alone, without its
+     * relations: they are loaded again before each render, so the page keeps
+     * naming every assignee (D-28) — the entries never load a relation
+     * themselves — and still costs a fixed number of queries. After the
+     * assign action the holders are read as they stand now
+     * (afterActionCalled()).
+     */
+    public function rendering(): void
+    {
+        $record = $this->getRecord();
+
+        if ($record instanceof Task) {
+            $record->loadMissing(self::RELATIONS);
+        }
     }
 
     /** The task's title as the page heading; the tab title keeps Filament's "View …". */
@@ -179,10 +200,21 @@ final class ViewTask extends ViewRecord
 
     /**
      * A move of the task's status (or its deletion) opens or closes the
-     * composer's progress mode: the composer is told to look again.
+     * composer's progress mode: the composer is told to look again. The
+     * assign action changed who holds the task and who handed it out (D-14,
+     * D-28) under any relation already loaded: they are dropped, and
+     * rendering() reads them again.
      */
     protected function afterActionCalled(Action $action): void
     {
+        if ($action->getName() === 'assign') {
+            $task = $this->taskRecord();
+
+            foreach ([...Task::ASSIGNEE_RELATIONS, 'assigner'] as $relation) {
+                $task->unsetRelation($relation);
+            }
+        }
+
         if (in_array($action->getName(), self::STATE_CHANGING_ACTIONS, true)) {
             $this->dispatch(TaskActions::CHANGED_EVENT, task: (int) $this->taskRecord()->getKey())->to(TaskComposer::class);
         }

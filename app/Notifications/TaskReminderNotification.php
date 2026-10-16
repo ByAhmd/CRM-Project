@@ -19,7 +19,8 @@ use Illuminate\Notifications\Notification;
 /**
  * "Your task is coming up" — sent once by TaskReminderService when the
  * task's reminder time has passed (decisions A-10, D-10): in-app bell, plus
- * mail when a real mailer is configured. Rendered in the assignee's locale.
+ * mail when a real mailer is configured. Every assignee of a shared task
+ * receives their own (D-28), rendered in that assignee's locale.
  */
 final class TaskReminderNotification extends Notification
 {

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Workspaces;
 
 use App\Enums\Permission;
+use App\Enums\TaskKind;
+use App\Enums\TaskStatus;
 use App\Enums\WorkspacePanel;
 use App\Filament\Pages\AdminHome;
 use App\Filament\Pages\ReportsHome;
@@ -74,7 +76,11 @@ final class WorkspaceHomesTest extends TestCase
 
         $this->assertSame([UpcomingFollowUpsWidget::class], (new TasksDashboard)->getWidgets());
 
+        // The follow-ups list shows only while a follow-up, call or meeting is coming.
         $this->actingAs($employee);
+        $this->assertFalse(UpcomingFollowUpsWidget::canView());
+
+        $this->taskAssignedTo($employee, TaskStatus::Pending, ['kind' => TaskKind::Call, 'due_at' => now()->addDay()]);
         $this->assertTrue(UpcomingFollowUpsWidget::canView());
     }
 

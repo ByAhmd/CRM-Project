@@ -11,6 +11,7 @@ use App\Services\Settings\OrganisationCalendar;
 use App\Services\Settings\SettingsRepository;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -35,6 +36,14 @@ use Illuminate\Support\Facades\DB;
  * them, and each card's checklist progress (D-25) is counted in the same
  * query. Only non-deleted tasks appear.
  *
+ * A shared task (D-28) is in the hands of each of its assignees, so it has a
+ * card in every one of their columns and counts in every one of their totals;
+ * the «unassigned» bucket holds only the tasks nobody holds at all. The
+ * window partitions the assignments — each task's first assignee and each of
+ * its co-assignee rows, one row apiece — rather than the tasks, so the read
+ * stays one statement; every card comes with all its assignees
+ * (Task::ASSIGNEE_RELATIONS), which the cards and the policy checks read.
+ *
  * The header stats fold "today" and "this week" in the organisation timezone
  * in PHP (A-19): the bounds are computed here and the SQL compares only the
  * raw stored columns, never a SQL date function.
@@ -46,7 +55,7 @@ use Illuminate\Support\Facades\DB;
  * cancelled tasks stay off the board. Each column shows its first
  * CARDS_PER_STATUS cards and counts the rest: two queries per column,
  * whatever the number of cards. «مهامي فقط» (mine only) narrows either view
- * to one assignee.
+ * to the tasks one user holds, as first assignee or co-assignee (D-28).
  */
 final class TaskBoardFeed
 {
@@ -65,6 +74,9 @@ final class TaskBoardFeed
         TaskStatus::InProgress,
         TaskStatus::Completed,
     ];
+
+    /** The attribute a by-assignee card carries: the user whose column it is in (null: the unassigned bucket). */
+    private const string COLUMN_ALIAS = 'board_assignee_id';
 
     public function __construct(
         private readonly SettingsRepository $settings,
@@ -102,9 +114,11 @@ final class TaskBoardFeed
     /**
      * The columns of the board: every assignee with open tasks, by name, the
      * unassigned bucket last, each carrying its earliest-due cards and the
-     * count left behind — cut to the board-wide card budget.
+     * count left behind — cut to the board-wide card budget. A shared task
+     * (D-28) has a card in each of its assignees' columns.
      *
-     * With an assignee («مهامي فقط», D-27) the board holds that one column.
+     * With an assignee («مهامي فقط», D-27) the board holds that one column:
+     * every open task the user holds, first assignee or co-assignee.
      *
      * @return array{columns: list<array{assignee: User|null, tasks: list<Task>, total: int, more: int}>, truncated: bool}
      */
@@ -112,15 +126,18 @@ final class TaskBoardFeed
     {
         $assigneeId = $assignee === null ? null : (int) $assignee->getKey();
         $totals = $this->openTotalsPerAssignee($assigneeId);
+        ['tasks' => $cards, 'users' => $users] = $this->topTasksPerAssignee($assigneeId);
 
         /** @var array<string, array{key: string, assignee: User|null, tasks: list<Task>}> $buckets */
         $buckets = [];
 
-        foreach ($this->topTasksPerAssignee($assigneeId) as $task) {
-            $key = (string) ($task->assignee_id ?? '');
+        foreach ($cards as $task) {
+            $columnId = $task->getAttribute(self::COLUMN_ALIAS);
+            $columnUser = $columnId === null ? null : $users->get((int) $columnId);
+            $key = $columnUser === null ? '' : (string) $columnUser->getKey();
 
             if (! array_key_exists($key, $buckets)) {
-                $buckets[$key] = ['key' => $key, 'assignee' => $task->assignee, 'tasks' => []];
+                $buckets[$key] = ['key' => $key, 'assignee' => $columnUser, 'tasks' => []];
             }
 
             $buckets[$key]['tasks'][] = $task;
@@ -179,8 +196,9 @@ final class TaskBoardFeed
      * order — the open columns by due date (no date last), the completed
      * column newest first and limited to the organisation's current week —
      * each with its first CARDS_PER_STATUS cards, their checklist counts
-     * (D-25) and its total. The readable query brings the assignee and the
-     * subject relations the cards and their policy checks read.
+     * (D-25) and its total. The readable query brings the subject relations
+     * the cards and their policy checks read; every assignee of a shared task
+     * (D-28) is loaded here. With an assignee, only the tasks they hold.
      *
      * @param  Builder<Task>  $readable  TaskResource::getEloquentQuery() — never an unscoped query
      * @return list<array{status: TaskStatus, tasks: list<Task>, total: int, more: int}>
@@ -190,10 +208,10 @@ final class TaskBoardFeed
         $columns = [];
 
         foreach (self::STATUS_COLUMNS as $status) {
-            $query = (clone $readable)->where('tasks.status', $status->value);
+            $query = (clone $readable)->where('tasks.status', $status->value)->with(Task::ASSIGNEE_RELATIONS);
 
             if ($assignee !== null) {
-                $query->where('tasks.assignee_id', $assignee->getKey());
+                $query->assignedTo($assignee);
             }
 
             if ($status === TaskStatus::Completed) {
@@ -239,59 +257,72 @@ final class TaskBoardFeed
 
     /**
      * Every assignee's earliest-due open tasks, at most TASKS_PER_ASSIGNEE
-     * each, in one window-function query: the subquery ranks the open tasks
-     * inside each assignee bucket by due date (nulls last, ties by id) and
-     * the outer query hydrates only the ranked heads, with the assignee and
-     * the subject relations the card and its `view` policy check need. The
-     * assignees come in one further query that includes soft-deleted users:
-     * a deleted user's tasks still carry their id (a soft delete does not
-     * fire the column's nullOnDelete), and without the user they would pose
-     * as a second «unassigned» column.
+     * each, in one window-function query: the subquery ranks the open
+     * assignments (openAssignments()) inside each assignee's bucket by due
+     * date (nulls last, ties by task id) and the outer query hydrates only the
+     * ranked heads — a shared task (D-28) once for every column it heads, each
+     * row carrying that column's user under COLUMN_ALIAS — with the subject
+     * relations the card and its `view` policy check need and the
+     * co-assignees. The users come in one further query that includes
+     * soft-deleted accounts: a deleted user's tasks still carry their id (a
+     * soft delete does not fire the column's nullOnDelete), and without the
+     * user they would pose as a second «unassigned» column. They name the
+     * columns and stand in as each card's first assignee.
      *
-     * @return EloquentCollection<int, Task>
+     * @return array{tasks: EloquentCollection<int, Task>, users: EloquentCollection<int, User>}
      */
-    private function topTasksPerAssignee(?int $assigneeId): EloquentCollection
+    private function topTasksPerAssignee(?int $assigneeId): array
     {
-        $ranked = DB::table('tasks')
-            ->whereNull('deleted_at')
-            ->whereIn('status', Task::openStatusValues())
-            ->when($assigneeId !== null, static fn ($query) => $query->where('assignee_id', $assigneeId))
-            ->select('id')
-            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY `assignee_id` ORDER BY `due_at` IS NULL, `due_at`, `id`) AS `bucket_position`');
+        $ranked = DB::query()
+            ->fromSub($this->openAssignments($assigneeId), 'assignments')
+            ->select(['task_id', 'user_id'])
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY `user_id` ORDER BY `due_at` IS NULL, `due_at`, `task_id`) AS `bucket_position`');
 
-        $heads = DB::table($ranked, 'ranked')
+        $heads = DB::query()
+            ->fromSub($ranked, 'ranked')
             ->where('bucket_position', '<=', self::TASKS_PER_ASSIGNEE)
-            ->select('id');
+            ->select(['task_id', 'user_id']);
 
         // The checklist counts (D-25) come after the select: a select() after
         // withCount() would drop them.
         $tasks = TaskChecklist::withCounts(
             Task::query()
-                ->joinSub($heads, 'ranked', 'ranked.id', '=', 'tasks.id')
-                ->with(['deal', 'lead', 'contact', 'account'])
-                ->select('tasks.*'),
+                ->joinSub($heads, 'heads', 'heads.task_id', '=', 'tasks.id')
+                ->with(['deal', 'lead', 'contact', 'account', 'coAssignees'])
+                ->select('tasks.*')
+                ->addSelect('heads.user_id AS '.self::COLUMN_ALIAS),
         )
             ->orderByRaw('`tasks`.`due_at` IS NULL')
             ->orderBy('tasks.due_at')
             ->orderBy('tasks.id')
             ->get();
 
-        $assigneeIds = $tasks->pluck('assignee_id')->filter()->unique()->values()->all();
-
-        $assignees = $assigneeIds === []
-            ? new EloquentCollection
-            : User::withTrashed()->whereKey($assigneeIds)->get()->keyBy(static fn (User $user): int => (int) $user->getKey());
+        /** @var array<int, true> $userIds */
+        $userIds = [];
 
         foreach ($tasks as $task) {
-            $task->setRelation('assignee', $task->assignee_id === null ? null : $assignees->get((int) $task->assignee_id));
+            foreach ([$task->assignee_id, $task->getAttribute(self::COLUMN_ALIAS)] as $userId) {
+                if ($userId !== null) {
+                    $userIds[(int) $userId] = true;
+                }
+            }
         }
 
-        return $tasks;
+        $users = $userIds === []
+            ? new EloquentCollection
+            : User::withTrashed()->whereKey(array_keys($userIds))->get()->keyBy(static fn (User $user): int => (int) $user->getKey());
+
+        foreach ($tasks as $task) {
+            $task->setRelation('assignee', $task->assignee_id === null ? null : $users->get((int) $task->assignee_id));
+        }
+
+        return ['tasks' => $tasks, 'users' => $users];
     }
 
     /**
-     * How many open tasks each assignee holds, keyed by assignee id ('' for
-     * the unassigned bucket), so a column can say what the cap hid.
+     * How many open tasks each assignee holds — a shared task (D-28) counting
+     * for each of them — keyed by user id ('' for the tasks nobody holds), so
+     * a column can say what the cap hid.
      *
      * @return array<string, int>
      */
@@ -299,19 +330,56 @@ final class TaskBoardFeed
     {
         $totals = [];
 
-        $rows = Task::query()
-            ->open()
-            ->when($assigneeId !== null, static fn (Builder $query): Builder => $query->where('assignee_id', $assigneeId))
-            ->toBase()
-            ->selectRaw('`assignee_id`, COUNT(*) AS `total`')
-            ->groupBy('assignee_id')
+        $rows = DB::query()
+            ->fromSub($this->openAssignments($assigneeId), 'assignments')
+            ->selectRaw('`user_id`, COUNT(*) AS `total`')
+            ->groupBy('user_id')
             ->get();
 
         foreach ($rows as $row) {
-            $totals[(string) ($row->assignee_id ?? '')] = (int) $row->total;
+            $totals[(string) ($row->user_id ?? '')] = (int) $row->total;
         }
 
         return $totals;
+    }
+
+    /**
+     * The open, non-deleted tasks as assignments (D-28): one row per task and
+     * holder — `task_id`, `due_at` and `user_id` — for the first assignee and
+     * for each co-assignee, and one row with a null `user_id` for a task
+     * nobody holds at all. With an assignee, only that user's rows.
+     */
+    private function openAssignments(?int $assigneeId): QueryBuilder
+    {
+        $open = Task::openStatusValues();
+
+        $first = DB::table('tasks')
+            ->whereNull('tasks.deleted_at')
+            ->whereIn('tasks.status', $open)
+            ->when(
+                $assigneeId !== null,
+                static fn (QueryBuilder $query): QueryBuilder => $query->where('tasks.assignee_id', $assigneeId),
+                // A task without a first assignee belongs to the unassigned
+                // bucket only when no co-assignee holds it either.
+                static fn (QueryBuilder $query): QueryBuilder => $query->where(static function (QueryBuilder $held): void {
+                    $held->whereNotNull('tasks.assignee_id')
+                        ->orWhereNotExists(static function (QueryBuilder $coAssigned): void {
+                            $coAssigned->selectRaw('1')
+                                ->from('task_co_assignees')
+                                ->whereColumn('task_co_assignees.task_id', 'tasks.id');
+                        });
+                }),
+            )
+            ->selectRaw('`tasks`.`id` AS `task_id`, `tasks`.`due_at` AS `due_at`, `tasks`.`assignee_id` AS `user_id`');
+
+        $coAssigned = DB::table('task_co_assignees')
+            ->join('tasks', 'tasks.id', '=', 'task_co_assignees.task_id')
+            ->whereNull('tasks.deleted_at')
+            ->whereIn('tasks.status', $open)
+            ->when($assigneeId !== null, static fn (QueryBuilder $query): QueryBuilder => $query->where('task_co_assignees.user_id', $assigneeId))
+            ->selectRaw('`task_co_assignees`.`task_id` AS `task_id`, `tasks`.`due_at` AS `due_at`, `task_co_assignees`.`user_id` AS `user_id`');
+
+        return $first->unionAll($coAssigned);
     }
 
     /** The first moment of the organisation's current week, in the application timezone the columns are stored in. */

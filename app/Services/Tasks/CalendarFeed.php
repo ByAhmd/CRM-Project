@@ -46,7 +46,9 @@ use LogicException;
  * whether it was cut so the page can tell the viewer to narrow the view.
  * Whether a task is draggable is TaskPolicy::update resolved once for the
  * range — the `task.update` key and the viewer's reach over assignees from
- * RecordVisibilityResolver — never one policy call per entry.
+ * RecordVisibilityResolver, every assignee of a shared task counting (D-28),
+ * with the range's co-assignees read in one query — never one policy call
+ * per entry.
  *
  * The range arrives in the organisation timezone (what the browser shows)
  * while every stored date is in the application timezone, so the bounds are
@@ -208,12 +210,16 @@ final class CalendarFeed
             ->limit($limit)
             ->get();
 
+        // The co-assignees of the tasks kept (D-28), in one query for the
+        // range: whether a task was handed out to the viewer, which the
+        // editability below asks, reads them.
         return $runningInto
             ->concat($startingInside)
             ->concat($dueInside)
             ->sort(static fn (Task $a, Task $b): int => [self::taskMoment($a), (int) $a->getKey()] <=> [self::taskMoment($b), (int) $b->getKey()])
             ->take($limit)
-            ->values();
+            ->values()
+            ->load('coAssignees');
     }
 
     /**
@@ -242,10 +248,11 @@ final class CalendarFeed
 
     /**
      * TaskPolicy::update for every task of the range, resolved once: a
-     * trashed task is frozen, the viewer needs `task.update`, the assignee
-     * must be inside the viewer's write reach, and a task handed out to the
-     * viewer by someone else stays its assigner's unless the viewer holds
-     * `task.assign` (D-14 amendment, 2026-09-28).
+     * trashed task is frozen, the viewer needs `task.update`, one of the
+     * task's assignees — the first or, on a shared task, a co-assignee
+     * (D-28) — must be inside the viewer's write reach, and a task handed out
+     * to the viewer by someone else stays its assigner's unless the viewer
+     * holds `task.assign` (D-14 amendment, 2026-09-28).
      *
      * @return Closure(Task): bool
      */
@@ -259,7 +266,7 @@ final class CalendarFeed
         $mayEditHandedOut = $viewer->can(Permission::TaskAssign->value);
 
         return static fn (Task $task): bool => ! $task->trashed()
-            && $writableOwner($task->assignee_id === null ? null : (int) $task->assignee_id)
+            && $writableOwner($task->assignee_id === null ? null : (int) $task->assignee_id, (int) $task->getKey())
             && ($mayEditHandedOut || ! $task->isHandedOutTo($viewer));
     }
 

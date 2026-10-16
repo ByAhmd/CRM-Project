@@ -101,6 +101,7 @@ enum ActivityLogEvent: string implements HasLabel
     case TaskCommented = 'task.commented';
     case TaskChecklistChanged = 'task.checklist_changed';
     case TaskChecklistTicked = 'task.checklist_ticked';
+    case TaskAssigneesChanged = 'task.assignees_changed';
 
     // Notes
     case NoteCreated = 'note.created';

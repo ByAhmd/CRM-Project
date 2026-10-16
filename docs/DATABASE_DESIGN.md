@@ -9,7 +9,8 @@ and the `tests/Feature/QualityPass/Schema` probes. Later owner decisions amend i
 event (D-20), `tasks.assigned_at` (D-21), `task_templates`, `task_template_user` and `tasks.template_id` (D-22) —
 and the migrations dated 2026-10-05: `task_checklist_items` and `task_template_checklist_items` (D-25), plus the data
 migration `2026_10_05_100001_grant_workspace_permissions_to_existing_roles` (D-23), which changes no table: it adds the
-four `workspace.*` rows to `permissions` and grants them to the existing roles (docs/PERMISSIONS.md, *Workspaces*).
+four `workspace.*` rows to `permissions` and grants them to the existing roles (docs/PERMISSIONS.md, *Workspaces*), and
+the migration dated 2026-10-15: `task_co_assignees` (D-28).
 
 ## Conventions
 
@@ -325,6 +326,25 @@ service as one `settings.lookup_updated` entry.
 timestamps. Written by `RoutineTaskService` (sync), one task per row on each scheduled day. Migration
 `2026_10_04_300002`.
 
+### `task_co_assignees` (shared tasks — D-28)
+
+| Column | Type | Notes |
+|---|---|---|
+| `task_id` | FK→tasks CASCADE | owned child (tasks are only soft-deleted, so a shared task keeps its assignees through a delete and a restore) |
+| `user_id` | FK→users CASCADE | the further assignee; I `task_co_assignees_user_id_task_id_index` (`user_id`,`task_id`) answers "which tasks does this user share" |
+| `assigned_by` | FK→users N SET NULL | I `task_co_assignees_assigned_by_index`; who added them (D-14) |
+| `assigned_at` | DATETIME | when the task reached them — the start of their time to finish (D-21) |
+
+U `task_co_assignees_task_id_user_id_unique` (`task_id`,`user_id`). No Eloquent timestamps. `tasks.assignee_id` keeps the
+first assignee; every other holder of the task is a row here, never the first assignee too
+(`TaskCoAssigneeGuardObserver`). Rows are added by `TaskService` (`assignee_ids`) and `TaskRecurrence` (the next
+occurrence's copy) only; they are removed by `TaskService` (an edit of `assignee_ids`) and by the guard observer
+whenever the task's first assignee changes (`RecordAssignmentService`, on every path — the assign and bulk assign
+actions, the Sales tabs' owner field, an edit), which drops the row of whoever became first. Not `LogsActivity`: a
+change of co-assignees is recorded on the task as `task.assignees_changed`, a change of the first assignee as
+`task.assigned`. `Task` implements `SharesOwnership`, so
+`RecordVisibilityResolver` reaches a task through any of its assignees. Migration `2026_10_15_100001`.
+
 ### `task_checklist_items` (task checklists — D-25)
 
 | Column | Type | Notes |
@@ -383,6 +403,7 @@ on the routine (`settings.lookup_updated`: `checklist_added`, `checklist_removed
 - Task `hasMany` updates (`task_updates`, newest first), `belongsTo` assigner (`assigned_by`), `belongsTo` template (`template_id`, D-22); TaskUpdate `belongsTo` task, author, `hasMany` mentions (`task_update_mentions`, D-20).
 - TaskTemplate `belongsToMany` assignees (`task_template_user`), `belongsTo` assigner (`assigned_by`, soft-deleted users included), `hasMany` tasks, `hasMany` checklistItems (`task_template_checklist_items`, in order, D-25).
 - Task `hasMany` checklistItems (`task_checklist_items`, in order, D-25); TaskChecklistItem `belongsTo` task, completer (`completed_by`, soft-deleted users included).
+- Task `belongsToMany` coAssignees (`task_co_assignees` with `assigned_by` and `assigned_at`, in the order added, soft-deleted users included) and `hasMany` coAssigneeRows (D-28); TaskCoAssignee `belongsTo` task, user, assigner.
 - Custom field values `morphTo` entity, `belongsTo` field.
 
 ## 6. Data integrity rules enforced outside the schema (services + observers + tests)

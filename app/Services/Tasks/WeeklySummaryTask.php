@@ -11,7 +11,8 @@ use Carbon\CarbonImmutable;
  * D-18): the task, its assignee's name (null when nobody is assigned), and
  * the moment the list is about — the due date of an overdue task, the last
  * progress entry or comment of a stalled one — in the organisation timezone,
- * with the whole days elapsed since then.
+ * with the whole days elapsed since then. A shared task (D-28) is named after
+ * its first assignee, and `otherAssignees` says how many more hold it.
  */
 final readonly class WeeklySummaryTask
 {
@@ -21,5 +22,6 @@ final readonly class WeeklySummaryTask
         public ?string $assigneeName,
         public CarbonImmutable $since,
         public int $days,
+        public int $otherAssignees = 0,
     ) {}
 }

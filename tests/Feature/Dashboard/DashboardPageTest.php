@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Enums\Permission;
+use App\Enums\TaskKind;
+use App\Enums\TaskStatus;
 use App\Filament\Pages\SalesDashboard;
 use App\Filament\Pages\TasksDashboard;
 use App\Filament\Widgets\ActivityCountsWidget;
@@ -19,6 +21,7 @@ use App\Models\Lead;
 use App\Models\Pipeline;
 use App\Models\User;
 use App\Services\Statistics\DashboardFilters;
+use App\Services\Statistics\TaskMetrics;
 use App\Support\Filament\PanelUrl;
 use Closure;
 use Filament\Forms\Components\Select;
@@ -103,6 +106,9 @@ final class DashboardPageTest extends TestCase
             $this->readOnly(),
             $this->employee(),
         ] as $user) {
+            // The follow-ups list shows only with something in it (2026-10-15).
+            $this->taskAssignedTo($user, TaskStatus::Pending, ['kind' => TaskKind::FollowUp, 'due_at' => now()->addDays(2)]);
+
             $this->actingAs($user)
                 ->get(TasksDashboard::getUrl())
                 ->assertOk()
@@ -117,6 +123,42 @@ final class DashboardPageTest extends TestCase
 
             Livewire::actingAs($user)->test(TasksDashboard::class)->assertOk();
         }
+    }
+
+    /**
+     * The owner's report (2026-10-15): the follow-ups list sat empty on the
+     * Tasks home because the team's work is plain tasks, which My Work lists.
+     * It counts only follow-ups, calls and meetings due in the coming days and
+     * shows only when there is one; a plain task never brings it.
+     */
+    #[Test]
+    public function the_follow_ups_list_shows_only_when_a_follow_up_call_or_meeting_is_coming(): void
+    {
+        $admin = $this->admin();
+        $this->taskAssignedTo($admin, TaskStatus::Pending, ['kind' => TaskKind::Task, 'due_at' => now()->addDay()]);
+        $this->taskAssignedTo($admin, TaskStatus::Completed, ['kind' => TaskKind::Meeting, 'due_at' => now()->addDay()]);
+        $this->taskAssignedTo($admin, TaskStatus::Pending, ['kind' => TaskKind::Call, 'due_at' => now()->addDays(TaskMetrics::UPCOMING_DAYS + 2)]);
+
+        $this->actingAs($admin)
+            ->get(TasksDashboard::getUrl())
+            ->assertOk()
+            ->assertSee(__('my_work.pages.title'))
+            ->assertDontSee(self::widgetName(UpcomingFollowUpsWidget::class), false);
+
+        $this->assertFalse(UpcomingFollowUpsWidget::canView());
+
+        $this->taskAssignedTo($admin, TaskStatus::Pending, ['kind' => TaskKind::Meeting, 'title' => 'Supplier meeting', 'due_at' => now()->addDays(3)]);
+
+        $this->actingAs($admin)
+            ->get(TasksDashboard::getUrl())
+            ->assertOk()
+            ->assertSee(self::widgetName(UpcomingFollowUpsWidget::class), false);
+
+        // The widget itself renders lazily; its table lists the meeting.
+        Livewire::actingAs($admin)
+            ->test(UpcomingFollowUpsWidget::class)
+            ->assertSee(__('dashboard.tables.upcoming_follow_ups'))
+            ->assertSee('Supplier meeting');
     }
 
     #[Test]

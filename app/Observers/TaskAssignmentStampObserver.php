@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Observers;
 
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 
 /**
  * Keeps `tasks.assigned_at` — when the task reached its current assignee —
@@ -18,6 +19,12 @@ use App\Models\Task;
  * TaskRecurrence's next occurrence, routine tasks, any importer and the
  * factories. The task performance report reads it as the start of the time
  * to finish.
+ *
+ * A co-assignee of a shared task who becomes its first assignee (D-28) has
+ * held the task since their own row's `assigned_at`, so the task carries that
+ * moment over rather than restarting their time to finish; their row is
+ * still there at this point (TaskCoAssigneeGuardObserver removes it once the
+ * save is done), so this costs one query only when the assignee changes.
  */
 final class TaskAssignmentStampObserver
 {
@@ -37,6 +44,19 @@ final class TaskAssignmentStampObserver
             return;
         }
 
-        $task->assigned_at = $task->getAttribute('assignee_id') === null ? null : $task->freshTimestamp();
+        $assigneeId = $task->getAttribute('assignee_id');
+
+        if ($assigneeId === null) {
+            $task->assigned_at = null;
+
+            return;
+        }
+
+        $heldSince = TaskCoAssignee::query()
+            ->where('task_id', $task->getKey())
+            ->where('user_id', $assigneeId)
+            ->value('assigned_at');
+
+        $task->assigned_at = $heldSince ?? $task->freshTimestamp();
     }
 }

@@ -28,7 +28,10 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * scope() is the one gate every statistics query passes through: it starts
  * from RecordVisibilityResolver::visible() and lets the owner and team
- * filters narrow that scope further, never past it.
+ * filters narrow that scope further, never past it. narrow() is those two
+ * filters alone, for a report whose lines follow another user column than
+ * the owner — the task report's assignees of a shared task (D-28) — on a
+ * query that already starts from visible().
  */
 final readonly class ReportFilters
 {
@@ -117,14 +120,30 @@ final readonly class ReportFilters
         $model = $query->getModel();
         assert($model instanceof OwnedRecord);
 
-        $column = $query->qualifyColumn($model::ownerColumn());
+        return $this->narrow($viewer, $visibility, $query, $query->qualifyColumn($model::ownerColumn()), $model::permissionGroup());
+    }
 
+    /**
+     * The owner and team filters on a user column of a query already inside
+     * the viewer's scope: the record's owner column for scope(), or another
+     * column naming the user a line is about — the assignee of each
+     * assignment on the task report, where a shared task has several (D-28).
+     *
+     * @template TModel of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<TModel>  $query
+     * @param  string  $column  A qualified column holding a user id.
+     * @param  string  $permissionGroup  The permission group whose assignable users bound the owner filter.
+     * @return Builder<TModel>
+     */
+    public function narrow(User $viewer, RecordVisibilityResolver $visibility, Builder $query, string $column, string $permissionGroup): Builder
+    {
         if ($this->ownerId !== null) {
             // The owner filter is a subset of the assignable users; re-checking
             // it here keeps a stale or forged id from reaching past the scope.
             $query
                 ->where($column, $this->ownerId)
-                ->whereIn($column, $visibility->assignableUsers($viewer, $model::permissionGroup())->select('users.id'));
+                ->whereIn($column, $visibility->assignableUsers($viewer, $permissionGroup)->select('users.id'));
         }
 
         if ($this->teamId !== null) {

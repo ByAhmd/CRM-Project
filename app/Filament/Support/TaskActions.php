@@ -10,7 +10,6 @@ use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Enums\TaskTransition;
-use App\Exceptions\Access\UnassignableUserException;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
@@ -42,7 +41,6 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Support\Exceptions\Halt;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -726,15 +724,17 @@ final class TaskActions
     }
 
     /**
-     * Quick add (D-27): a small dialog — the title, the assignee (the reader;
-     * a holder of `task.assign` may choose anyone in their reach, D-14), the
-     * due date as chips (or a picked date) and the priority — creating
-     * through TaskService::create(), which re-checks the assignee. «خيارات
-     * أكثر» validates the same fields, keeps them in the reader's session and
-     * opens the full create page with a one-time token only (takePrefill()
-     * and createPrefill() re-validate them there). The button carries
-     * data-crm-shortcut="quick-add", so the N key and the phone bar's «+»
-     * open it in place on any page that offers it (tasks-shortcuts).
+     * Quick add (D-27): a small dialog — the title, the assignees (the
+     * reader; a holder of `task.assign` may choose anyone in their reach,
+     * D-14, and several people to share the task, D-28 — the first chosen is
+     * the one it is filed under), the due date as chips (or a picked date)
+     * and the priority — creating through TaskService::create(), which
+     * re-checks every assignee. «خيارات أكثر» validates the same fields, keeps
+     * them in the reader's session and opens the full create page with a
+     * one-time token only (takePrefill() and createPrefill() re-validate them
+     * there). The button carries data-crm-shortcut="quick-add", so the N key
+     * and the phone bar's «+» open it in place on any page that offers it
+     * (tasks-shortcuts).
      */
     public static function quickAdd(): Action
     {
@@ -745,7 +745,7 @@ final class TaskActions
             ->modalHeading(__('tasks.actions.quick_add_heading'))
             ->modalSubmitActionLabel(__('tasks.actions.add_submit'))
             ->fillForm(static fn (): array => [
-                'assignee_id' => auth()->id(),
+                TaskForm::ASSIGNEES => auth()->id() === null ? [] : [(int) auth()->id()],
                 'due_shortcut' => DueShortcut::None->value,
                 'priority' => TaskPriority::Medium->value,
             ])
@@ -757,9 +757,10 @@ final class TaskActions
                     ->maxLength(200)
                     ->autofocus(),
 
-                Select::make('assignee_id')
-                    ->label(__('tasks.fields.assignee'))
-                    ->helperText(__('tasks.helpers.quick_add_assignee'))
+                Select::make(TaskForm::ASSIGNEES)
+                    ->label(__('tasks.fields.assignees'))
+                    ->helperText(__('tasks.helpers.quick_add_assignees'))
+                    ->multiple()
                     ->options(static fn (): array => self::quickAddAssignees())
                     ->required()
                     ->searchable()
@@ -802,13 +803,8 @@ final class TaskActions
                     return;
                 }
 
-                try {
-                    TaskForm::saving(static fn (): Task => app(TaskService::class)->create($attributes, $actor));
-                } catch (UnassignableUserException $exception) {
-                    Notification::make()->title($exception->getMessage())->danger()->send();
-
-                    throw new Halt;
-                }
+                // A refused assignee (D-4, D-28) becomes a danger notice and keeps the dialog open (TaskForm::saving()).
+                TaskForm::saving(static fn (): Task => app(TaskService::class)->create($attributes, $actor));
 
                 Notification::make()->title(__('tasks.notifications.added'))->success()->send();
             });
@@ -840,12 +836,14 @@ final class TaskActions
 
     /**
      * The full create form's state from the values quick add's «خيارات
-     * أكثر» kept (`title`, `assignee`, `due` as "Y-m-d H:i" on the
-     * organisation clock, `priority`) — each value validated and dropped
-     * when it is not what the form would accept: a title of at most 200
-     * characters, a known priority, a real moment, and an assignee only for
-     * a holder of `task.assign` and only within their reach. The create page
-     * fills these over its defaults; TaskService checks again on save.
+     * أكثر» kept (`title`, `assignees` — every assignee's id, the first one
+     * first (D-28) — `due` as "Y-m-d H:i" on the organisation clock,
+     * `priority`) — each value validated and dropped when it is not what the
+     * form would accept: a title of at most 200 characters, a known
+     * priority, a real moment, and assignees only for a holder of
+     * `task.assign`, each id well formed and within their reach, in the
+     * order chosen. The create page fills these over its defaults;
+     * TaskService checks again on save.
      *
      * @param  array<mixed>  $query
      * @return array<string, mixed>
@@ -872,14 +870,42 @@ final class TaskActions
             $prefill['due_at'] = app(OrganisationCalendar::class)->stored($due)->format('Y-m-d H:i:s');
         }
 
-        $assignee = $query['assignee'] ?? null;
+        $assignees = self::reachableAssignees($query['assignees'] ?? null, $actor);
 
-        if (is_string($assignee) && ctype_digit($assignee) && $actor->can(Permission::TaskAssign->value)
-            && app(RecordVisibilityResolver::class)->assignableUsers($actor, Task::permissionGroup())->whereKey((int) $assignee)->exists()) {
-            $prefill[OwnerSelect::FIELD] = (int) $assignee;
+        if ($assignees !== []) {
+            $prefill[TaskForm::ASSIGNEES] = $assignees;
         }
 
         return $prefill;
+    }
+
+    /**
+     * The well-formed ids among the given ones that the actor may hand a
+     * task to (D-4, D-28): only for a holder of `task.assign`, only users in
+     * their reach (RecordVisibilityResolver::assignableUsers), each once, in
+     * the order given. Anything else is dropped.
+     *
+     * @return list<int>
+     */
+    private static function reachableAssignees(mixed $ids, User $actor): array
+    {
+        if (! is_array($ids) || ! $actor->can(Permission::TaskAssign->value)) {
+            return [];
+        }
+
+        $ids = array_values(array_unique(array_filter(self::userIds($ids), static fn (int $id): bool => $id > 0)));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $reachable = app(RecordVisibilityResolver::class)->assignableUsers($actor, Task::permissionGroup())
+            ->whereKey($ids)
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        return array_values(array_filter($ids, static fn (int $id): bool => in_array($id, $reachable, true)));
     }
 
     /**
@@ -1000,7 +1026,7 @@ final class TaskActions
     }
 
     /**
-     * Who quick add offers as assignee to a holder of `task.assign`: the
+     * Who quick add offers as assignees to a holder of `task.assign`: the
      * active users in their reach (RecordVisibilityResolver::assignableUsers,
      * the same list the full form offers), the reader first.
      *
@@ -1027,16 +1053,18 @@ final class TaskActions
     }
 
     /**
-     * What quick add hands TaskService::create(): the submitted assignee only
-     * from a holder of `task.assign` (the service re-checks the reach), the
-     * reader otherwise; the due moment from the chip.
+     * What quick add hands TaskService::create(): the submitted assignees —
+     * the first one first (D-28) — only from a holder of `task.assign` (the
+     * service re-checks each against the reach), the reader otherwise, and
+     * the reader too when nothing well formed was sent; the due moment from
+     * the chip.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private static function quickAddAttributes(array $data, User $actor): array
     {
-        $assigneeId = $data['assignee_id'] ?? null;
+        $assigneeIds = self::canAssign() ? array_values(array_unique(self::idList($data[TaskForm::ASSIGNEES] ?? []))) : [];
         $shortcut = self::shortcut($data['due_shortcut'] ?? null) ?? DueShortcut::None;
         $priority = $data['priority'] ?? null;
 
@@ -1045,9 +1073,7 @@ final class TaskActions
             'kind' => TaskKind::Task->value,
             'priority' => ($priority instanceof TaskPriority ? $priority : TaskPriority::tryFrom((string) $priority) ?? TaskPriority::Medium)->value,
             'due_at' => app(DueShortcuts::class)->resolve($shortcut, null, self::dateString($data['due_on'] ?? null)),
-            'assignee_id' => self::canAssign() && (is_int($assigneeId) || (is_string($assigneeId) && ctype_digit($assigneeId)))
-                ? (int) $assigneeId
-                : (int) $actor->getKey(),
+            TaskForm::ASSIGNEES => $assigneeIds === [] ? [(int) $actor->getKey()] : $assigneeIds,
         ];
     }
 
@@ -1069,21 +1095,24 @@ final class TaskActions
     }
 
     /**
-     * The quick-add values as the create page reads them (createPrefill()).
+     * The quick-add values as the create page reads them (createPrefill()):
+     * the assignees as a list of ids, the first one first (D-28), kept only
+     * for a holder of `task.assign`.
      *
      * @param  array<string, mixed>  $attributes
-     * @return array<string, string>
+     * @return array<string, string|list<string>>
      */
     private static function createQuery(array $attributes): array
     {
         $dueAt = $attributes['due_at'] ?? null;
+        $assignees = self::canAssign() ? self::idList($attributes[TaskForm::ASSIGNEES] ?? []) : [];
 
         return array_filter([
             'title' => (string) $attributes['title'],
             'priority' => (string) $attributes['priority'],
             'due' => $dueAt instanceof DateTimeInterface ? app(OrganisationCalendar::class)->local($dueAt)->format('Y-m-d H:i') : '',
-            'assignee' => self::canAssign() ? (string) $attributes['assignee_id'] : '',
-        ], static fn (string $value): bool => $value !== '');
+            'assignees' => array_map(static fn (int $id): string => (string) $id, $assignees),
+        ], static fn (string|array $value): bool => $value !== '' && $value !== []);
     }
 
     /** "Y-m-d H:i" on the organisation clock, strictly; null for anything else. */

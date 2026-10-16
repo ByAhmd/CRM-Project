@@ -16,7 +16,10 @@ use Illuminate\Database\Eloquent\Model;
  * Creating a task goes through TaskService, never Model::create, so the
  * assignee defaults to the actor, the recurrence settings are normalised and
  * the creation is audited (A-10). The linked-record ids were re-checked by
- * the pickers against the actor's reach.
+ * the pickers against the actor's reach. A holder of `task.assign` sends
+ * every assignee as `assignee_ids` (D-28), the first one first; the service
+ * checks each against the actor's reach, and a refusal becomes a danger
+ * notification (TaskForm::saving()).
  */
 final class CreateTask extends CreateRecord
 {
@@ -39,6 +42,10 @@ final class CreateTask extends CreateRecord
      * and are filled over the form's defaults only as far as
      * TaskActions::takePrefill() validates them. The save goes through
      * TaskService like any other.
+     *
+     * The values are written whole and then hydrated, key by key: the
+     * assignees (D-28) are a list, which fillPartially() would flatten into
+     * `assignee_ids.0`, `assignee_ids.1` … and so never match the field.
      */
     protected function afterFill(): void
     {
@@ -50,9 +57,17 @@ final class CreateTask extends CreateRecord
 
         $prefill = TaskActions::takePrefill(request()->query(TaskActions::PREFILL_PARAMETER), $actor);
 
-        if ($prefill !== []) {
-            $this->form->fillPartially($prefill, array_keys($prefill));
+        if ($prefill === []) {
+            return;
         }
+
+        $statePath = $this->form->getStatePath();
+
+        $this->form->partialRawState($prefill);
+        $this->form->hydrateStatePartially(array_map(
+            static fn (string $key): string => filled($statePath) ? "{$statePath}.{$key}" : $key,
+            array_keys($prefill),
+        ));
     }
 
     protected function getRedirectUrl(): string

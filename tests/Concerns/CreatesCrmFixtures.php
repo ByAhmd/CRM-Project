@@ -21,9 +21,12 @@ use App\Models\LeadStatus;
 use App\Models\PipelineStage;
 use App\Models\Task;
 use App\Models\TaskChecklistItem;
+use App\Models\TaskCoAssignee;
 use App\Models\TaskUpdate;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Statistics\Reports\ReportFilters;
 use App\Support\Filament\WorkspacePanelRegistry;
 use Carbon\CarbonInterface;
 use Database\Seeders\ActivityTypeSeeder;
@@ -240,6 +243,25 @@ trait CreatesCrmFixtures
         ]);
     }
 
+    /**
+     * Shares the task with further assignees (D-28), each row as TaskService
+     * writes it: added by the task's assigner (or its creator) and reached by
+     * it now — or at the given moment.
+     */
+    protected function shareTask(Task $task, User ...$coAssignees): Task
+    {
+        foreach ($coAssignees as $user) {
+            TaskCoAssignee::query()->create([
+                'task_id' => $task->getKey(),
+                'user_id' => $user->getKey(),
+                'assigned_by' => $task->assigned_by ?? $task->created_by,
+                'assigned_at' => now(),
+            ]);
+        }
+
+        return $task->unsetRelation('coAssignees');
+    }
+
     /** A thread entry (progress or comment) on the task at a fixed moment, as TaskService writes it. */
     protected function threadEntryOn(Task $task, User $author, CarbonInterface $at, TaskUpdateKind $kind = TaskUpdateKind::Comment, string $body = 'Entry', ?TaskStatus $status = null): TaskUpdate
     {
@@ -395,5 +417,23 @@ trait CreatesCrmFixtures
         return $this->withHeaders(['X-Livewire' => 'true'])->postJson(app(HandleRequests::class)->getUpdateUri(), [
             'components' => [['snapshot' => $snapshot, 'updates' => [], 'calls' => []]],
         ]);
+    }
+
+    /**
+     * The task report's filters (D-21, D-28) as the viewer resolves them —
+     * September 2026 on the organisation clock unless $data says otherwise,
+     * the period the task report tests pin their tasks to.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function taskReportFilters(User $viewer, array $data = []): ReportFilters
+    {
+        return ReportFilters::resolve(
+            $data + ['from' => '2026-09-01', 'to' => '2026-09-30'],
+            $viewer,
+            app(RecordVisibilityResolver::class),
+            Task::permissionGroup(),
+            'Asia/Riyadh',
+        );
     }
 }

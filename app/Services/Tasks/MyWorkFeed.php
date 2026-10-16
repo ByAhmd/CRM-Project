@@ -10,6 +10,7 @@ use App\Enums\Permission;
 use App\Enums\TaskStatus;
 use App\Enums\VisibilityLevel;
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Settings\OrganisationCalendar;
@@ -42,6 +43,14 @@ use Illuminate\Support\Facades\DB;
  * first TASKS_PER_BUCKET tasks of every bucket (a window function, as the
  * tasks board caps its columns) with their checklist counts, and one per
  * eager-loaded relation.
+ *
+ * A shared task (D-28) is the work of every assignee: «مهامي» lists the tasks
+ * the reader holds as the first assignee or as a co-assignee
+ * (Task::assignedTo()); «أسندتُها» the ones they handed to someone else,
+ * either as the task's assigner or by adding a colleague to it; and every
+ * row — in each view, and the task an action resolves — comes with all its
+ * assignees (Task::ASSIGNEE_RELATIONS), so the screens name them without a
+ * query per row.
  */
 final class MyWorkFeed
 {
@@ -54,14 +63,19 @@ final class MyWorkFeed
     /** How many days "Completed recently" looks back, today included. */
     public const int RECENT_DAYS = 7;
 
-    /** The relations a My Work row shows: who handed the task out, and the record it is linked to. */
-    private const RELATIONS = ['assigner', 'lead', 'contact', 'account', 'deal'];
+    /**
+     * The relations a My Work row shows: who handed the task out — its
+     * assigner, or for a co-assignee whoever added them (D-28,
+     * TaskVisuals::handedOutBy()) — and the record it is linked to.
+     */
+    private const RELATIONS = ['assigner', 'coAssigneeRows.assigner', 'lead', 'contact', 'account', 'deal'];
 
     /**
      * The views the reader is offered, in tab order: their own tasks always;
      * the ones they handed out when they may hand tasks out (D-14) or have
-     * done so; everyone's when their task visibility reaches beyond their own
-     * (team or all — at `own` the team view would only repeat «مهامي»).
+     * done so — as a task's assigner or by sharing it (D-28); everyone's when
+     * their task visibility reaches beyond their own (team or all — at `own`
+     * the team view would only repeat «مهامي»).
      *
      * @return list<MyWorkView>
      */
@@ -136,9 +150,11 @@ final class MyWorkFeed
     /**
      * One task of the view by id — what an action on a My Work row resolves
      * its record from (the id arrives from the browser and is trusted for
-     * nothing) — with its checklist counts, or null when the task is not in
-     * the view, is out of the reader's scope, deleted or absent. The action
-     * still asks TaskPolicy whether the reader may make the move.
+     * nothing) — with its checklist counts and every assignee (D-28: the
+     * policy asks whether it was handed out to the reader), or null when the
+     * task is not in the view, is out of the reader's scope, deleted or
+     * absent. The action still asks TaskPolicy whether the reader may make
+     * the move.
      */
     public function find(User $reader, mixed $id, MyWorkView $view = MyWorkView::Mine): ?Task
     {
@@ -148,7 +164,7 @@ final class MyWorkFeed
             return null;
         }
 
-        $task = TaskChecklist::withCounts($this->scope($reader, $view)->whereKey($key))->first();
+        $task = TaskChecklist::withCounts($this->scope($reader, $view)->whereKey($key)->with(Task::ASSIGNEE_RELATIONS))->first();
 
         return $task instanceof Task ? $task : null;
     }
@@ -220,24 +236,17 @@ final class MyWorkFeed
             ->select(['id', 'bucket']);
 
         // The checklist counts (D-25) come after the select: a select() after
-        // withCount() would drop them.
+        // withCount() would drop them. Every view loads every assignee: even
+        // in «مهامي» a shared task may be filed under a colleague (D-28).
         $tasks = TaskChecklist::withCounts(
             Task::query()
                 ->joinSub($heads, 'heads', 'heads.id', '=', 'tasks.id')
-                ->with($view === MyWorkView::Mine ? self::RELATIONS : [...self::RELATIONS, 'assignee'])
+                ->with([...self::RELATIONS, ...Task::ASSIGNEE_RELATIONS])
                 ->select('tasks.*')
                 ->addSelect('heads.bucket AS my_work_bucket'),
         )
             ->orderByRaw($order, $orderBindings)
             ->get();
-
-        if ($view === MyWorkView::Mine) {
-            foreach ($tasks as $task) {
-                // Every task here is the reader's own: the row and any policy
-                // check reading the assignee need no query.
-                $task->setRelation('assignee', $reader);
-            }
-        }
 
         return array_values($tasks->all());
     }
@@ -261,21 +270,35 @@ final class MyWorkFeed
     }
 
     /**
-     * The view's tasks inside the reader's visibility scope: their own
-     * (assigned to them), the ones they handed out to someone else, or every
-     * task in reach.
+     * The view's tasks inside the reader's visibility scope: their own (they
+     * hold it, as its first assignee or as a co-assignee — D-28), the ones
+     * they handed out to someone else, or every task in reach.
+     *
+     * Handed out (D-14, D-28) is either path: the reader is the task's
+     * assigner and its first assignee is someone else, or the reader added
+     * someone else to it as a co-assignee.
      *
      * @return Builder<Task>
      */
     private function scope(User $reader, MyWorkView $view): Builder
     {
         $query = $this->visibility->visible($reader, Task::query());
+        $readerId = (int) $reader->getKey();
 
         return match ($view) {
-            MyWorkView::Mine => $query->where('tasks.assignee_id', $reader->getKey()),
-            MyWorkView::Delegated => $query->where('tasks.assigned_by', $reader->getKey())
-                ->whereNotNull('tasks.assignee_id')
-                ->where('tasks.assignee_id', '!=', $reader->getKey()),
+            MyWorkView::Mine => $query->assignedTo($readerId),
+            MyWorkView::Delegated => $query->where(static function (Builder $handedOut) use ($readerId): void {
+                $handedOut
+                    ->where(static function (Builder $asAssigner) use ($readerId): void {
+                        $asAssigner->where('tasks.assigned_by', $readerId)
+                            ->whereNotNull('tasks.assignee_id')
+                            ->where('tasks.assignee_id', '!=', $readerId);
+                    })
+                    ->orWhereIn('tasks.id', TaskCoAssignee::query()
+                        ->select('task_co_assignees.task_id')
+                        ->where('task_co_assignees.assigned_by', $readerId)
+                        ->where('task_co_assignees.user_id', '!=', $readerId));
+            }),
             MyWorkView::Team => $query,
         };
     }

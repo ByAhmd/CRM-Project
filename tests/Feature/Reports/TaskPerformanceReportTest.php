@@ -7,7 +7,6 @@ namespace Tests\Feature\Reports;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
-use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
 use App\Services\Statistics\Reports\TaskPerformanceReport;
@@ -98,7 +97,7 @@ final class TaskPerformanceReportTest extends TestCase
     #[Test]
     public function an_admin_sees_one_line_per_assignee_with_exact_figures_and_totals(): void
     {
-        $rows = $this->report()->rows($this->admin, $this->filters());
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin));
 
         $first = $rows->first();
 
@@ -107,15 +106,15 @@ final class TaskPerformanceReportTest extends TestCase
         $this->assertSame(['completed' => 3, 'on_time' => 2, 'late' => 1, 'still_open' => 2, 'overdue_now' => 1, 'completion_rate' => 60.0, 'avg_time_to_finish' => 864000, 'finish_seconds' => 2592000], $first->values);
         $this->assertSame(['completed' => 1, 'on_time' => 1, 'late' => 0, 'still_open' => 0, 'overdue_now' => 1, 'completion_rate' => 100.0, 'avg_time_to_finish' => 0, 'finish_seconds' => 0], $rows->last()?->values);
         $this->assertSame(['assignee_id' => $this->repA->getKey()], $first->meta);
-        $this->assertSame(['completed' => 4, 'on_time' => 3, 'late' => 1, 'still_open' => 2, 'overdue_now' => 2, 'completion_rate' => 66.7, 'avg_time_to_finish' => 648000, 'finish_seconds' => 2592000], $this->report()->totals($rows)->values);
+        $this->assertSame(['completed' => 4, 'on_time' => 3, 'late' => 1, 'still_open' => 2, 'overdue_now' => 2, 'completion_rate' => 66.7, 'avg_time_to_finish' => 648000, 'finish_seconds' => 2592000], app(TaskPerformanceReport::class)->totals($rows)->values);
     }
 
     #[Test]
     public function a_manager_sees_the_team_and_reps_see_only_their_own_tasks(): void
     {
-        $manager = $this->report()->rows($this->manager, $this->filters());
-        $repA = $this->report()->rows($this->repA, $this->filters());
-        $repB = $this->report()->rows($this->repB, $this->filters());
+        $manager = app(TaskPerformanceReport::class)->rows($this->manager, $this->taskReportFilters($this->admin));
+        $repA = app(TaskPerformanceReport::class)->rows($this->repA, $this->taskReportFilters($this->admin));
+        $repB = app(TaskPerformanceReport::class)->rows($this->repB, $this->taskReportFilters($this->admin));
 
         $this->assertSame([$this->repA->name], $manager->map(fn (ReportRow $row): string => $row->label)->all());
         $this->assertSame(3, (int) $manager->first()?->value('completed'));
@@ -127,12 +126,12 @@ final class TaskPerformanceReportTest extends TestCase
     #[Test]
     public function the_period_follows_the_completion_and_creation_dates_while_overdue_is_now(): void
     {
-        $august = $this->report()->rows($this->admin, $this->filters(['from' => '2026-08-01', 'to' => '2026-08-31']));
+        $august = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin, ['from' => '2026-08-01', 'to' => '2026-08-31']));
 
         $this->assertSame(['completed' => 0, 'on_time' => 0, 'late' => 0, 'still_open' => 0, 'overdue_now' => 1, 'completion_rate' => 0.0, 'avg_time_to_finish' => ReportRow::NOT_MEASURED, 'finish_seconds' => 0], $august->first()?->values);
         $this->assertSame(['completed' => 0, 'on_time' => 0, 'late' => 0, 'still_open' => 1, 'overdue_now' => 1, 'completion_rate' => 0.0, 'avg_time_to_finish' => ReportRow::NOT_MEASURED, 'finish_seconds' => 0], $august->last()?->values);
 
-        $firstWeek = $this->report()->rows($this->admin, $this->filters(['from' => '2026-09-01', 'to' => '2026-09-10']));
+        $firstWeek = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin, ['from' => '2026-09-01', 'to' => '2026-09-10']));
 
         $this->assertSame(['completed' => 1, 'on_time' => 1, 'late' => 0, 'still_open' => 2, 'overdue_now' => 1, 'completion_rate' => 33.3, 'avg_time_to_finish' => 691200, 'finish_seconds' => 691200], $firstWeek->first()?->values);
     }
@@ -140,50 +139,31 @@ final class TaskPerformanceReportTest extends TestCase
     #[Test]
     public function the_owner_filter_narrows_and_never_widens(): void
     {
-        $adminOnRepB = $this->report()->rows($this->admin, $this->filters(['owner_id' => $this->repB->getKey()]));
+        $adminOnRepB = app(TaskPerformanceReport::class)->rows($this->admin, $this->taskReportFilters($this->admin, ['owner_id' => $this->repB->getKey()]));
 
         $this->assertSame([$this->repB->name], $adminOnRepB->map(fn (ReportRow $row): string => $row->label)->all());
 
-        $managerOnRepB = $this->filters(['owner_id' => $this->repB->getKey()], $this->manager);
+        $managerOnRepB = $this->taskReportFilters($this->manager, ['owner_id' => $this->repB->getKey()]);
 
         $this->assertNull($managerOnRepB->ownerId);
-        $this->assertSame([$this->repA->name], $this->report()->rows($this->manager, $managerOnRepB)->map(fn (ReportRow $row): string => $row->label)->all());
+        $this->assertSame([$this->repA->name], app(TaskPerformanceReport::class)->rows($this->manager, $managerOnRepB)->map(fn (ReportRow $row): string => $row->label)->all());
 
         $forged = new ReportFilters($managerOnRepB->from, $managerOnRepB->to, ownerId: $this->repB->getKey());
-        $this->assertTrue($this->report()->rows($this->manager, $forged)->isEmpty());
+        $this->assertTrue(app(TaskPerformanceReport::class)->rows($this->manager, $forged)->isEmpty());
     }
 
     #[Test]
     public function the_chart_plots_completed_on_time_and_late_per_assignee(): void
     {
-        $chart = $this->report()->chart($this->admin, $this->filters());
+        $chart = app(TaskPerformanceReport::class)->chart($this->admin, $this->taskReportFilters($this->admin));
 
         $this->assertSame([$this->repA->name, $this->repB->name], $chart['labels']);
         $this->assertSame([__('reports.chart.completed'), __('reports.chart.on_time'), __('reports.chart.late')], array_column($chart['datasets'], 'label'));
         $this->assertSame([3, 1], $chart['datasets'][0]['data']);
         $this->assertSame([2, 1], $chart['datasets'][1]['data']);
         $this->assertSame([1, 0], $chart['datasets'][2]['data']);
-        $this->assertSame(array_keys($this->report()->columns()), array_keys($this->report()->formats()));
-        $this->assertSame(ReportRow::FORMAT_PERCENT, $this->report()->formats()['completion_rate']);
-        $this->assertSame(ReportRow::FORMAT_DURATION, $this->report()->formats()['avg_time_to_finish']);
-    }
-
-    private function report(): TaskPerformanceReport
-    {
-        return app(TaskPerformanceReport::class);
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function filters(array $data = [], ?User $viewer = null): ReportFilters
-    {
-        return ReportFilters::resolve(
-            $data + ['from' => '2026-09-01', 'to' => '2026-09-30'],
-            $viewer ?? $this->admin,
-            app(RecordVisibilityResolver::class),
-            Task::permissionGroup(),
-            'Asia/Riyadh',
-        );
+        $this->assertSame(array_keys(app(TaskPerformanceReport::class)->columns()), array_keys(app(TaskPerformanceReport::class)->formats()));
+        $this->assertSame(ReportRow::FORMAT_PERCENT, app(TaskPerformanceReport::class)->formats()['completion_rate']);
+        $this->assertSame(ReportRow::FORMAT_DURATION, app(TaskPerformanceReport::class)->formats()['avg_time_to_finish']);
     }
 }

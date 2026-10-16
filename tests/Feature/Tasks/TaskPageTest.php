@@ -702,6 +702,35 @@ final class TaskPageTest extends TestCase
     }
 
     /**
+     * The owner's report (2026-10-15): with a short description and no files
+     * the comments sat far below the files, as low as the properties column
+     * ran. The rule that lets the properties span both rows targeted the
+     * group as a direct child of the grid item, but Filament wraps each group
+     * twice (.fi-grid-col > .fi-sc-component > group), so it never matched
+     * and the activity waited for the end of the properties. The selector
+     * now reaches the group at any depth; this walks it over the rendered
+     * page, so a change in Filament's wrapping fails here, not on screen.
+     */
+    #[Test]
+    public function the_properties_column_spans_both_rows_so_the_activity_follows_the_content(): void
+    {
+        $css = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
+
+        $this->assertStringContainsString('.crm-task-page > .fi-grid > :has(.crm-task-page__aside) {', $css);
+        $this->assertStringNotContainsString(':has(> .crm-task-page__aside)', $css, 'the group is not a direct child of the grid item');
+
+        $document = new \DOMDocument;
+        @$document->loadHTML('<?xml encoding="utf-8"?>'.$this->page($this->admin)->html());
+        $xpath = new \DOMXPath($document);
+        $class = static fn (string $name): string => "contains(concat(' ', normalize-space(@class), ' '), ' {$name} ')";
+        $gridItems = "//*[{$class('crm-task-page')}]/*[{$class('fi-grid')}]/*";
+
+        $this->assertSame(3, $xpath->query($gridItems)->length, 'content, properties and activity are the three grid items');
+        $this->assertSame(1, $xpath->query("{$gridItems}[.//*[{$class('crm-task-page__aside')}]]")->length, 'the CSS rule matches exactly the properties column');
+        $this->assertSame(0, $xpath->query("{$gridItems}[.//*[{$class('crm-task-page__aside')}]][.//*[{$class('crm-task-page__activity')}] or .//*[{$class('crm-task-page__content')}]]")->length);
+    }
+
+    /**
      * The HTTP walk per role: the page, its composer and its files render
      * for every reader who may open the task, and an outsider gets 404.
      */

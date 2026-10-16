@@ -96,7 +96,9 @@ final class OwnershipActions
         $owner = $ownerId === null || $ownerId === '' ? null : User::query()->find((int) $ownerId);
 
         try {
-            app(RecordAssignmentService::class)->assign($record, $owner, $actor);
+            // The owner the record ends with: clearing the owner of a shared
+            // task moves its next assignee up (D-28), and the notice says so.
+            $owner = app(RecordAssignmentService::class)->assign($record, $owner, $actor);
         } catch (UnassignableUserException $exception) {
             Notification::make()->title($exception->getMessage())->danger()->send();
 

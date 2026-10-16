@@ -148,6 +148,30 @@ final class GlobalSearchScopeTest extends TestCase
     }
 
     #[Test]
+    public function a_shared_task_found_by_search_names_every_assignee_first_one_first(): void
+    {
+        // D-28: a co-assignee who finds the task sees themselves among the holders, not only the first.
+        $first = $this->salesRep();
+        $coAssignee = $this->salesRep();
+        $outsider = $this->salesRep();
+        $task = $this->shareTask(Task::factory()->create(['assignee_id' => $first->getKey(), 'title' => 'Shared stocktake']), $coAssignee);
+
+        $this->actingAs($coAssignee);
+
+        $found = TaskResource::getGlobalSearchEloquentQuery()->whereKey($task->getKey())->first();
+        $this->assertInstanceOf(Task::class, $found, 'the co-assignee finds the task they hold');
+        $this->assertTrue($found->relationLoaded('coAssignees'), 'the search loads every assignee with its rows');
+
+        $details = TaskResource::getGlobalSearchResultDetails($found);
+
+        $this->assertSame($first->name.__('tasks.assignees.separator').$coAssignee->name, $details[__('tasks.fields.assignees')]);
+        $this->assertArrayNotHasKey(__('tasks.fields.assignee'), $details);
+
+        $this->actingAs($outsider);
+        $this->assertFalse(TaskResource::getGlobalSearchEloquentQuery()->whereKey($task->getKey())->exists(), 'nobody else gains anything');
+    }
+
+    #[Test]
     public function a_task_linked_to_a_reps_own_lead_is_searchable_even_when_assigned_to_someone_else(): void
     {
         $rep = $this->salesRep();

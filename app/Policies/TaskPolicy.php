@@ -176,13 +176,15 @@ final class TaskPolicy
     /**
      * Whether the task was handed out to the user by someone else and the
      * user may not hand tasks out themselves — the case where the task's
-     * details and its fate stay with the assigner.
+     * details and its fate stay with the assigner. The permission is asked
+     * first: it is answered from memory, while isHandedOutTo() may read the
+     * task's co-assignees (D-28) when the screen did not load them.
      */
     private function handedOutTo(User $user, ?Model $record): bool
     {
         return $record instanceof Task
-            && $record->isHandedOutTo($user)
-            && ! $user->can(Permission::TaskAssign->value);
+            && ! $user->can(Permission::TaskAssign->value)
+            && $record->isHandedOutTo($user);
     }
 
     /** Whether a comment on the task mentioned the user (D-20). */

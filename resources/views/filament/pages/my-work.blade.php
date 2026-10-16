@@ -17,6 +17,9 @@
     (the browser sends only the id; the page resolves it again through
     MyWorkFeed::find() and the action authorises itself), and a control the
     policy refuses is simply not drawn — a plain pill or date stands in.
+    Who holds a task (D-28) is drawn by TaskVisuals from the relations the
+    feed loads with every row: outside «مهامي» everyone holding it, inside
+    it the colleagues the reader shares it with.
 --}}
 <x-filament-panels::page>
     <div class="crm-my-work">
@@ -159,7 +162,8 @@
                                     ->tooltip(__('tasks.actions.reschedule'));
                                 $subject = $task->subjectLabel();
                                 $meter = TaskVisuals::checklistMeterFor($task);
-                                $assigner = $task->assigned_by !== null && $task->assigned_by !== $task->assignee_id ? $task->assigner : null;
+                                // Who handed it to the reader: the assigner, or whoever added them to a shared task (D-28).
+                                $assigner = TaskVisuals::handedOutBy($task, $reader);
                                 // Outside «مهامي» the row is someone else's: it names who it is for instead.
                                 $forOthers = $shownView !== MyWorkView::Mine;
                             @endphp
@@ -217,9 +221,11 @@
                                     </span>
 
                                     @if ($forOthers)
+                                        {{-- Who it is for (D-28: everyone holding it — avatars, the first name, «+N»). --}}
                                         @php
-                                            $assigneeLabel = $task->assignee !== null
-                                                ? __('my_work.fields.assigned_to', ['name' => $task->assignee->name])
+                                            $holderNames = TaskVisuals::assigneeNames($task);
+                                            $assigneeLabel = $holderNames !== ''
+                                                ? __('my_work.fields.assigned_to', ['name' => $holderNames])
                                                 : __('my_work.fields.unassigned');
                                         @endphp
                                         <span
@@ -227,14 +233,26 @@
                                             role="img"
                                             aria-label="{{ $assigneeLabel }}"
                                             title="{{ $assigneeLabel }}"
-                                        >{{ TaskVisuals::avatar($task->assignee?->name) }}<span class="crm-my-work-assignee-name" aria-hidden="true">{{ $task->assignee?->name ?? __('my_work.fields.unassigned') }}</span></span>
-                                    @elseif ($assigner !== null)
-                                        <span
-                                            class="crm-my-work-assigner"
-                                            role="img"
-                                            aria-label="{{ __('my_work.fields.handed_out_by', ['name' => $assigner->name]) }}"
-                                            title="{{ __('my_work.fields.handed_out_by', ['name' => $assigner->name]) }}"
-                                        >{{ InitialsAvatar::forName($assigner->name) }}</span>
+                                        >
+                                            @if ($holderNames !== '')
+                                                <x-task.assignees :task="$task" />
+                                            @else
+                                                {{ TaskVisuals::avatar(null) }}
+                                                <span class="crm-assignees__name" aria-hidden="true">{{ __('my_work.fields.unassigned') }}</span>
+                                            @endif
+                                        </span>
+                                    @else
+                                        {{-- The reader's own task: who handed it out, and the colleagues sharing it (D-28). --}}
+                                        @if ($assigner !== null)
+                                            <span
+                                                class="crm-my-work-assigner"
+                                                role="img"
+                                                aria-label="{{ __('my_work.fields.handed_out_by', ['name' => $assigner->name]) }}"
+                                                title="{{ __('my_work.fields.handed_out_by', ['name' => $assigner->name]) }}"
+                                            >{{ InitialsAvatar::forName($assigner->name) }}</span>
+                                        @endif
+
+                                        <x-task.co-holders :task="$task" :holder="$reader" />
                                     @endif
                                 </div>
                             </li>

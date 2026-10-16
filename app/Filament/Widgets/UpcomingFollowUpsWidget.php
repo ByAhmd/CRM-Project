@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\Tasks\TaskResource;
+use App\Filament\Support\TaskVisuals;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Statistics\DashboardFilters;
@@ -30,6 +31,13 @@ use Illuminate\Database\Eloquent\Builder;
  * declares that property is required here even though this list ignores
  * the period: without it the property arrives as an unmatched Livewire
  * parameter and the page render fails.
+ *
+ * The list shows itself only when it has something to show (the owner's
+ * report, 2026-10-15: on the Tasks home it sat empty because the team's work
+ * is all plain tasks, which My Work's buckets already list). It counts only
+ * follow-ups, calls and meetings; once one is due in the window it appears,
+ * and its empty state remains for the moment the last one is completed while
+ * the page is open.
  */
 final class UpcomingFollowUpsWidget extends TableWidget
 {
@@ -48,7 +56,9 @@ final class UpcomingFollowUpsWidget extends TableWidget
     {
         $user = auth()->user();
 
-        return $user instanceof User && $user->can('viewAny', Task::class);
+        return $user instanceof User
+            && $user->can('viewAny', Task::class)
+            && app(TaskMetrics::class)->upcomingFollowUpsQuery($user)->exists();
     }
 
     public function table(Table $table): Table
@@ -59,7 +69,8 @@ final class UpcomingFollowUpsWidget extends TableWidget
         return $table
             ->heading(__('dashboard.tables.upcoming_follow_ups'))
             ->description(trans_choice('dashboard.tables.upcoming_follow_ups_description', TaskMetrics::UPCOMING_DAYS, ['days' => TaskMetrics::UPCOMING_DAYS]))
-            ->query(static fn (): Builder => $metrics->upcomingFollowUpsQuery($viewer))
+            // Every assignee rides on the page's query (D-28): one query for the page, never one per row.
+            ->query(static fn (): Builder => $metrics->upcomingFollowUpsQuery($viewer)->with(Task::ASSIGNEE_RELATIONS))
             ->columns([
                 TextColumn::make('title')
                     ->label(__('dashboard.tables.columns.title'))
@@ -79,8 +90,9 @@ final class UpcomingFollowUpsWidget extends TableWidget
                     ->dateTime('Y-m-d H:i', timezone: DashboardFilters::timezone())
                     ->color(static fn (Task $record): ?string => $metrics->isDueToday($record) ? 'warning' : null),
 
-                TextColumn::make('assignee.name')
-                    ->label(__('dashboard.tables.columns.assignee'))
+                // Who holds it (D-28): the Tasks workspace's one presentation of assignees.
+                TaskVisuals::assigneeColumn(TextColumn::make('assignee.name'))
+                    ->label(__('dashboard.tables.columns.assignees'))
                     ->placeholder(__('assignment.placeholders.unassigned'))
                     ->visibleFrom('md'),
 

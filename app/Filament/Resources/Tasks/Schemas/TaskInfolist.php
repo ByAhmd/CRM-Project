@@ -54,7 +54,7 @@ final class TaskInfolist
      * The task page of the Tasks workspace (TaskResource::infolist(),
      * ViewTask) in two columns (D-27). From `lg`: the content — description,
      * the checklist ticked with one click, the files — beside the properties
-     * (status pill with its moves, priority, assignee, assigner, due with the
+     * (status pill with its moves, priority, assignees, assigner, due with the
      * reschedule chips, linked records, routine, more details), and under
      * the content the activity: the composer, the filter and the thread. On
      * a phone the three stack in that order — content, properties, activity
@@ -192,9 +192,11 @@ final class TaskInfolist
     /**
      * The properties: the status as a pill that opens the moves the reader
      * may make (TaskActions::statusMenu(); a plain pill for a reader with
-     * none), the priority flag, who the task is assigned to and by whom, and
-     * the due date in relative words with the reschedule chips for whoever
-     * may edit the task (D-14: never the handed-out assignee).
+     * none), the priority flag, every assignee with their avatar — the first
+     * one first, then the colleagues sharing the task (D-28) — and who
+     * assigned it, and the due date in relative words with the reschedule
+     * chips for whoever may edit the task (D-14: never the handed-out
+     * assignee).
      */
     private static function pagePropertiesSection(): Section
     {
@@ -218,9 +220,9 @@ final class TaskInfolist
                 TaskVisuals::priorityEntry(TextEntry::make('priority'))
                     ->label(__('tasks.fields.priority')),
 
-                TextEntry::make('assignee.name')
-                    ->label(__('tasks.fields.assignee'))
-                    ->formatStateUsing(static fn (?string $state): string|HtmlString => self::person($state))
+                // Everyone holding the task, the first one first (D-28).
+                TaskVisuals::assigneesEntry(TextEntry::make('assignees_list'))
+                    ->label(__('tasks.fields.assignees'))
                     ->placeholder(__('assignment.placeholders.unassigned')),
 
                 TextEntry::make('assigner.name')

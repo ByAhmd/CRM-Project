@@ -190,7 +190,7 @@
 
                             <div class="flex min-h-24 flex-col gap-2 p-2">
                                 @foreach ($column['tasks'] as $task)
-                                    @include('filament.pages.tasks-board-card', ['task' => $task, 'showAssignee' => false, 'sortable' => false])
+                                    @include('filament.pages.tasks-board-card', ['task' => $task, 'showAssignee' => false, 'sortable' => false, 'holder' => $assignee])
                                 @endforeach
 
                                 @if ($column['more'] > 0)

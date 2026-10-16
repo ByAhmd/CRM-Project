@@ -8,14 +8,17 @@ use App\Enums\Permission;
 use App\Enums\TaskStatus;
 use App\Enums\UserStatus;
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 use App\Models\User;
 use App\Notifications\WeeklySummaryNotification;
 use App\Services\Settings\SettingsRepository;
 use App\Services\System\BackupService;
 use App\Services\System\LoggedErrorCounter;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -32,9 +35,21 @@ use Throwable;
  * and a per-assignee table (open / overdue / completed). Task titles and
  * assignees are organisation-wide, as on the shared board (D-14). Every
  * figure comes from a fixed number of queries whatever the data size — one
- * grouped aggregate, one name lookup, and a count plus a capped list for
- * each of overdue and stalled — and every moment is converted to the
- * organisation timezone in PHP (A-19), never with SQL date functions.
+ * grouped aggregate per assignee, one of the task totals, one name lookup,
+ * two counts of what was handed out, and a count plus a capped list (with
+ * its co-assignees) for each of overdue and stalled — and every moment is
+ * converted to the organisation timezone in PHP (A-19), never with SQL date
+ * functions.
+ *
+ * A shared task (D-28) is the work of each of its assignees: the
+ * per-assignee table counts it in every holder's row (open, overdue,
+ * completed), and the «unassigned» row keeps only the tasks nobody holds.
+ * The totals still count tasks — a shared task completed once is one
+ * completion — so for an unshared task every figure means what it always
+ * did. Adding a colleague to a task is handing it out to them: a co-assignee
+ * added in the window by someone else counts as handed out, beside the tasks
+ * created for someone else. A listed task names its first assignee and how
+ * many others hold it.
  *
  * health() is the super admins' part: the newest backup set or the failure
  * recorded since, failed queue jobs and ERROR-or-higher log entries in the
@@ -143,15 +158,16 @@ final class WeeklySummary
         $timezone = $this->settings->timezone();
 
         [$rows, $names] = $this->perAssignee($from, $to);
+        $totals = $this->totals($from, $to);
 
         $stalled = $this->stalledQuery($to);
 
         return new WeeklySummaryReport(
             from: $from->setTimezone($timezone),
             to: $to->setTimezone($timezone),
-            completed: array_sum(array_column($rows, 'completed')),
+            completed: $totals['completed'],
             handedOut: $this->handedOutCount($from, $to),
-            overdueTotal: array_sum(array_column($rows, 'overdue')),
+            overdueTotal: $totals['overdue'],
             overdue: $this->overdueList($to, $names, $timezone),
             stalledTotal: (clone $stalled)->count(),
             stalled: $this->stalledList($stalled, $to, $names, $timezone),
@@ -199,9 +215,11 @@ final class WeeklySummary
     }
 
     /**
-     * One grouped aggregate over the open tasks and those completed in the
-     * window, sorted most overdue first, then most open, most completed and
-     * name; and the names of every assignee in it (deleted accounts included).
+     * One grouped aggregate over the assignments of the open tasks and of
+     * those completed in the window (assignments(): a shared task counts for
+     * each of its holders, D-28), sorted most overdue first, then most open,
+     * most completed and name; and the names of every assignee in it
+     * (deleted accounts included).
      *
      * @return array{0: list<array{assignee_id: ?int, open: int, overdue: int, completed: int}>, 1: array<int, string>}
      */
@@ -210,27 +228,20 @@ final class WeeklySummary
         $open = Task::openStatusValues();
         $marks = implode(', ', array_fill(0, count($open), '?'));
 
-        $aggregates = Task::query()
-            ->where(static function (Builder $query) use ($open, $from, $to): void {
-                $query->whereIn('status', $open)
-                    ->orWhere(static function (Builder $done) use ($from, $to): void {
-                        $done->where('status', TaskStatus::Completed->value)
-                            ->whereBetween('completed_at', [$from, $to]);
-                    });
-            })
-            ->select('assignee_id')
-            ->selectRaw("SUM(CASE WHEN status IN ({$marks}) THEN 1 ELSE 0 END) AS open_count", $open)
-            ->selectRaw("SUM(CASE WHEN status IN ({$marks}) AND due_at < ? THEN 1 ELSE 0 END) AS overdue_count", [...$open, $to])
-            ->selectRaw('SUM(CASE WHEN status = ? AND completed_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS completed_count', [TaskStatus::Completed->value, $from, $to])
-            ->groupBy('assignee_id')
-            ->toBase()
+        $aggregates = DB::query()
+            ->fromSub($this->assignments($from, $to), 'assignments')
+            ->select('user_id')
+            ->selectRaw("SUM(CASE WHEN `status` IN ({$marks}) THEN 1 ELSE 0 END) AS open_count", $open)
+            ->selectRaw("SUM(CASE WHEN `status` IN ({$marks}) AND `due_at` < ? THEN 1 ELSE 0 END) AS overdue_count", [...$open, $to])
+            ->selectRaw('SUM(CASE WHEN `status` = ? AND `completed_at` BETWEEN ? AND ? THEN 1 ELSE 0 END) AS completed_count', [TaskStatus::Completed->value, $from, $to])
+            ->groupBy('user_id')
             ->get();
 
         $rows = [];
 
         foreach ($aggregates as $aggregate) {
             $rows[] = [
-                'assignee_id' => $aggregate->assignee_id === null ? null : (int) $aggregate->assignee_id,
+                'assignee_id' => $aggregate->user_id === null ? null : (int) $aggregate->user_id,
                 'open' => (int) $aggregate->open_count,
                 'overdue' => (int) $aggregate->overdue_count,
                 'completed' => (int) $aggregate->completed_count,
@@ -252,14 +263,106 @@ final class WeeklySummary
         return [$rows, $names];
     }
 
+    /**
+     * The task totals of the week, each task once however many hold it
+     * (D-28): the tasks completed in the window and the open tasks overdue
+     * now — one aggregate over the same tasks as the per-assignee table.
+     *
+     * @return array{completed: int, overdue: int}
+     */
+    private function totals(CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $open = Task::openStatusValues();
+        $marks = implode(', ', array_fill(0, count($open), '?'));
+
+        $row = DB::table('tasks')
+            ->where(self::inWindow($from, $to))
+            ->selectRaw("SUM(CASE WHEN `tasks`.`status` IN ({$marks}) AND `tasks`.`due_at` < ? THEN 1 ELSE 0 END) AS overdue_count", [...$open, $to])
+            ->selectRaw('SUM(CASE WHEN `tasks`.`status` = ? AND `tasks`.`completed_at` BETWEEN ? AND ? THEN 1 ELSE 0 END) AS completed_count', [TaskStatus::Completed->value, $from, $to])
+            ->first();
+
+        return [
+            'completed' => (int) ($row->completed_count ?? 0),
+            'overdue' => (int) ($row->overdue_count ?? 0),
+        ];
+    }
+
+    /**
+     * What the summary reads — the open tasks and those completed in the
+     * window, never a deleted one — as assignments (D-28): one row per task
+     * and holder with the task's `status`, `due_at` and `completed_at` and the
+     * holder's `user_id`, for the first assignee and for each co-assignee, and
+     * one row with a null `user_id` for a task nobody holds at all.
+     */
+    private function assignments(CarbonImmutable $from, CarbonImmutable $to): QueryBuilder
+    {
+        $columns = '`tasks`.`status` AS `status`, `tasks`.`due_at` AS `due_at`, `tasks`.`completed_at` AS `completed_at`';
+
+        $first = DB::table('tasks')
+            ->where(self::inWindow($from, $to))
+            // A task without a first assignee is «unassigned» only when no
+            // co-assignee holds it either.
+            ->where(static function (QueryBuilder $held): void {
+                $held->whereNotNull('tasks.assignee_id')
+                    ->orWhereNotExists(static function (QueryBuilder $coAssigned): void {
+                        $coAssigned->selectRaw('1')
+                            ->from('task_co_assignees')
+                            ->whereColumn('task_co_assignees.task_id', 'tasks.id');
+                    });
+            })
+            ->selectRaw('`tasks`.`assignee_id` AS `user_id`, '.$columns);
+
+        $coAssigned = DB::table('task_co_assignees')
+            ->join('tasks', 'tasks.id', '=', 'task_co_assignees.task_id')
+            ->where(self::inWindow($from, $to))
+            ->selectRaw('`task_co_assignees`.`user_id` AS `user_id`, '.$columns);
+
+        return $first->unionAll($coAssigned);
+    }
+
+    /**
+     * The tasks the summary's figures are about: not deleted, and open or
+     * completed inside the window — as a nested constraint on `tasks`.
+     *
+     * @return Closure(QueryBuilder): void
+     */
+    private static function inWindow(CarbonImmutable $from, CarbonImmutable $to): Closure
+    {
+        return static function (QueryBuilder $query) use ($from, $to): void {
+            $query->whereNull('tasks.deleted_at')
+                ->where(static function (QueryBuilder $tasks) use ($from, $to): void {
+                    $tasks->whereIn('tasks.status', Task::openStatusValues())
+                        ->orWhere(static function (QueryBuilder $done) use ($from, $to): void {
+                            $done->where('tasks.status', TaskStatus::Completed->value)
+                                ->whereBetween('tasks.completed_at', [$from, $to]);
+                        });
+                });
+        };
+    }
+
+    /**
+     * What was handed out in the window: the tasks created for someone other
+     * than the person who assigned them, and — D-28 — every colleague added
+     * to a task by someone else, each a hand-out of its own. Deleted tasks
+     * count for neither.
+     */
     private function handedOutCount(CarbonImmutable $from, CarbonImmutable $to): int
     {
-        return Task::query()
+        $created = Task::query()
             ->whereBetween('created_at', [$from, $to])
             ->whereNotNull('assignee_id')
             ->whereNotNull('assigned_by')
             ->whereColumn('assigned_by', '<>', 'assignee_id')
             ->count();
+
+        $shared = TaskCoAssignee::query()
+            ->whereBetween('assigned_at', [$from, $to])
+            ->whereNotNull('assigned_by')
+            ->whereColumn('assigned_by', '<>', 'user_id')
+            ->whereIn('task_id', Task::query()->select('tasks.id'))
+            ->count();
+
+        return $created + $shared;
     }
 
     /**
@@ -271,6 +374,7 @@ final class WeeklySummary
         $tasks = Task::query()
             ->open()
             ->where('due_at', '<', $to)
+            ->with('coAssignees')
             ->orderBy('due_at')
             ->orderBy('id')
             ->limit(self::LIST_LIMIT)
@@ -306,6 +410,7 @@ final class WeeklySummary
     private function stalledList(Builder $query, CarbonImmutable $to, array $names, string $timezone): array
     {
         $tasks = StalledTaskRule::quietestFirst($query->select(['id', 'title', 'assignee_id', 'updated_at']))
+            ->with('coAssignees')
             ->limit(self::LIST_LIMIT)
             ->get();
 
@@ -319,11 +424,26 @@ final class WeeklySummary
     }
 
     /**
+     * One listed task, naming its first assignee — from the names the
+     * per-assignee table read, deleted accounts included — and how many
+     * others hold it (D-28). A shared task whose first assignee left it is
+     * named after its earliest co-assignee.
+     *
      * @param  array<int, string>  $names
      */
     private function line(Task $task, array $names, CarbonImmutable $since, CarbonImmutable $to, string $timezone): WeeklySummaryTask
     {
-        $assignee = $task->assignee_id === null ? null : ($names[(int) $task->assignee_id] ?? null);
+        $firstId = $task->assignee_id === null ? null : (int) $task->assignee_id;
+        $others = $task->coAssignees
+            ->reject(static fn (User $user): bool => (int) $user->getKey() === $firstId)
+            ->values();
+
+        if ($firstId !== null) {
+            $assignee = $names[$firstId] ?? null;
+        } else {
+            $assignee = $others->first()?->name;
+            $others = $others->slice(1);
+        }
 
         return new WeeklySummaryTask(
             id: (int) $task->getKey(),
@@ -331,6 +451,7 @@ final class WeeklySummary
             assigneeName: $assignee,
             since: $since->setTimezone($timezone),
             days: (int) max(0, floor($since->diffInDays($to))),
+            otherAssignees: $assignee === null ? 0 : $others->count(),
         );
     }
 }

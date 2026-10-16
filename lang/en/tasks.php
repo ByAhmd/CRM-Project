@@ -46,6 +46,7 @@ return [
         'reminder_at' => 'Remind at',
         'completed_at' => 'Completed at',
         'assignee' => 'Assignee',
+        'assignees' => 'Assignees',
         'lead' => 'Lead',
         'contact' => 'Contact',
         'account' => 'Account',
@@ -109,7 +110,8 @@ return [
         'checklist_complete_anyway' => 'You can still complete the task: the number left open is recorded and the assigner is told.',
         'change_status' => 'Now: :status. Choose what happens next.',
         'reschedule_time' => 'The day changes and the task keeps its time; a task without one is due at 17:00.',
-        'quick_add_assignee' => 'The task is yours unless you choose a colleague.',
+        'quick_add_assignees' => 'The task is yours unless you choose someone else; choose several colleagues and they share the same task.',
+        'assignees' => 'The first person you choose is the one the task is filed under. Everyone you choose holds the same task: one status, one checklist and one thread.',
     ],
 
     'filters' => [
@@ -340,6 +342,15 @@ return [
             'no_move' => 'There is no direct move from :from to :to.',
             'not_allowed' => 'You may not make this move (:move) on this task.',
         ],
+    ],
+
+    // D-28: who holds a task — the first assignee, then the colleagues sharing it.
+    'assignees' => [
+        'separator' => ', ',
+        'everyone' => 'Assignees: :names',
+        'shared_with' => 'Shared with :names',
+        'more' => '+:count',
+        'others' => '{0} No other assignees|{1} and 1 other assignee: :names|[2,*] and :count other assignees: :names',
     ],
 
     'recurrence' => [

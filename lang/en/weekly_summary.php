@@ -45,6 +45,7 @@ return [
         'open_board' => 'Open the tasks board',
         'assignees_more' => '{1} … and :count more person with tasks.|[2,*] … and :count more people with tasks.',
         'tasks_more' => '{1} … and :count more task on the tasks board.|[2,*] … and :count more tasks on the tasks board.',
+        'assignee_and_others' => '{0} :name|{1} :name and :count other assignee|[2,*] :name and :count other assignees',
         'overdue_detail' => 'Due :date · :late',
         'days_late' => '{0} less than a day late|{1} :count day late|[2,*] :count days late',
         'stalled_detail' => 'Last update :date · :quiet',

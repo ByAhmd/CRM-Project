@@ -6,6 +6,7 @@ namespace App\Filament\Exports;
 
 use App\Filament\Support\ImportExportActions;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\Tasks\TaskChecklist;
 use Carbon\CarbonInterface;
 use Filament\Actions\Exports\ExportColumn;
@@ -19,7 +20,8 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Exports the rows of the table query it is launched from — already inside
  * the actor's visible scope — with enums as labels in the actor's locale,
- * the assignee by name, the linked records by their labels, dates as
+ * the assignee by name — and, for a shared task, the colleagues sharing it
+ * in a column of their own (D-28) — the linked records by their labels, dates as
  * Y-m-d H:i, the checklist progress as "done of total" (D-25) — in words,
  * since a spreadsheet opening the CSV turns a bare 2/3 into a date. All
  * text cells are protected against spreadsheet formula injection.
@@ -61,6 +63,10 @@ final class TaskExporter extends Exporter
                 ->label(__('exports.columns.task.completed_at'))
                 ->formatStateUsing(fn (?CarbonInterface $state): ?string => ImportExportActions::dateTime($state)),
             ExportColumn::make('assignee.name')->label(__('exports.columns.task.assignee'))->preventFormulaInjection(),
+            ExportColumn::make('co_assignees')
+                ->label(__('exports.columns.task.co_assignees'))
+                ->state(fn (Task $record): ?string => self::coAssigneeNames($record))
+                ->preventFormulaInjection(),
             ExportColumn::make('related')
                 ->label(__('exports.columns.task.related'))
                 ->state(fn (Task $record): ?string => $record->subjectLabel())
@@ -100,8 +106,23 @@ final class TaskExporter extends Exporter
     }
 
     /**
+     * The colleagues sharing the task beside its first assignee (D-28), in
+     * the order they were added — empty for a task held by one person. Read
+     * from the co-assignees the chunk loaded (modifyQuery()).
+     */
+    private static function coAssigneeNames(Task $record): ?string
+    {
+        $names = $record->coAssignees
+            ->reject(static fn (User $user): bool => $record->assignee_id !== null && (int) $user->getKey() === (int) $record->assignee_id)
+            ->map(static fn (User $user): string => $user->name)
+            ->all();
+
+        return $names === [] ? null : implode(__('exports.values.list_separator'), $names);
+    }
+
+    /**
      * The checklist progress (D-25) is counted with the chunk instead of
-     * once per row.
+     * once per row, and the co-assignees (D-28) are loaded with it.
      *
      * @template TModel of Model
      *
@@ -110,10 +131,12 @@ final class TaskExporter extends Exporter
      */
     public static function modifyQuery(Builder $query): Builder
     {
-        return $query->withCount([
-            'checklistItems as '.TaskChecklist::TOTAL_ALIAS,
-            'checklistItems as '.TaskChecklist::DONE_ALIAS => static fn (Builder $items): Builder => $items->whereNotNull('completed_at'),
-        ]);
+        return $query
+            ->with('coAssignees')
+            ->withCount([
+                'checklistItems as '.TaskChecklist::TOTAL_ALIAS,
+                'checklistItems as '.TaskChecklist::DONE_ALIAS => static fn (Builder $items): Builder => $items->whereNotNull('completed_at'),
+            ]);
     }
 
     /**

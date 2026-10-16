@@ -23,7 +23,8 @@ use Livewire\Attributes\On;
  * The task list (decisions A-10, D-27): "my" open tasks by default, then the
  * open tasks due today, the overdue, the upcoming, the completed and
  * everything. The "my" and "overdue" tabs carry a count so the numbers are
- * visible without opening them.
+ * visible without opening them. "My" tasks are the ones the reader holds,
+ * whether they are the first assignee or share the task (D-28).
  *
  * "Today" is the organisation's calendar day (OrganisationCalendar, A-19):
  * due today means due inside that day at any hour — the relative dates on
@@ -98,10 +99,8 @@ final class ListTasks extends ListRecords
     }
 
     /**
-     * @template TModel of \Illuminate\Database\Eloquent\Model
-     *
-     * @param  Builder<TModel>  $query
-     * @return Builder<TModel>
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
      */
     private static function open(Builder $query): Builder
     {
@@ -109,14 +108,15 @@ final class ListTasks extends ListRecords
     }
 
     /**
-     * @template TModel of \Illuminate\Database\Eloquent\Model
+     * The tasks the reader holds — as the first assignee or sharing them
+     * (D-28, Task::assignedTo()): «مهامي» is the reader's own work either way.
      *
-     * @param  Builder<TModel>  $query
-     * @return Builder<TModel>
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
      */
     private static function mine(Builder $query): Builder
     {
-        return $query->where('tasks.assignee_id', auth()->id());
+        return $query->assignedTo((int) auth()->id());
     }
 
     /**

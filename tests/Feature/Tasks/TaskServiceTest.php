@@ -6,6 +6,7 @@ namespace Tests\Feature\Tasks;
 
 use App\Enums\ActivityKind;
 use App\Enums\ActivityLogEvent;
+use App\Enums\Permission;
 use App\Enums\RecurrenceFrequency;
 use App\Enums\TaskKind;
 use App\Enums\TaskPriority;
@@ -155,18 +156,19 @@ final class TaskServiceTest extends TestCase
     #[Test]
     public function updating_changes_the_given_attributes_and_maps_the_owner_alias_to_the_assignee(): void
     {
+        // Reassigning is handing out, the administrator's (D-14).
         $team = $this->makeTeam();
-        $manager = $this->salesManager($team);
+        $admin = $this->admin();
         $rep = $this->salesRep($team);
-        $task = Task::factory()->create(['assignee_id' => $manager->getKey(), 'title' => 'Draft']);
+        $task = Task::factory()->create(['assignee_id' => $admin->getKey(), 'title' => 'Draft']);
 
-        $updated = $this->service()->update($task, ['title' => 'Final', 'owner_id' => $rep->getKey(), 'priority' => 'urgent'], $manager);
+        $updated = $this->service()->update($task, ['title' => 'Final', 'owner_id' => $rep->getKey(), 'priority' => 'urgent'], $admin);
 
         $this->assertSame('Final', $updated->title);
         $this->assertSame(TaskPriority::Urgent, $updated->priority);
         $this->assertSame($rep->getKey(), (int) $updated->assignee_id);
         $this->assertSame(TaskStatus::Pending, $updated->status);
-        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskUpdated->value, 'subject_id' => $task->getKey(), 'causer_id' => $manager->getKey()]);
+        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskUpdated->value, 'subject_id' => $task->getKey(), 'causer_id' => $admin->getKey()]);
     }
 
     #[Test]
@@ -385,19 +387,19 @@ final class TaskServiceTest extends TestCase
         Notification::fake();
 
         $team = $this->makeTeam();
-        $manager = $this->salesManager($team);
+        $admin = $this->admin();
         $rep = $this->salesRep($team);
-        $task = Task::factory()->create(['assignee_id' => $manager->getKey()]);
+        $task = Task::factory()->create(['assignee_id' => $admin->getKey()]);
 
-        $this->service()->update($task, ['owner_id' => $rep->getKey()], $manager);
+        $this->service()->update($task, ['owner_id' => $rep->getKey()], $admin);
 
         $this->assertSame($rep->getKey(), (int) $task->refresh()->assignee_id);
-        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $manager->getKey()]);
+        $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $admin->getKey()]);
 
         Notification::assertSentTo($rep, RecordAssignedNotification::class);
 
         // An edit that keeps the assignee writes no assignment row.
-        $this->service()->update($task, ['title' => 'Same assignee'], $manager);
+        $this->service()->update($task, ['title' => 'Same assignee'], $admin);
 
         $this->assertSame(1, DB::table('activity_log')->where('description', ActivityLogEvent::TaskAssigned->value)->where('subject_id', $task->getKey())->count());
         Notification::assertSentToTimes($rep, RecordAssignedNotification::class, 1);
@@ -406,19 +408,51 @@ final class TaskServiceTest extends TestCase
     #[Test]
     public function an_assignee_outside_the_actor_reach_is_refused_on_edit(): void
     {
-        $manager = $this->salesManager($this->makeTeam());
+        // A team-level assigner (task.assign granted through the Roles resource) hands out inside the team only.
+        $team = $this->makeTeam();
+        $assigner = $this->userWithPermissions($team, [Permission::TaskViewAny, Permission::TaskViewTeam, Permission::TaskCreate, Permission::TaskUpdate, Permission::TaskAssign]);
         $stranger = $this->salesRep($this->makeTeam('Jeddah Team', 'فريق جدة'));
-        $task = Task::factory()->create(['assignee_id' => $manager->getKey(), 'title' => 'Mine']);
+        $task = Task::factory()->create(['assignee_id' => $assigner->getKey(), 'title' => 'Mine']);
 
         $this->expectException(UnassignableUserException::class);
 
         try {
-            $this->service()->update($task, ['title' => 'Changed', 'owner_id' => $stranger->getKey()], $manager);
+            $this->service()->update($task, ['title' => 'Changed', 'owner_id' => $stranger->getKey()], $assigner);
         } finally {
             // The whole edit is rolled back with the refused assignment.
             $this->assertSame('Mine', $task->refresh()->title);
-            $this->assertSame($manager->getKey(), (int) $task->assignee_id);
+            $this->assertSame($assigner->getKey(), (int) $task->assignee_id);
         }
+    }
+
+    #[Test]
+    public function only_a_holder_of_task_assign_changes_the_assignee_on_edit(): void
+    {
+        // D-14: handing tasks out is the administrator's; a team manager edits the details within reach only.
+        Notification::fake();
+
+        $team = $this->makeTeam();
+        $manager = $this->salesManager($team);
+        $rep = $this->salesRep($team);
+        $task = Task::factory()->create(['assignee_id' => $manager->getKey(), 'title' => 'Mine']);
+
+        foreach (['owner_id' => $rep->getKey(), 'assignee_id' => $rep->getKey(), 'assignee_ids' => [$rep->getKey()]] as $key => $value) {
+            try {
+                $this->service()->update($task, ['title' => 'Changed', $key => $value], $manager);
+                $this->fail("a user without task.assign reassigned the task through {$key}");
+            } catch (UnassignableUserException) {
+                // Refused before anything is written.
+            }
+        }
+
+        $this->assertSame('Mine', $task->refresh()->title);
+        $this->assertSame($manager->getKey(), (int) $task->assignee_id);
+        $this->assertDatabaseMissing('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey()]);
+        Notification::assertNothingSent();
+
+        // Naming the holder they already have is no change.
+        $this->service()->update($task, ['title' => 'Changed', 'owner_id' => $manager->getKey()], $manager);
+        $this->assertSame('Changed', $task->refresh()->title);
     }
 
     #[Test]

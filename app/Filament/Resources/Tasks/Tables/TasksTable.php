@@ -17,6 +17,7 @@ use App\Filament\Support\OwnershipActions;
 use App\Filament\Support\TaskActions;
 use App\Filament\Support\TaskVisuals;
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Settings\SettingsRepository;
@@ -76,8 +77,12 @@ final class TasksTable
      * toast), the status pill that changes status in place (only the moves
      * the reader's policy allows), the title, the due date in relative words
      * (a click reschedules, for those who may edit the dates), the priority
-     * flag, the assignee's avatar and the checklist meter. Every control is a
-     * TaskActions action: authorised by TaskPolicy, written by TaskService.
+     * flag, who holds the task (TaskVisuals::assignees(), D-28 — the
+     * colleagues sharing it as «+N») and the checklist meter. «مهامي», the
+     * «مهامي فقط» and assignee filters match anyone holding a task, and «أسندتُها
+     * أنا» every task the reader handed to someone, first or added later.
+     * Every control is a TaskActions action: authorised by TaskPolicy,
+     * written by TaskService.
      *
      * Phone budget: the check, the title, the pill and the due date stay at
      * every width; the flag, the meter and the assignee step in from `md`.
@@ -145,13 +150,15 @@ final class TasksTable
                     ->placeholder(__('common.placeholders.empty'))
                     ->visibleFrom('md'),
 
+                // Who holds the task (D-28): avatars, the first assignee's name and «+N»; below
+                // 2xl the first avatar and the chip stand alone, every name in the tooltip.
+                // Sorted by the first assignee; a search finds a task by anyone holding it.
                 TaskVisuals::assigneeColumn(TextColumn::make('assignee.name'))
-                    ->label(__('tasks.fields.assignee'))
-                    ->formatStateUsing(static fn (?string $state): HtmlString => new HtmlString('<span class="crm-ta-assignee-name">'.e((string) $state).'</span>'))
-                    ->tooltip(static fn (Task $record): ?string => $record->assignee?->name)
+                    ->label(__('tasks.fields.assignees'))
                     ->extraCellAttributes(['class' => 'crm-ta-compact'])
                     ->placeholder(__('assignment.placeholders.unassigned'))
                     ->sortable()
+                    ->searchable(query: static fn (Builder $query, string $search): Builder => self::searchAssignees($query, $search))
                     ->visibleFrom('md'),
 
                 TextColumn::make('created_at')
@@ -179,19 +186,17 @@ final class TasksTable
             // they are seeded once when the table first renders.
             ->extraAttributes(['x-init' => self::collapseClosedGroupsScript()])
             ->filters([
+                // The tasks the reader holds, first assignee or sharing them (D-28).
                 Filter::make('mine')
                     ->label(__('tasks.filters.mine'))
                     ->toggle()
-                    ->query(static fn (Builder $query): Builder => $query->where('tasks.assignee_id', auth()->id())),
+                    ->query(static fn (Builder $query): Builder => self::assignedTo($query, (int) auth()->id())),
 
                 // The tasks the reader handed out to someone else — My Work's «أسندتُها» view (D-27 amendment).
                 Filter::make('handed_out_by_me')
                     ->label(__('tasks.filters.handed_out_by_me'))
                     ->toggle()
-                    ->query(static fn (Builder $query): Builder => $query
-                        ->where('tasks.assigned_by', auth()->id())
-                        ->whereNotNull('tasks.assignee_id')
-                        ->where('tasks.assignee_id', '!=', auth()->id())),
+                    ->query(static fn (Builder $query): Builder => self::handedOutBy($query, (int) auth()->id())),
 
                 Filter::make('no_due')
                     ->label(__('tasks.filters.no_due'))
@@ -213,6 +218,7 @@ final class TasksTable
                     ->options(TaskKind::class)
                     ->multiple(),
 
+                // Anyone holding the task, first assignee or sharing it (D-28).
                 SelectFilter::make('assignee_id')
                     ->label(__('tasks.filters.assignee'))
                     ->options(function (): array {
@@ -222,6 +228,9 @@ final class TasksTable
                             ? app(RecordVisibilityResolver::class)->assignableUsers($user, Task::permissionGroup())->pluck('name', 'id')->all()
                             : [];
                     })
+                    ->query(static fn (Builder $query, array $data): Builder => is_numeric($data['value'] ?? null)
+                        ? self::assignedTo($query, (int) $data['value'])
+                        : $query)
                     ->searchable(),
 
                 Filter::make('due_at')
@@ -459,6 +468,60 @@ final class TasksTable
     /* ---------------------------------------------------------------------
      | The workspace list (D-27)
      * ------------------------------------------------------------------- */
+
+    /**
+     * The tasks the user holds, as the first assignee or sharing them
+     * (D-28) — Task::assignedTo(), the one meaning of "assigned to".
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    private static function assignedTo(Builder $query, int $userId): Builder
+    {
+        return $query->assignedTo($userId);
+    }
+
+    /**
+     * The tasks the user handed out to someone else (D-27 amendment): those
+     * they gave a first assignee other than themselves, and those they added
+     * a colleague to (D-28, the co-assignee row remembers who added them).
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    private static function handedOutBy(Builder $query, int $userId): Builder
+    {
+        return $query->where(static function (Builder $handed) use ($userId): void {
+            $handed
+                ->where(static function (Builder $first) use ($userId): void {
+                    $first->where('tasks.assigned_by', $userId)
+                        ->whereNotNull('tasks.assignee_id')
+                        ->where('tasks.assignee_id', '!=', $userId);
+                })
+                ->orWhereIn('tasks.id', TaskCoAssignee::query()
+                    ->select('task_id')
+                    ->where('assigned_by', $userId)
+                    ->where('user_id', '!=', $userId));
+        });
+    }
+
+    /**
+     * The list's search over who holds a task (D-28): the first assignee's
+     * name or the name of a colleague sharing it.
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    private static function searchAssignees(Builder $query, string $search): Builder
+    {
+        $like = '%'.$search.'%';
+
+        return $query->where(static function (Builder $holders) use ($like): void {
+            $holders
+                ->whereHas('assignee', static fn (Builder $user): Builder => $user->where('name', 'like', $like))
+                ->orWhereHas('coAssignees', static fn (Builder $user): Builder => $user->where('users.name', 'like', $like));
+        });
+    }
 
     /** The row's completion check (TaskVisuals::completionCheck), a button only when the reader may complete the task now. */
     public static function completionCheck(Task $record): HtmlString

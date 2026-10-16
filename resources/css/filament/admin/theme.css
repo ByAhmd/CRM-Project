@@ -429,6 +429,88 @@ input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
 }
 
 /* ---------------------------------------------------------------------------
+ | Shared tasks (D-28)
+ |
+ | Who holds a task (TaskVisuals::assignees() and ::coHolders(), the
+ | <x-task.assignees> and <x-task.co-holders> components): up to three
+ | initials avatars overlapping from inline-start, each ringed in the card
+ | colour so the overlap reads as separate people in both themes, the first
+ | assignee's name, and a «+N» chip on the table-header ground for the
+ | colleagues sharing the task (its text holds AA on that ground in both
+ | themes, as My Work's counts do). The name truncates instead of widening
+ | its row; compact places hide it visually — the words stay for screen
+ | readers and in the tooltip. Logical properties only, so the overlap runs
+ | the same way in RTL and LTR; nothing moves.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    --crm-assignees-ring: var(--crm-card);
+    --crm-assignees-more-bg: var(--crm-table-header);
+    --crm-assignees-more-text: var(--crm-text);
+}
+
+.crm-assignees {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    vertical-align: middle;
+}
+
+.crm-assignees__stack {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+}
+
+.crm-assignees__stack .crm-avatar {
+    margin-inline-end: 0;
+    box-shadow: 0 0 0 2px var(--crm-assignees-ring);
+}
+
+.crm-assignees__stack .crm-avatar + .crm-avatar {
+    margin-inline-start: -0.5rem;
+}
+
+.crm-assignees__name {
+    min-inline-size: 0;
+    max-inline-size: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.crm-assignees__more {
+    flex: none;
+    min-inline-size: 1.5rem;
+    padding-inline: 0.375rem;
+    border-radius: 9999px;
+    background-color: var(--crm-assignees-more-bg);
+    color: var(--crm-assignees-more-text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The chip's two counts (D-28: «+N» is everyone whose avatar is not drawn):
+   beside the full stack it counts those beyond it, so a task the stack
+   already shows whole carries no chip; a compact list cell, which leaves the
+   first avatar alone (below), shows the other count — everyone but the first. */
+.crm-assignees__more-compact,
+.crm-assignees__more--compact-only {
+    display: none;
+}
+
+/* A board card's holders yield to its due date when the card is narrow. */
+.crm-board-card-holders {
+    display: inline-flex;
+    min-inline-size: 0;
+}
+
+/* ---------------------------------------------------------------------------
  | Task list and tasks board (D-27)
  |
  | The completion check (TaskVisuals::completionCheck; list and My Work): an empty ring
@@ -457,12 +539,14 @@ input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
     min-inline-size: 14rem;
 }
 
-/* Below 2xl the priority flag and the assignee's avatar stand alone (ClickUp's
-   list): the words are visually hidden, never removed, so screen readers still
-   read them and the cell's tooltip shows them. */
+/* Below 2xl the priority flag and the first assignee's avatar stand alone
+   (ClickUp's list), a shared task keeping its «+N» chip beside the avatar
+   (D-28): the words are visually hidden, never removed, so screen readers
+   still read them and the cell's tooltip shows every name; the second and
+   third avatars are decoration and step out. */
 @media (width < 96rem) {
     .fi-ta-table td.crm-ta-compact .crm-flag-label,
-    .fi-ta-table td.crm-ta-compact .crm-ta-assignee-name {
+    .fi-ta-table td.crm-ta-compact .crm-assignees__name {
         position: absolute;
         inline-size: 1px;
         block-size: 1px;
@@ -472,6 +556,22 @@ input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
         clip-path: inset(50%);
         white-space: nowrap;
         border: 0;
+    }
+
+    .fi-ta-table td.crm-ta-compact .crm-assignees__stack .crm-avatar:nth-child(n + 2) {
+        display: none;
+    }
+
+    .fi-ta-table td.crm-ta-compact .crm-assignees__more--compact-only {
+        display: inline-block;
+    }
+
+    .fi-ta-table td.crm-ta-compact .crm-assignees__more-stacked {
+        display: none;
+    }
+
+    .fi-ta-table td.crm-ta-compact .crm-assignees__more-compact {
+        display: inline;
     }
 }
 
@@ -534,7 +634,8 @@ input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
  | so a long properties column never pushes the activity down. Below lg the
  | three stack in source order — content, properties, activity — so the
  | composer is reached before the thread. The grid item is Filament's
- | wrapper around each group, hence the :has() selectors.
+ | column wrapper (.fi-grid-col > .fi-sc-component > the group), hence the
+ | :has() selector reaching the group at any depth inside its column.
  | The checklist box is a real checkbox button (role=checkbox, aria-checked)
  | whose state the server's re-render settles; a ticked box holds a check
  | and its text is struck through, so the state never rests on colour. The
@@ -560,7 +661,7 @@ input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
         align-items: start;
     }
 
-    .crm-task-page > .fi-grid > :has(> .crm-task-page__aside) {
+    .crm-task-page > .fi-grid > :has(.crm-task-page__aside) {
         grid-row: span 2;
     }
 }
@@ -570,6 +671,21 @@ input:checked + label.fi-btn.fi-color-primary[class*='fi-bg-color-'] {
     align-items: center;
     gap: 0.5rem;
     vertical-align: middle;
+}
+
+/* The gap spaces a person's avatar from the name; the avatar's own margin would double it. */
+.crm-person .crm-avatar {
+    margin-inline-end: 0;
+}
+
+/* Every assignee of the task, one per line (D-28: «المكلَّفون»). */
+.crm-people {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
 .crm-checklist__list {
@@ -939,7 +1055,8 @@ button.crm-checklist__box:focus-visible {
 }
 
 /* The views «أسندتُها» and «الفريق» (D-27 amendment): each row names who it is
-   for — the avatar, and the name beside it from sm up. */
+   for — the avatars and «+N» of everyone holding it (D-28), and the first
+   name beside them from sm up. */
 .crm-my-work-assignee {
     display: inline-flex;
     align-items: center;
@@ -952,16 +1069,13 @@ button.crm-checklist__box:focus-visible {
     margin-inline-end: 0;
 }
 
-.crm-my-work-assignee-name {
+.crm-my-work-assignee .crm-assignees__name {
     display: none;
     max-inline-size: 9rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 @media (width >= 40rem) {
-    .crm-my-work-assignee-name {
+    .crm-my-work-assignee .crm-assignees__name {
         display: inline;
     }
 }

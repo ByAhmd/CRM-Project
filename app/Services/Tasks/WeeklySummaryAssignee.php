@@ -6,8 +6,9 @@ namespace App\Services\Tasks;
 
 /**
  * One row of the weekly summary's per-assignee table (decision D-18): open
- * tasks now, how many of them are overdue, and tasks completed in the week.
- * `name` is null for the tasks nobody is assigned to.
+ * tasks now, how many of them are overdue, and tasks completed in the week —
+ * a shared task (D-28) counting in the row of each of its assignees. `name`
+ * is null for the tasks nobody is assigned to.
  */
 final readonly class WeeklySummaryAssignee
 {

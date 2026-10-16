@@ -3,7 +3,7 @@
 Bilingual (ar + en), RTL + LTR, light/dark CRM on **Laravel 13 + Filament 5 + MySQL 8**, single organisation,
 a home panel plus four workspace panels (D-23). Engineering standard inherited from the Stockflow (ZonKSA)
 project and adapted; the authoritative plan is `docs/ARCHITECTURE_PLAN.md`, the schema `docs/DATABASE_DESIGN.md`, the decisions
-`docs/DECISIONS.md` (D-1 … D-27 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
+`docs/DECISIONS.md` (D-1 … D-28 owner, A-1 … A-26 architect). **Every implementation is production-ready or it
 is not delivered**: no TODOs, no placeholders, no dummy data, no half-wired buttons.
 
 ## 1. Frozen stack
@@ -142,7 +142,10 @@ all/team/own, a task's thread text and link only where the reader may open the t
 Tasks workspace: My Work home in buckets, one visual language (status, flag, avatar, meter, relative dates on the
 organisation day), one-click completion check with undo, status pill with only the allowed moves, quick add, list grouped
 by status, two-column task page with one-click checklist and an always-visible composer, board by status with drag, Inbox
-page, phone tab bar, installable web app without service worker, keys N, / and ?; the Sales task tabs unchanged (D-27).
+page, phone tab bar, installable web app without service worker, keys N, / and ?; the Sales task tabs unchanged (D-27) ·
+shared tasks: several assignees on one task (one status, checklist and thread), the first in `tasks.assignee_id`, the
+others in `task_co_assignees`; `task.assign` holders share within their reach; every assignee owns it for visibility and
+works on it; "a user's tasks" is `Task::assignedTo()`; reports count it per assignee (D-28).
 
 ## 6. QA checklist before any commit
 

@@ -195,6 +195,43 @@ final class EmployeeDashboardFiguresTest extends TestCase
     }
 
     #[Test]
+    public function a_shared_task_is_the_co_assignees_own_measured_from_when_it_reached_them_as_the_task_report_does(): void
+    {
+        $colleague = $this->makeUser(CrmRole::Employee, ['name' => 'Employee Two']);
+
+        // Handed to the colleague at 09:00 on 1 October and shared with the
+        // employee a day later (D-28): the employee's time to finish starts then.
+        $this->travelTo(Carbon::parse('2026-10-01 09:00:00'));
+        $done = $this->taskAssignedTo($colleague, TaskStatus::Completed, ['title' => 'Done together', 'due_at' => Carbon::parse('2026-10-06 18:00:00'), 'completed_at' => Carbon::parse('2026-10-05 09:00:00')]);
+        $late = $this->taskAssignedTo($colleague, TaskStatus::Pending, ['title' => 'Late together', 'due_at' => Carbon::parse('2026-10-10 10:00:00')]);
+
+        $this->travelTo(Carbon::parse('2026-10-02 09:00:00'));
+        $this->shareTask($done, $this->employee);
+        $this->shareTask($late, $this->employee);
+
+        $this->travelTo(Carbon::parse('2026-10-20 12:00:00'));
+        $snapshot = $this->snapshot();
+
+        $this->assertSame(1, $snapshot->open);
+        $this->assertSame(1, $snapshot->overdue);
+        $this->assertSame(['Late together'], $this->titles($snapshot->overdueTasks->tasks));
+        $this->assertSame(1, $snapshot->completedThisMonth);
+        $this->assertSame(100.0, $snapshot->onTimeRate);
+        $this->assertSame(3 * 86400, $snapshot->averageSecondsToFinish, 'from 2 October, when the task reached the employee');
+
+        $rows = app(TaskPerformanceReport::class)->rows($this->admin, ReportFilters::currentMonth(app(SettingsRepository::class)->timezone()));
+        $mine = $rows->first(fn (ReportRow $row): bool => ($row->meta['assignee_id'] ?? null) === (int) $this->employee->getKey());
+        $theirs = $rows->first(fn (ReportRow $row): bool => ($row->meta['assignee_id'] ?? null) === (int) $colleague->getKey());
+
+        $this->assertInstanceOf(ReportRow::class, $mine);
+        $this->assertInstanceOf(ReportRow::class, $theirs);
+        $this->assertSame($snapshot->completedThisMonth, $mine->value('completed'));
+        $this->assertSame($snapshot->overdue, $mine->value('overdue_now'), "the dashboard's overdue is the task report's overdue now");
+        $this->assertSame($snapshot->averageSecondsToFinish, $mine->value('avg_time_to_finish'), 'the dashboard and the report measure the shared task from the same moment');
+        $this->assertSame(4 * 86400, $theirs->value('avg_time_to_finish'), 'the colleague keeps their own moment');
+    }
+
+    #[Test]
     public function with_nothing_completed_this_month_the_rate_and_the_average_are_empty_not_zero(): void
     {
         $this->travelTo(Carbon::parse('2026-10-20 12:00:00'));

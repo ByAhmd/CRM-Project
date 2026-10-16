@@ -7,6 +7,7 @@ namespace App\Services\Statistics;
 use App\Enums\TaskKind;
 use App\Enums\TaskStatus;
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,8 +18,9 @@ use Illuminate\Support\Carbon;
  * The task numbers of the dashboard (decisions D-4, A-10).
  *
  * Every query starts from the viewer's visibility scope: the personal
- * lists are then pinned to the viewer as assignee, the follow-ups keep the
- * whole scope (a manager sees the team's, a rep their own). "Today" is the
+ * lists are then pinned to the viewer as assignee — first assignee or
+ * co-assignee of a shared task (D-28) — the follow-ups keep the whole scope
+ * (a manager sees the team's, a rep their own). "Today" is the
  * organisation's calendar day (D-8): due today is an open task due at any
  * moment of that day, from its start to its end, whether the moment has
  * passed or not; overdue is an open task due before the start of that
@@ -152,7 +154,10 @@ final class TaskMetrics
 
     /**
      * Tasks due in the period within the viewer's reach, counted per
-     * status; every status is present, at zero when empty.
+     * status; every status is present, at zero when empty. The owner and
+     * team filters narrow to the tasks that owner — or a member of that
+     * team — holds, as first assignee or co-assignee (D-28), each task
+     * counted once.
      *
      * @return array<string, int>
      */
@@ -160,7 +165,7 @@ final class TaskMetrics
     {
         $counts = array_fill_keys(array_map(static fn (TaskStatus $status): string => $status->value, TaskStatus::cases()), 0);
 
-        $rows = $filters->constrainOwner($this->visibility->visible($viewer, Task::query()))
+        $rows = self::constrainHolders($this->visibility->visible($viewer, Task::query()), $filters)
             ->whereBetween('tasks.due_at', [$filters->periodStart(), $filters->periodEnd()])
             ->selectRaw('tasks.status AS status, COUNT(*) AS total')
             ->groupBy('tasks.status')
@@ -172,6 +177,35 @@ final class TaskMetrics
         }
 
         return $counts;
+    }
+
+    /**
+     * DashboardFilters::constrainOwner() for tasks, where the owner is every
+     * assignee (D-28): the chosen owner holds the task (Task::assignedTo()),
+     * and a member of the chosen team holds it as its first assignee or as a
+     * co-assignee. Only ever narrows — the filters were clamped to the
+     * viewer's reach when they were built — and for an unshared task it
+     * means exactly what the owner column alone meant.
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    private static function constrainHolders(Builder $query, DashboardFilters $filters): Builder
+    {
+        if ($filters->ownerId !== null) {
+            $query->assignedTo($filters->ownerId);
+        }
+
+        if ($filters->teamId !== null) {
+            $members = User::query()->select('id')->where('team_id', $filters->teamId);
+
+            $query->where(static function (Builder $held) use ($members): void {
+                $held->whereIn('tasks.assignee_id', $members)
+                    ->orWhereIn('tasks.id', TaskCoAssignee::query()->select('task_co_assignees.task_id')->whereIn('task_co_assignees.user_id', $members));
+            });
+        }
+
+        return $query;
     }
 
     /**
@@ -199,17 +233,20 @@ final class TaskMetrics
     }
 
     /**
-     * The viewer's own open tasks, inside their visibility scope.
+     * The viewer's own open tasks, inside their visibility scope: the ones
+     * they hold as the first assignee or as a co-assignee of a shared task
+     * (D-28).
      *
      * @return Builder<Task>
      */
     private function mine(User $viewer): Builder
     {
-        return $this->scoped($viewer)->where('tasks.assignee_id', $viewer->getKey());
+        return $this->scoped($viewer)->assignedTo($viewer);
     }
 
     /**
-     * The open tasks the viewer may see (D-4), with what the widgets show.
+     * The open tasks the viewer may see (D-4), with what the widgets show —
+     * every assignee of a shared task among it (D-28).
      *
      * @return Builder<Task>
      */
@@ -218,6 +255,6 @@ final class TaskMetrics
         return $this->visibility->visible($viewer, Task::query())
             ->whereIn('tasks.status', Task::openStatusValues())
             ->whereNotNull('tasks.due_at')
-            ->with(['assignee', 'lead', 'contact', 'account', 'deal']);
+            ->with([...Task::ASSIGNEE_RELATIONS, 'lead', 'contact', 'account', 'deal']);
     }
 }

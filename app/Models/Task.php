@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Contracts\OwnedRecord;
+use App\Contracts\SharesOwnership;
 use App\Contracts\TracksAssigner;
 use App\Enums\ActivityLogEvent;
 use App\Enums\RecurrenceFrequency;
@@ -15,6 +16,7 @@ use App\Models\Concerns\GuardsWorkflowFields;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasOwner;
 use App\Observers\TaskAssignmentStampObserver;
+use App\Observers\TaskCoAssigneeGuardObserver;
 use App\Support\RecordLabel;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -23,6 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
@@ -55,6 +58,17 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * by TaskService only: its structure by whoever may edit the task, its ticks
  * by whoever may report on it while the task is open.
  *
+ * A task may be shared (D-28): `assignee_id` is its first assignee — the one
+ * it is filed under, the owner column — and `coAssignees` the other employees
+ * who hold the same task, with its one status, checklist and thread. Every
+ * assignee is an owner for visibility (SharesOwnership: the resolver reaches
+ * the task through any of them), finds it in their own work (assignedTo())
+ * and reports on it like the first; co-assignees are added by TaskService and
+ * TaskRecurrence only and removed by TaskService and the guard that keeps the
+ * first assignee from also being a co-assignee (TaskCoAssigneeGuardObserver,
+ * on every change of the first assignee). Display code eager-loads
+ * ASSIGNEE_RELATIONS and reads assignees().
+ *
  * @property ?int $assigned_by
  * @property ?int $template_id
  * @property ?Carbon $assigned_at
@@ -71,14 +85,17 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property ?Carbon $overdue_notified_at
  * @property ?Carbon $recurrence_ends_at
  */
-#[ObservedBy(TaskAssignmentStampObserver::class)]
+#[ObservedBy([TaskAssignmentStampObserver::class, TaskCoAssigneeGuardObserver::class])]
 #[Fillable([
     'title', 'description', 'kind', 'status', 'priority', 'due_at', 'starts_at', 'ends_at', 'reminder_at',
     'assignee_id', 'lead_id', 'contact_id', 'account_id', 'deal_id',
     'recurrence_frequency', 'recurrence_interval', 'recurrence_ends_at', 'series_id', 'created_by',
 ])]
-final class Task extends Model implements OwnedRecord, TracksAssigner
+final class Task extends Model implements SharesOwnership, TracksAssigner
 {
+    /** What a screen eager-loads to show every assignee of a task (D-28). */
+    public const array ASSIGNEE_RELATIONS = ['assignee', 'coAssignees'];
+
     use GuardsWorkflowFields;
     use HasAttachments;
 
@@ -105,6 +122,28 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
 
     /** Who handed the task to its assignee (D-14). */
     public static function assignerColumn(): string
+    {
+        return 'assigned_by';
+    }
+
+    /** The further assignees of a shared task (D-28) own it too. */
+    public static function coOwnerModel(): string
+    {
+        return TaskCoAssignee::class;
+    }
+
+    public static function coOwnerRecordColumn(): string
+    {
+        return 'task_id';
+    }
+
+    public static function coOwnerUserColumn(): string
+    {
+        return 'user_id';
+    }
+
+    /** Who added each co-assignee (D-14, D-28). */
+    public static function coOwnerAssignerColumn(): string
     {
         return 'assigned_by';
     }
@@ -166,6 +205,31 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    /**
+     * The other employees who hold the same task (D-28), in the order they
+     * were added; soft-deleted accounts still resolve so the task keeps naming
+     * who held it. The pivot carries who added each one and when.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function coAssignees(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'task_co_assignees')
+            ->withPivot(['assigned_by', 'assigned_at'])
+            ->withTrashed()
+            ->orderBy('task_co_assignees.id');
+    }
+
+    /**
+     * The co-assignee rows themselves (D-28), for writes and the reports.
+     *
+     * @return HasMany<TaskCoAssignee, $this>
+     */
+    public function coAssigneeRows(): HasMany
+    {
+        return $this->hasMany(TaskCoAssignee::class)->orderBy('id');
     }
 
     /**
@@ -291,10 +355,98 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
      */
     public function isHandedOutTo(User $user): bool
     {
-        return $this->assignee_id !== null
-            && $this->assigned_by !== null
-            && (int) $this->assignee_id === (int) $user->getKey()
-            && (int) $this->assigned_by !== (int) $user->getKey();
+        $userId = (int) $user->getKey();
+
+        if ($this->assignee_id !== null && (int) $this->assignee_id === $userId) {
+            return $this->assigned_by !== null && (int) $this->assigned_by !== $userId;
+        }
+
+        // A co-assignee (D-28) was handed the task by whoever added them.
+        $assignerId = $this->coAssignerOf($userId);
+
+        return $assignerId !== false && $assignerId !== null && $assignerId !== $userId;
+    }
+
+    /**
+     * Every assignee of the task (D-28): the first, then the co-assignees in
+     * the order they were added. Reads the eager-loaded ASSIGNEE_RELATIONS.
+     *
+     * @return list<User>
+     */
+    public function assignees(): array
+    {
+        $first = $this->assignee;
+
+        return array_values(array_filter([
+            $first,
+            ...$this->coAssignees->reject(static fn (User $user): bool => $first !== null && $user->is($first))->all(),
+        ]));
+    }
+
+    /**
+     * The user ids of every assignee (D-28), the first one first; from the
+     * eager-loaded co-assignees when present, otherwise in one query.
+     *
+     * @return list<int>
+     */
+    public function assigneeIds(): array
+    {
+        $coIds = $this->relationLoaded('coAssignees')
+            ? $this->coAssignees->map(static fn (User $user): int => (int) $user->getKey())->all()
+            : TaskCoAssignee::query()->where('task_id', $this->getKey())->orderBy('id')->pluck('user_id')->map(static fn (mixed $id): int => (int) $id)->all();
+
+        $first = $this->assignee_id === null ? [] : [(int) $this->assignee_id];
+
+        return array_values(array_unique([...$first, ...$coIds]));
+    }
+
+    /** Whether the user is one of the task's assignees, first or co-assignee (D-28). */
+    public function isAssignedTo(User $user): bool
+    {
+        if ($this->assignee_id !== null && (int) $this->assignee_id === (int) $user->getKey()) {
+            return true;
+        }
+
+        return $this->coAssignerOf((int) $user->getKey()) !== false;
+    }
+
+    /** Whether the task is shared: it has co-assignees (D-28). */
+    public function isShared(): bool
+    {
+        return $this->relationLoaded('coAssignees')
+            ? $this->coAssignees->isNotEmpty()
+            : TaskCoAssignee::query()->where('task_id', $this->getKey())->exists();
+    }
+
+    /**
+     * Who added the user as a co-assignee — null when nobody is recorded —
+     * or false when the user is not a co-assignee of the task.
+     */
+    private function coAssignerOf(int $userId): int|false|null
+    {
+        if (! $this->exists) {
+            return false;
+        }
+
+        if ($this->relationLoaded('coAssignees')) {
+            $user = $this->coAssignees->first(static fn (User $coAssignee): bool => (int) $coAssignee->getKey() === $userId);
+
+            if (! $user instanceof User) {
+                return false;
+            }
+
+            $assignerId = $user->getRelationValue('pivot')?->getAttribute('assigned_by');
+
+            return $assignerId === null ? null : (int) $assignerId;
+        }
+
+        $row = TaskCoAssignee::query()->where('task_id', $this->getKey())->where('user_id', $userId)->first(['assigned_by']);
+
+        if (! $row instanceof TaskCoAssignee) {
+            return false;
+        }
+
+        return $row->assigned_by === null ? null : (int) $row->assigned_by;
     }
 
     public function isOpen(): bool
@@ -385,6 +537,24 @@ final class Task extends Model implements OwnedRecord, TracksAssigner
             static fn (TaskStatus $status): string => $status->value,
             array_filter(TaskStatus::cases(), static fn (TaskStatus $status): bool => $status->isOpen()),
         ));
+    }
+
+    /**
+     * The tasks the user holds (D-28): as the first assignee or as a
+     * co-assignee — what "assigned to me" means everywhere (My Work, the
+     * dashboards, the reminders, the reports).
+     *
+     * @param  Builder<Task>  $query
+     * @return Builder<Task>
+     */
+    protected function scopeAssignedTo(Builder $query, User|int $user): Builder
+    {
+        $userId = $user instanceof User ? (int) $user->getKey() : $user;
+
+        return $query->where(static function (Builder $nested) use ($query, $userId): void {
+            $nested->where($query->qualifyColumn('assignee_id'), $userId)
+                ->orWhereIn($query->qualifyColumn('id'), TaskCoAssignee::query()->select('task_id')->where('user_id', $userId));
+        });
     }
 
     /**

@@ -8,7 +8,7 @@ Companion documents:
 |---|---|
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Every table, column, key, index and constraint, as built |
 | [STOCKFLOW_COMPARISON.md](STOCKFLOW_COMPARISON.md) | Stockflow vs CRM comparison table and the reuse classification |
-| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-27 and architect decisions A-1 … A-26 |
+| [DECISIONS.md](DECISIONS.md) | Owner decisions D-1 … D-28 and architect decisions A-1 … A-26 |
 | [PERMISSIONS.md](PERMISSIONS.md) | Seeded roles, record scope and the guards above the permissions |
 | [GoLive_Checklist.md](GoLive_Checklist.md) | Step-12 exit checklist: every go-live item with its evidence, result and owner |
 | [OPEN_DECISIONS.md](OPEN_DECISIONS.md) | The questions as asked on 2026-09-04 (historical record; all resolved) |
@@ -88,7 +88,7 @@ Administration workspaces, each entered by its own permission; the site root `/`
 | 6 | Deals (Opportunities) | CRUD, account, contacts (with roles), owner, pipeline, stage, probability (stage default + override), amount computed from product line items in SAR (D-8), expected close date, source, product line items (D-8), forecast category, status open/won/lost, win/loss reason (configurable), competitors, stage history, activities, tasks, attachments, timeline, kanban board |
 | 7 | Pipelines & stages | Configurable pipelines, ordered stages, probability, kind (open/won/lost), default stage, default pipeline, active flag |
 | 8 | Activities | Calls, meetings, emails (logged), other; configurable activity types; owner, links to lead/contact/account/deal, occurred_at, duration, outcome, attachments, timeline |
-| 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views, progress log and comments with @mentions (D-14, D-17, D-20), routine tasks (D-22), checklists with who ticked each item and done / total progress (D-25); since D-27 a ClickUp-style Tasks workspace — My Work, the grouped list with the completion check and the status pill, quick add, the two-column task page with the composer, the board by status with drag, the Inbox, the phone bar, the installable app and keyboard shortcuts (section 3.4.3) |
+| 9 | Tasks & follow-ups | Assignee, due date, priority, status, related records, reminders (in-app, mail when configured), completion, overdue detection, recurrence (daily/weekly/monthly), "my tasks" views, progress log and comments with @mentions (D-14, D-17, D-20), routine tasks (D-22), checklists with who ticked each item and done / total progress (D-25); since D-27 a ClickUp-style Tasks workspace — My Work, the grouped list with the completion check and the status pill, quick add, the two-column task page with the composer, the board by status with drag, the Inbox, the phone bar, the installable app and keyboard shortcuts (section 3.4.3); since D-28 shared tasks — several assignees on one task with one status, checklist and thread, each an owner for visibility and counted per assignee in the reports (section 3.4.4) |
 | 10 | Calendar | Month/week/day views of tasks, meetings and follow-ups with create/edit from the calendar |
 | 11 | Notes | Authored, timestamped, attached to lead/contact/account/deal, pinning, edit history (audit ledger) |
 | 12 | Timeline | Chronological, per record: activities, notes, tasks, stage/status changes, ownership changes, attachments, conversion, audit events |
@@ -197,7 +197,11 @@ Full schema in [DATABASE_DESIGN.md](DATABASE_DESIGN.md). Rules:
   permission with `RecordVisibilityResolver::canRead/canWrite(User, Model)`.
 - Visibility (D-4): `RecordVisibilityResolver::visible(User, Builder)` applies Own / Team / All
   from the user's permissions; applied in every resource `getEloquentQuery()`, global search query,
-  exporters, widgets and statistics services. Filters never widen scope.
+  exporters, widgets and statistics services. Filters never widen scope. A record that implements
+  `App\Contracts\SharesOwnership` (a shared task, D-28) is reached through any of its owners — the owner column or a
+  co-owner row naming the reader (own level) or a member of the reader's team (team level); lists add one subquery,
+  per-record checks one memoised query per user, level and request, dropped with every co-owner write, rollback and
+  membership change.
 - Filament enforcement: resource `can*` methods (policy-backed), `->authorize()` on actions,
   `authorizeIndividualRecords()` on every bulk action, `Page::canAccess()`, `Widget::canView()`,
   `Importer`/`Exporter` policies. `->strictAuthorization()` on every panel.
@@ -396,6 +400,33 @@ untouched: the UI only makes the allowed actions quicker.
   `tests/Feature/Notifications/InboxTest.php`: every control per role (admin, handed-out assignee, mentioned
   participant, read-only, outsider), forged mounts, the D-25 warning on every completion path, the organisation day,
   both locales, and query counts.
+
+### 3.4.4 Shared tasks (D-28)
+
+One task, one status, one checklist, one thread and one set of files, held by several assignees; the Sales task tabs
+stay as they are (D-27).
+
+- **Data.** `tasks.assignee_id` is the first assignee — the one the task is filed under, the owner column — and
+  `task_co_assignees` (`App\Models\TaskCoAssignee`: `task_id`, `user_id`, `assigned_by`, `assigned_at`, unique per
+  task and user) holds every other one. `TaskCoAssigneeGuardObserver` removes a co-assignee row for whoever becomes the
+  first assignee, so nobody holds a task twice. `Task::ASSIGNEE_RELATIONS` (`assignee`, `coAssignees`) is eager-loaded
+  by every screen that shows the holders; `Task::assignedTo()` is what "a user's tasks" means (My Work, «مهامي», the
+  filters, the badges); reminders and overdue notices reach every assignee, and the task report and the employee
+  dashboard count a shared task once per assignee (D-21, D-26).
+- **Writes.** `TaskService::create()` / `update()` take `assignee_ids` (the first one first); a change of who holds
+  the task needs `task.assign` and the actor's reach, tells each joiner (`RecordAssignedNotification`), writes one
+  `task.assignees_changed` ledger entry and moves the task's `updated_at` (so the undo of a completion never withdraws
+  an occurrence someone shared further). A change of the first assignee — on every path, the assign actions and the
+  Sales tabs' owner field included — goes through `RecordAssignmentService`, which moves the next co-assignee up when
+  the first is cleared. `TaskRecurrence::next()` copies the co-assignees.
+- **Access.** `Task` implements `SharesOwnership`, so `RecordVisibilityResolver` reaches it through any assignee
+  (section 3.3) and `Task::isHandedOutTo()` applies the D-14 rule to a co-assignee added by someone else.
+- **Screens.** `TaskVisuals::assignees()` (overlapping avatars, the first name, «+N»), `coHolders()`,
+  `assigneeList()`; the workspace form and quick add pick «المكلَّفون» (`TaskForm::ASSIGNEES`); the task page
+  loads the holders again before every render (`ViewTask::rendering()`). The export adds a co-assignees column.
+- **Tests.** `tests/Feature/Tasks/` `SharedTasksTest`, `SharedTaskScreensTest`, `SharedTaskFeedsTest`,
+  `tests/Feature/Reports/SharedTaskReportsTest.php`, `tests/Feature/QualityPass/Performance/SharedTaskTabQueryCountTest.php`
+  and the shared cases in the calendar, employee-role, global-search and task-service suites.
 
 ### 3.5 Localization architecture
 
@@ -753,7 +784,7 @@ CRM_Project/
 │   │                              NotifyOverdueTasks (tasks:notify-overdue), NotifyStaleLeads (leads:notify-stale), DemoDataCommand (app:demo-data),
 │   │                              BackupCommand (crm:backup), WeeklySummaryCommand (crm:weekly-summary),
 │   │                              GenerateRoutineTasksCommand (tasks:generate-routines, D-22)
-│   ├── Contracts/                 TranslatableStatus
+│   ├── Contracts/                 TranslatableStatus, OwnedRecord, TracksAssigner, SharesOwnership (D-28)
 │   ├── Enums/                     NavigationGroup, Permission, CrmRole, UserStatus, LeadStatusKind, LeadPriority, StageKind, DealStatus,
 │   │                              ForecastCategory, ActivityKind, ActivityDirection, TaskStatus, TaskUpdateKind, TaskPriority, RecurrenceFrequency, RoutineFrequency,
 │   │                              AccountType, CompanySize, CustomFieldType, ActivityLogEvent, NotificationEvent,
@@ -790,7 +821,7 @@ CRM_Project/
 │   │   ├── Concerns/              HasLocalisedName, HasOwner, HasTags, HasAttachments, HasNotes, HasTasks, HasActivities, HasCustomFieldValues, GuardsWorkflowFields
 │   │   └── *.php                  User, Team, Setting, Lead, LeadStatus, LeadStatusLog, LeadSource, Industry, Account, Contact, Deal, DealStageLog,
 │   │                              DealContact, DealCloseReason, Competitor, Product, DealProduct, Pipeline, PipelineStage, ActivityType,
-│   │                              Activity, Task, TaskUpdate, TaskUpdateMention, TaskTemplate, TaskChecklistItem, TaskTemplateChecklistItem (D-25), Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
+│   │                              Activity, Task, TaskUpdate, TaskUpdateMention, TaskTemplate, TaskChecklistItem, TaskTemplateChecklistItem (D-25), TaskCoAssignee (D-28), Note, Attachment, Tag, CustomField, CustomFieldValue, LeadScoringRule, EmailTemplate, NotificationPreference, ActivityLog
 │   ├── Notifications/             RecordAssignedNotification, TaskReminderNotification, TaskOverdueNotification, DealStageChangedNotification,
 │   │                              DealClosedNotification, LeadConvertedNotification, LeadStaleNotification, NoteMentionNotification,
 │   │                              TaskCompletedNotification, TaskProgressNotification, TaskCommentNotification, TaskMentionNotification,
@@ -798,7 +829,7 @@ CRM_Project/
 │   ├── Observers/                 LeadObserver, DealObserver, TaskObserver, AttachmentObserver, PipelineStageObserver,
 │   │                              DealStageLogAppendOnlyObserver, LeadStatusLogAppendOnlyObserver, ActivityLogAppendOnlyObserver,
 │   │                              TaskUpdateAppendOnlyObserver, TaskUpdateMentionAppendOnlyObserver (D-20),
-│   │                              TaskAssignmentStampObserver (tasks.assigned_at, D-21)
+│   │                              TaskAssignmentStampObserver (tasks.assigned_at, D-21), TaskCoAssigneeGuardObserver (D-28)
 │   ├── Policies/                  <Model>Policy per model + Concerns/ChecksPermissions
 │   ├── Providers/                 AppServiceProvider, Filament/{Home,Sales,Tasks,Reports,Admin}PanelProvider + Filament/Concerns/ConfiguresCrmPanel (D-23)
 │   ├── Services/
@@ -882,6 +913,6 @@ CRM_Project/
 
 ## 12. Decision register
 
-The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-27 and architect
+The decision register lives in one place: [DECISIONS.md](DECISIONS.md) — owner decisions D-1 … D-28 and architect
 decisions A-1 … A-26, with amendments recorded in the row they change. This plan no longer keeps its own copy, which
 had drifted from the register (its A1 … A15 numbering did not match A-1 … A-15).

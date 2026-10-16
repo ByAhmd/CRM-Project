@@ -131,6 +131,7 @@ return [
             'ends_at' => 'ينتهي',
             'completed_at' => 'وقت الإكمال',
             'assignee' => 'المكلَّف',
+            'co_assignees' => 'المكلَّفون الآخرون',
             'related' => 'السجل المرتبط',
             'lead' => 'العميل المحتمل',
             'contact' => 'جهة الاتصال',
@@ -191,6 +192,8 @@ return [
         'no' => 'لا',
         // Words, not "2/3": a spreadsheet opening the CSV reads a bare 2/3 as a date.
         'checklist_progress' => ':done من :total',
+        // Between the names of a list in one cell (the other assignees of a shared task, D-28).
+        'list_separator' => '، ',
     ],
 
     'empty' => [

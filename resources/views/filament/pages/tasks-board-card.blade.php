@@ -1,7 +1,7 @@
 {{--
     One tasks-board card (D-14, D-27): the title (a link only where the
     reader's `view` policy allows), the priority flag, the status pill, the
-    checklist meter, the assignee's avatar and the relative due date.
+    checklist meter, who holds the task and the relative due date.
 
     The pill is the keyboard and touch alternative to dragging: where the
     reader may move the task it opens a menu of exactly the moves the policy
@@ -10,8 +10,13 @@
     A card is draggable only on the by-status view and only when one of the
     reader's moves leads to a column on the board.
 
-    Expects: $task (Task, assignee eager-loaded, checklist counts on the
-    query), $showAssignee (bool), $sortable (bool).
+    Who holds it (D-28): on the by-status view everyone (avatars, the first
+    assignee's name, «+N»); in an assignee's column, which already names
+    them, only the colleagues sharing the task with them.
+
+    Expects: $task (Task, Task::ASSIGNEE_RELATIONS eager-loaded, checklist
+    counts on the query), $showAssignee (bool), $sortable (bool) and, when
+    $showAssignee is false, $holder (the column's assignee, or null).
 --}}
 @php
     use App\Filament\Pages\TasksBoard;
@@ -21,6 +26,7 @@
 
     $moves = TaskActions::transitionsFor($task);
     $draggable = $sortable && TasksBoard::draggable($moves);
+    $holders = $showAssignee ? TaskVisuals::assignees($task) : TaskVisuals::coHolders($task, $holder ?? null);
 @endphp
 
 <article
@@ -89,16 +95,18 @@
         <x-task.checklist-meter :task="$task" />
     </div>
 
-    @if ($showAssignee || $task->due_at !== null)
+    @if ($showAssignee || $holders !== null || $task->due_at !== null)
         <div class="flex items-center justify-between gap-2 text-xs">
-            @if ($showAssignee)
-                <x-task.avatar :name="$task->assignee?->name" />
+            @if ($holders !== null)
+                <span class="crm-board-card-holders">{{ $holders }}</span>
+            @elseif ($showAssignee)
+                <x-task.avatar />
             @else
                 <span></span>
             @endif
 
             @if ($task->due_at !== null)
-                <x-task.due :task="$task" />
+                <span class="shrink-0"><x-task.due :task="$task" /></span>
             @endif
         </div>
     @endif

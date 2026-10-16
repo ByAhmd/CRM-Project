@@ -88,9 +88,12 @@ abstract class BaseTasksRelationManager extends RelationManager
             ->recordTitleAttribute('title')
             // The relation orders by due date for its other callers; the table drops
             // that order so the column sorts apply and re-adds it as the default.
+            // The co-assignees (D-28) ride along although the tab does not show
+            // them: the policy answers every row's actions from them (who was
+            // handed the task) without a query per row.
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->reorder()
-                ->with(['assignee', 'lead', 'contact', 'account', 'deal']))
+                ->with([...Task::ASSIGNEE_RELATIONS, 'lead', 'contact', 'account', 'deal']))
             ->headerActions([
                 CreateAction::make()
                     ->label(__('tasks.actions.add'))

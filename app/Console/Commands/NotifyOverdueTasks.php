@@ -9,7 +9,8 @@ use Illuminate\Console\Command;
 
 /**
  * Tells assignees once about open tasks that passed their due date
- * (decisions A-10, D-1). Idempotent, so the scheduler in routes/console.php
+ * (decisions A-10, D-1) — every assignee of a shared task (D-28) — and prints
+ * how many notices left. Idempotent, so the scheduler in routes/console.php
  * may run it as often as it likes on shared hosting without a queue worker.
  */
 final class NotifyOverdueTasks extends Command

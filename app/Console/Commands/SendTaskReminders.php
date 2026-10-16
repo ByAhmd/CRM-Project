@@ -9,7 +9,8 @@ use Illuminate\Console\Command;
 
 /**
  * Sends the reminders for tasks whose reminder time has passed (decisions
- * A-10, D-1). Idempotent — each task is reminded about once — so the
+ * A-10, D-1) — to every assignee of a shared task (D-28) — and prints how
+ * many left. Idempotent — each task is reminded about once — so the
  * scheduler in routes/console.php may run it every minute on shared hosting
  * without a queue worker.
  */

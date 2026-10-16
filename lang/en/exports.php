@@ -131,6 +131,7 @@ return [
             'ends_at' => 'Ends',
             'completed_at' => 'Completed at',
             'assignee' => 'Assignee',
+            'co_assignees' => 'Other assignees',
             'related' => 'Related record',
             'lead' => 'Lead',
             'contact' => 'Contact',
@@ -191,6 +192,8 @@ return [
         'no' => 'No',
         // Words, not "2/3": a spreadsheet opening the CSV reads a bare 2/3 as a date.
         'checklist_progress' => ':done of :total',
+        // Between the names of a list in one cell (the other assignees of a shared task, D-28).
+        'list_separator' => ', ',
     ],
 
     'empty' => [

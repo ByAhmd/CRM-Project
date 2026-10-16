@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Access;
 
 use App\Contracts\OwnedRecord;
+use App\Contracts\SharesOwnership;
 use App\Enums\UserStatus;
 use App\Enums\VisibilityLevel;
 use App\Models\User;
@@ -13,6 +14,7 @@ use Illuminate\Container\Attributes\Scoped;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\TransactionRolledBack;
 use WeakMap;
 
 /**
@@ -39,6 +41,17 @@ use WeakMap;
  * request — the class is container-scoped for that reason. The memo is keyed
  * by the user and their team, and any saved, deleted or restored user clears
  * it, so a membership change inside the same request is never served stale.
+ *
+ * A record that SharesOwnership (a shared task, D-28) is reached through any
+ * of its owners: the owner column or a row of its co-owner model naming the
+ * user (own level) or a member of the user's team (team level). Lists keep
+ * that as one more subquery; per-record checks read, once per user, level and
+ * request, the keys of the records shared within the user's reach. That memo
+ * is dropped whenever a co-owner row is written or deleted, whenever a
+ * transaction rolls back and — since at team level it is read through the
+ * team's members — with the membership memo above (any saved, deleted or
+ * restored user), so a check never trusts a sharing or a membership the
+ * database no longer holds, and agrees with visible() within the request.
  */
 #[Scoped]
 final class RecordVisibilityResolver
@@ -51,6 +64,22 @@ final class RecordVisibilityResolver
     private array $teamMembers = [];
 
     /**
+     * Per "model:level:userId:teamId", the keys of the shared records reached
+     * through a co-owner, as keys.
+     *
+     * @var array<string, array<int, true>>
+     */
+    private array $coOwned = [];
+
+    /**
+     * Per event dispatcher, the co-owner models whose writes already flush
+     * the memo above.
+     *
+     * @var WeakMap<Dispatcher, array<class-string, true>>|null
+     */
+    private static ?WeakMap $coOwnerFlushRegisteredOn = null;
+
+    /**
      * The event dispatchers the memo flush is registered on, so the listeners
      * are wired once per application rather than once per resolved instance.
      *
@@ -58,7 +87,7 @@ final class RecordVisibilityResolver
      */
     private static ?WeakMap $flushRegisteredOn = null;
 
-    public function __construct(Dispatcher $events)
+    public function __construct(private readonly Dispatcher $events)
     {
         self::$flushRegisteredOn ??= new WeakMap;
 
@@ -75,12 +104,31 @@ final class RecordVisibilityResolver
                 }
             });
         }
+
+        $events->listen(TransactionRolledBack::class, static function (): void {
+            if (app()->resolved(self::class)) {
+                app(self::class)->forgetCoOwners();
+            }
+        });
     }
 
-    /** Drops the memoised team memberships (a user joined, left or was removed). */
+    /** Drops the memoised shared records (a co-owner row was written, deleted or rolled back). */
+    public function forgetCoOwners(): void
+    {
+        $this->coOwned = [];
+    }
+
+    /**
+     * Drops the memoised team memberships (a user joined, left or was
+     * removed) and, with them, the memoised shared records (D-28): at team
+     * level those are read through the team's members, so a co-owner who
+     * joins, leaves or loses their account moves the answer exactly as a
+     * first owner does.
+     */
     public function forgetTeamMembers(): void
     {
         $this->teamMembers = [];
+        $this->forgetCoOwners();
     }
 
     /**
@@ -123,14 +171,25 @@ final class RecordVisibilityResolver
         }
 
         $column = $query->qualifyColumn($instance::ownerColumn());
+        $key = $query->qualifyColumn($instance->getKeyName());
+        $shared = $instance instanceof SharesOwnership ? $instance : null;
 
         return match ($this->levelFor($user, $instance::class)) {
             VisibilityLevel::All => $query,
-            VisibilityLevel::Team => $query->where(function (Builder $nested) use ($user, $column): void {
+            VisibilityLevel::Team => $query->where(function (Builder $nested) use ($user, $column, $key, $shared): void {
                 $nested->whereIn($column, $this->teamMemberIds($user))
                     ->orWhereNull($column);
+
+                if ($shared !== null) {
+                    $nested->orWhereIn($key, self::coOwnedKeys($shared, $this->teamMemberIds($user)));
+                }
             }),
-            VisibilityLevel::Own => $query->where($column, $user->getKey()),
+            VisibilityLevel::Own => $shared === null
+                ? $query->where($column, $user->getKey())
+                : $query->where(static function (Builder $nested) use ($user, $column, $key, $shared): void {
+                    $nested->where($column, $user->getKey())
+                        ->orWhereIn($key, self::coOwnedKeys($shared, [(int) $user->getKey()]));
+                }),
             VisibilityLevel::None => $query->whereRaw('1 = 0'),
         };
     }
@@ -211,11 +270,13 @@ final class RecordVisibilityResolver
      * owner id: the level is resolved here, once, and the team's member ids
      * are read at most once, so a long list (a calendar range) costs no
      * permission lookup per record. The test answers exactly what canWrite()
-     * answers for a record with that owner; it knows nothing of the verb
-     * permission or of a trashed record, which remain the policy's checks.
+     * answers for a record with that owner — and, for a shared record (D-28)
+     * whose key is given, with its co-owners, read once for the whole list;
+     * it knows nothing of the verb permission or of a trashed record, which
+     * remain the policy's checks.
      *
      * @param  class-string<Model&OwnedRecord>  $model
-     * @return Closure(int|null): bool
+     * @return Closure(int|null, int|null=): bool
      */
     public function writableOwner(User $user, string $model): Closure
     {
@@ -225,14 +286,98 @@ final class RecordVisibilityResolver
             $this->memoisedTeamMemberIds($user);
         }
 
-        return fn (?int $ownerId): bool => $this->ownerReached($level, $user, $ownerId);
+        $shared = is_subclass_of($model, SharesOwnership::class) ? $model : null;
+
+        return fn (?int $ownerId, ?int $recordKey = null): bool => $this->ownerReached($level, $user, $ownerId)
+            || ($shared !== null && $recordKey !== null && $this->coOwnerReached($level, $user, $shared, $recordKey));
     }
 
     private function reaches(VisibilityLevel $level, User $user, Model&OwnedRecord $record): bool
     {
         $ownerId = $record->getAttribute($record::ownerColumn());
 
-        return $this->ownerReached($level, $user, $ownerId === null ? null : (int) $ownerId);
+        if ($this->ownerReached($level, $user, $ownerId === null ? null : (int) $ownerId)) {
+            return true;
+        }
+
+        return $record instanceof SharesOwnership
+            && $record->exists
+            && $this->coOwnerReached($level, $user, $record::class, (int) $record->getKey());
+    }
+
+    /**
+     * Whether a co-owner of the shared record is the user (own level) or in
+     * the user's team (team level), from the per-request memo.
+     *
+     * @param  class-string<SharesOwnership&Model>  $model
+     */
+    private function coOwnerReached(VisibilityLevel $level, User $user, string $model, int $recordKey): bool
+    {
+        if ($level !== VisibilityLevel::Own && $level !== VisibilityLevel::Team) {
+            return $level === VisibilityLevel::All;
+        }
+
+        $this->registerCoOwnerFlush($model);
+
+        $memoKey = $model.':'.$level->value.':'.$user->getKey().':'.($user->team_id ?? '');
+
+        $this->coOwned[$memoKey] ??= array_fill_keys(
+            array_map(
+                static fn (mixed $key): int => (int) $key,
+                self::coOwnedKeys(
+                    new $model,
+                    $level === VisibilityLevel::Own ? [(int) $user->getKey()] : $this->memoisedTeamMemberIds($user),
+                )->pluck($model::coOwnerRecordColumn())->all(),
+            ),
+            true,
+        );
+
+        return isset($this->coOwned[$memoKey][$recordKey]);
+    }
+
+    /**
+     * The keys of the shared records one of the given users co-owns, as a
+     * subquery for a `whereIn` on the record's key.
+     *
+     * @param  Builder<User>|list<int>  $userIds
+     * @return Builder<Model>
+     */
+    private static function coOwnedKeys(SharesOwnership $record, Builder|array $userIds): Builder
+    {
+        $coOwner = $record::coOwnerModel();
+
+        return $coOwner::query()
+            ->select($record::coOwnerRecordColumn())
+            ->whereIn($record::coOwnerUserColumn(), $userIds);
+    }
+
+    /**
+     * Flushes the shared-record memo on every write of the model's co-owner
+     * rows, wired once per event dispatcher and model — before the first memo
+     * of that model is read, so no memo can outlive a change.
+     *
+     * @param  class-string<SharesOwnership&Model>  $model
+     */
+    private function registerCoOwnerFlush(string $model): void
+    {
+        self::$coOwnerFlushRegisteredOn ??= new WeakMap;
+        $registered = self::$coOwnerFlushRegisteredOn[$this->events] ?? [];
+        $coOwner = $model::coOwnerModel();
+
+        if (isset($registered[$coOwner])) {
+            return;
+        }
+
+        $registered[$coOwner] = true;
+        self::$coOwnerFlushRegisteredOn[$this->events] = $registered;
+
+        foreach (['saved', 'deleted'] as $event) {
+            $this->events->listen('eloquent.'.$event.': '.$coOwner, static function (): void {
+                if (app()->resolved(self::class)) {
+                    app(self::class)->forgetCoOwners();
+                }
+            });
+        }
     }
 
     private function ownerReached(VisibilityLevel $level, User $user, ?int $ownerId): bool

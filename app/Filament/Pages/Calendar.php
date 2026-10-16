@@ -66,7 +66,7 @@ final class Calendar extends Page
     #[Locked]
     public bool $truncated = false;
 
-    /** The task form keys an edit modal is filled from (the assignee arrives as OwnerSelect's owner_id). */
+    /** The task form keys an edit modal is filled from (the assignees arrive as TaskForm::ASSIGNEES, D-28). */
     private const FORM_ATTRIBUTES = [
         'title', 'description', 'kind', 'priority', 'due_at', 'reminder_at', 'starts_at', 'ends_at',
         'lead_id', 'contact_id', 'account_id', 'deal_id',
@@ -218,7 +218,7 @@ final class Calendar extends Page
                 'kind' => TaskKind::Task->value,
                 'priority' => TaskPriority::Medium->value,
                 'due_at' => $this->dueAtFromArgument($arguments['start'] ?? null),
-                'owner_id' => $this->actor()->getKey(),
+                TaskForm::ASSIGNEES => [(int) $this->actor()->getKey()],
                 'recurrence_frequency' => RecurrenceFrequency::None->value,
                 'recurrence_interval' => 1,
             ])
@@ -313,10 +313,10 @@ final class Calendar extends Page
     }
 
     /**
-     * The form state of a task: its editable attributes only, the assignee
-     * under OwnerSelect's name and the stored checklist items — the same
+     * The form state of a task: its editable attributes only, every assignee
+     * the first one first (D-28) and the stored checklist items — the same
      * mapping as the edit page, so a save from the calendar never wipes the
-     * checklist (D-25).
+     * checklist (D-25) nor drops a colleague sharing the task.
      *
      * @return array<string, mixed>
      */
@@ -324,7 +324,7 @@ final class Calendar extends Page
     {
         return [
             ...Arr::only($task->attributesToArray(), self::FORM_ATTRIBUTES),
-            'owner_id' => $task->assignee_id,
+            TaskForm::ASSIGNEES => $task->assigneeIds(),
             'checklist' => TaskChecklist::formState($task),
         ];
     }

@@ -6,6 +6,7 @@ namespace App\Services\Statistics\Reports;
 
 use App\Enums\TaskStatus;
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 use App\Models\TaskUpdate;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
@@ -24,18 +25,25 @@ use Illuminate\Database\Eloquent\Builder;
  * ownership (RecordVisibilityResolver::visibleOwners() on Task — everyone at
  * all level, deleted accounts included; the reader's team at team level;
  * the reader alone at own level) who may hold tasks (`task.view_any`
- * through a role or directly) or carry one. employee() admits an id only
+ * through a role or directly) or carry one — as a task's first assignee or
+ * as a co-assignee of a shared task (D-28). employee() admits an id only
  * from that list, and snapshot() refuses anyone outside it — the page never
  * renders a partial dashboard.
  *
- * Figures: the tasks assigned to the employee, deleted tasks excluded, read
- * through the reader's own visibility scope. Every boundary — now, today,
- * this week (on the organisation's week start), this month, the eight trend
- * weeks — is computed on the organisation clock and calendar in PHP and
- * bound as a moment in the application timezone the columns are stored in
- * (A-19); no SQL date function is used, and the one expression that is
- * (the time to finish, TaskPerformanceReport::FINISH_SECONDS_SQL) reads alike
- * on MySQL 8 and MariaDB (A-21).
+ * Figures: the tasks the employee holds (Task::assignedTo(): first assignee
+ * or co-assignee, D-28), deleted tasks excluded, read through the reader's
+ * own visibility scope. A shared task is the employee's like any other —
+ * open, overdue, completed and on time alike — and its time to finish runs
+ * from the employee's own assignment moment: the figures join the task
+ * report's own assignments (TaskPerformanceReport::joinAssignments()) for
+ * the employee, so they read what the employee's line on that report reads.
+ * Every boundary — now, today, this week (on the organisation's week
+ * start), this month, the eight trend weeks — is computed on the
+ * organisation clock and calendar in PHP and bound as a moment in the
+ * application timezone the columns are stored in (A-19); no SQL date
+ * function is used, and the one expression that is (the time to finish,
+ * TaskPerformanceReport::FINISH_SECONDS_SQL) reads alike on MySQL 8 and
+ * MariaDB (A-21).
  *
  * - now: open; overdue (open, due before now — the task report's "overdue
  *   now"); due today (open, due during the organisation's today, overdue or
@@ -91,7 +99,9 @@ final class EmployeeDashboard
                 $holders
                     ->whereHas('permissions', static fn (Builder $permission): Builder => $permission->where($permission->qualifyColumn('name'), $viewAny))
                     ->orWhereHas('roles.permissions', static fn (Builder $permission): Builder => $permission->where($permission->qualifyColumn('name'), $viewAny))
-                    ->orWhereIn('users.id', Task::query()->select('assignee_id')->whereNotNull('assignee_id'));
+                    ->orWhereIn('users.id', Task::query()->select('assignee_id')->whereNotNull('assignee_id'))
+                    // A co-assignee of a task that is not deleted carries it too (D-28).
+                    ->orWhereIn('users.id', TaskCoAssignee::query()->select('task_co_assignees.user_id')->whereIn('task_co_assignees.task_id', Task::query()->select('tasks.id')));
             })
             ->orderBy('users.name')
             ->orderBy('users.id');
@@ -214,7 +224,10 @@ final class EmployeeDashboard
 
     /**
      * Every figure in one grouped aggregate over the employee's open tasks
-     * and those completed since the earliest boundary the figures need.
+     * and those completed since the earliest boundary the figures need. The
+     * tasks are read as the employee's assignments on the task report
+     * (D-28) — the same tasks as tasks(), each once — so a shared task's
+     * time to finish runs from when it reached this employee.
      *
      * @param  array{today: CarbonImmutable, tomorrow: CarbonImmutable, month: CarbonImmutable, next_month: CarbonImmutable, weeks: list<CarbonImmutable>, next_week: CarbonImmutable}  $calendar
      * @return array{open: int, overdue: int, due_today: int, completed_month: int, on_time_month: int, finish_seconds_month: int, weeks: list<int>}
@@ -228,7 +241,7 @@ final class EmployeeDashboard
         $month = [$moment($calendar['month']), $moment($calendar['next_month'])];
         $earliest = $calendar['month']->min($calendar['weeks'][0]);
 
-        $query = $this->tasks($viewer, $employee)
+        $query = TaskPerformanceReport::joinAssignments($this->visibility->visible($viewer, Task::query()), $employee)
             ->where(static function (Builder $relevant) use ($open, $completed, $earliest): void {
                 $relevant->whereIn('tasks.status', $open)
                     ->orWhere(static function (Builder $done) use ($completed, $earliest): void {
@@ -398,15 +411,16 @@ final class EmployeeDashboard
     }
 
     /**
-     * The employee's tasks inside the reader's visibility scope (deleted
-     * tasks are left out by the model's soft-delete scope).
+     * The tasks the employee holds — as the first assignee or as a
+     * co-assignee of a shared task (D-28) — inside the reader's visibility
+     * scope (deleted tasks are left out by the model's soft-delete scope).
      *
      * @return Builder<Task>
      */
     private function tasks(User $viewer, User $employee): Builder
     {
         return $this->visibility->visible($viewer, Task::query())
-            ->where('tasks.assignee_id', $employee->getKey());
+            ->assignedTo($employee);
     }
 
     /**

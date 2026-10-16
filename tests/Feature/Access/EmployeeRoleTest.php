@@ -6,6 +6,7 @@ namespace Tests\Feature\Access;
 
 use App\Enums\CrmRole;
 use App\Enums\Permission;
+use App\Enums\TaskKind;
 use App\Enums\TaskStatus;
 use App\Enums\WorkspacePanel;
 use App\Exceptions\Access\UnassignableUserException;
@@ -17,6 +18,7 @@ use App\Filament\Resources\Tasks\Pages\CreateTask;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Filament\Resources\Tasks\Pages\ViewTask;
 use App\Filament\Resources\Tasks\RelationManagers\TaskAttachmentsRelationManager;
+use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Widgets\ActivityCountsWidget;
 use App\Filament\Widgets\LeadsByStatusChart;
@@ -126,7 +128,10 @@ final class EmployeeRoleTest extends TestCase
 
         Livewire::actingAs($this->employee)
             ->test(CreateTask::class)
-            ->assertFormFieldHidden('owner_id')
+            // D-28: no one but themselves to name — the assignee picker is hidden, the read-only list names them.
+            ->assertFormFieldHidden(TaskForm::ASSIGNEES)
+            ->assertFormFieldDoesNotExist('owner_id')
+            ->assertSeeHtml('<span class="crm-person__name">'.e($this->employee->name).'</span>')
             ->assertFormFieldHidden('lead_id')
             ->assertFormFieldHidden('deal_id')
             // A forged link to a lead they cannot read is never submitted: the picker is not there.
@@ -223,6 +228,10 @@ final class EmployeeRoleTest extends TestCase
         $this->actingAs($this->employee)->get(TasksDashboard::getUrl())->assertOk()->assertSee(__('my_work.pages.title'));
         $this->actingAs($this->employee)->get(SalesDashboard::getUrl())->assertForbidden();
 
+        // The follow-ups list shows once the employee has a follow-up, call or meeting coming (2026-10-15).
+        $this->actingAs($this->employee);
+        $this->assertFalse(UpcomingFollowUpsWidget::canView(), 'nothing coming: the list stays out of the way');
+        $this->taskAssignedTo($this->employee, TaskStatus::Pending, ['kind' => TaskKind::Call, 'due_at' => now()->addDay()]);
         $this->assertTrue(UpcomingFollowUpsWidget::canView(), 'the follow-ups list hides from the employee');
 
         foreach ([SalesKpisWidget::class, LeadsByStatusChart::class, PipelineByStageChart::class, RevenueWonByMonthChart::class, StaleDealsWidget::class, ActivityCountsWidget::class] as $widget) {

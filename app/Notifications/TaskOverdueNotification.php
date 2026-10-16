@@ -19,7 +19,8 @@ use Illuminate\Notifications\Notification;
 /**
  * "Your task is overdue" — sent once by TaskReminderService when an open
  * task passes its due date (decisions A-10, D-10): in-app bell, plus mail
- * when a real mailer is configured. Rendered in the assignee's locale.
+ * when a real mailer is configured. Every assignee of a shared task receives
+ * their own (D-28), rendered in that assignee's locale.
  */
 final class TaskOverdueNotification extends Notification
 {

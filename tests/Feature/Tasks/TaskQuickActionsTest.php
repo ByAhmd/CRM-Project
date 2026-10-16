@@ -15,6 +15,7 @@ use App\Enums\TaskTransition;
 use App\Enums\TaskUpdateKind;
 use App\Exceptions\Access\UnassignableUserException;
 use App\Filament\Resources\Tasks\Pages\CreateTask;
+use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Filament\Support\TaskActions;
 use App\Livewire\TaskUndo;
@@ -228,6 +229,56 @@ final class TaskQuickActionsTest extends TestCase
         $this->assertSame(TaskStatus::Pending, $weekly->refresh()->status);
         $this->assertNotSoftDeleted($next);
         $this->assertNull(Activity::query()->where('description', ActivityLogEvent::TaskReopened->value)->where('subject_id', $weekly->getKey())->sole()->properties->get('withdrawn_occurrence_id'));
+    }
+
+    #[Test]
+    public function the_undo_keeps_a_scheduled_occurrence_whose_co_assignees_an_administrator_changed(): void
+    {
+        // D-28: who holds the occurrence lives beside it (task_co_assignees), yet sharing it further
+        // or taking a colleague off it is an edit like any other — the undo never throws it away.
+        $colleague = $this->employee();
+        $joiner = $this->employee();
+        $edits = [
+            'shared further' => [$this->employee->getKey(), $colleague->getKey(), $joiner->getKey()],
+            'a colleague taken off' => [$this->employee->getKey()],
+        ];
+
+        foreach ($edits as $edit => $assigneeIds) {
+            $weekly = $this->tasks->create([
+                'title' => 'Weekly shelf count ('.$edit.')',
+                'assignee_ids' => [$this->employee->getKey(), $colleague->getKey()],
+                'due_at' => '2026-10-10 09:00:00',
+                'recurrence_frequency' => RecurrenceFrequency::Weekly->value,
+                'recurrence_interval' => 1,
+            ], $this->admin);
+
+            $this->host($this->employee, $weekly)->callAction('quickComplete');
+            $next = Task::query()->where('series_id', $weekly->getKey())->sole();
+            $this->assertSame([$this->employee->getKey(), $colleague->getKey()], $next->assigneeIds(), "{$edit}: the occurrence is shared like the series");
+
+            // While the toast still shows (held open under the pointer), the administrator edits who
+            // holds the scheduled occurrence; nothing else of it changes.
+            $this->travel(2)->minutes();
+            Notifications::fake();
+            $this->tasks->update($next, ['assignee_ids' => $assigneeIds], $this->admin);
+
+            if (in_array($joiner->getKey(), $assigneeIds, true)) {
+                Notifications::assertSentToTimes($joiner, RecordAssignedNotification::class, 1);
+            }
+
+            Livewire::actingAs($this->employee)
+                ->test(TaskUndo::class)
+                ->dispatch(TaskActions::UNDO_COMPLETE_EVENT, task: (int) $weekly->getKey())
+                ->assertNotified(__('tasks.notifications.reopened'));
+
+            $this->assertSame(TaskStatus::Pending, $weekly->refresh()->status, "{$edit}: the completion is undone");
+            $this->assertNotSoftDeleted($next);
+            $this->assertSame($assigneeIds, $next->refresh()->assigneeIds(), "{$edit}: the administrator's change stands");
+            $this->assertNull(
+                Activity::query()->where('description', ActivityLogEvent::TaskReopened->value)->where('subject_id', $weekly->getKey())->sole()->properties->get('withdrawn_occurrence_id'),
+                "{$edit}: nothing was withdrawn",
+            );
+        }
     }
 
     #[Test]
@@ -447,11 +498,11 @@ final class TaskQuickActionsTest extends TestCase
     {
         $this->host($this->employee)
             ->mountAction('quickAdd')
-            ->assertFormFieldHidden('assignee_id');
+            ->assertFormFieldHidden(TaskForm::ASSIGNEES);
 
         $this->host($this->employee)->callAction('quickAdd', data: [
             'title' => 'Call the supplier',
-            'assignee_id' => $this->admin->getKey(),
+            TaskForm::ASSIGNEES => [$this->admin->getKey(), $this->outsider->getKey()],
             'due_shortcut' => DueShortcut::Tomorrow->value,
             'priority' => TaskPriority::High->value,
         ])->assertHasNoErrors()->assertNotified(__('tasks.notifications.added'));
@@ -459,6 +510,7 @@ final class TaskQuickActionsTest extends TestCase
         $task = Task::query()->where('title', 'Call the supplier')->firstOrFail();
 
         $this->assertSame((int) $this->employee->getKey(), (int) $task->assignee_id, 'a forged assignee is ignored without task.assign');
+        $this->assertSame([(int) $this->employee->getKey()], $task->assigneeIds(), 'and so is a forged list of colleagues to share it with (D-28)');
         $this->assertSame((int) $this->employee->getKey(), (int) $task->assigned_by);
         $this->assertSame((int) $this->employee->getKey(), (int) $task->created_by);
         $this->assertSame(TaskPriority::High, $task->priority);
@@ -474,7 +526,7 @@ final class TaskQuickActionsTest extends TestCase
 
         $this->host($this->admin)->callAction('quickAdd', data: [
             'title' => 'Count the stock',
-            'assignee_id' => $this->employee->getKey(),
+            TaskForm::ASSIGNEES => [$this->employee->getKey()],
             'due_shortcut' => DueShortcut::None->value,
             'priority' => TaskPriority::Urgent->value,
         ])->assertHasNoErrors();
@@ -492,20 +544,20 @@ final class TaskQuickActionsTest extends TestCase
 
         $this->host($narrow)
             ->mountAction('quickAdd')
-            ->assertFormFieldVisible('assignee_id')
+            ->assertFormFieldVisible(TaskForm::ASSIGNEES)
             ->fillForm([
                 'title' => 'Out of reach',
-                'assignee_id' => $this->employee->getKey(),
+                TaskForm::ASSIGNEES => [$narrow->getKey(), $this->employee->getKey()],
                 'due_shortcut' => DueShortcut::Today->value,
                 'priority' => TaskPriority::Medium->value,
             ])
             ->callMountedAction()
-            ->assertHasActionErrors(['assignee_id']);
+            ->assertHasActionErrors([TaskForm::ASSIGNEES.'.1']);
 
         $this->assertFalse(Task::query()->where('title', 'Out of reach')->exists(), 'nothing is created outside the reach');
 
         $this->expectException(UnassignableUserException::class);
-        $this->tasks->create(['title' => 'Out of reach', 'assignee_id' => $this->employee->getKey()], $narrow);
+        $this->tasks->create(['title' => 'Out of reach', TaskForm::ASSIGNEES => [$narrow->getKey(), $this->employee->getKey()]], $narrow);
     }
 
     #[Test]
@@ -522,7 +574,7 @@ final class TaskQuickActionsTest extends TestCase
 
         $this->host($this->admin)
             ->mountAction('quickAdd')
-            ->assertFormFieldExists('assignee_id', static function (Select $field) use (&$options): bool {
+            ->assertFormFieldExists(TaskForm::ASSIGNEES, static function (Select $field) use (&$options): bool {
                 $options = $field->getOptions();
 
                 return true;
@@ -544,7 +596,7 @@ final class TaskQuickActionsTest extends TestCase
 
         $this->host($this->admin)->callAction('quickAdd', data: [
             'title' => 'Picked by name',
-            'assignee_id' => $picked,
+            TaskForm::ASSIGNEES => [$picked],
             'due_shortcut' => DueShortcut::None->value,
             'priority' => TaskPriority::Medium->value,
         ])->assertHasNoErrors();
@@ -567,7 +619,7 @@ final class TaskQuickActionsTest extends TestCase
         $host = $this->host($this->admin)
             ->callAction(TestAction::make('quickAdd')->arguments(['more' => true]), data: [
                 'title' => 'Plan the launch',
-                'assignee_id' => $this->employee->getKey(),
+                TaskForm::ASSIGNEES => [$this->employee->getKey()],
                 'due_shortcut' => DueShortcut::Tomorrow->value,
                 'priority' => TaskPriority::High->value,
             ]);
@@ -579,7 +631,7 @@ final class TaskQuickActionsTest extends TestCase
             'title' => 'Plan the launch',
             'priority' => TaskPriority::High->value,
             'due' => '2026-10-08 17:00',
-            'assignee' => (string) $this->employee->getKey(),
+            'assignees' => [(string) $this->employee->getKey()],
         ], $stash['values']);
         $token = $stash['token'];
         $this->assertIsString($token);
@@ -594,7 +646,7 @@ final class TaskQuickActionsTest extends TestCase
                 'title' => 'Plan the launch',
                 'priority' => TaskPriority::High,
                 'due_at' => '2026-10-08 17:00',
-                'owner_id' => (int) $this->employee->getKey(),
+                TaskForm::ASSIGNEES => [(int) $this->employee->getKey()],
             ]);
 
         $this->assertNull(session(TaskActions::PREFILL_SESSION_KEY), 'the prefill is taken once');
@@ -611,7 +663,7 @@ final class TaskQuickActionsTest extends TestCase
         $this->assertSame([], TaskActions::takePrefill('forged-token', $this->admin));
         $this->assertSame([], TaskActions::takePrefill('real-token', $this->admin));
 
-        // The employee may not choose an assignee, so an assignee in the address is dropped; the rest
+        // The employee may not choose an assignee, so assignees in the stash are dropped; the rest
         // is validated value by value.
         $this->assertSame(
             ['title' => 'Plan the launch'],
@@ -619,14 +671,14 @@ final class TaskQuickActionsTest extends TestCase
                 'title' => 'Plan the launch',
                 'priority' => 'critical',
                 'due' => '2026-02-31 17:00',
-                'assignee' => (string) $this->admin->getKey(),
+                'assignees' => [(string) $this->admin->getKey()],
             ], $this->employee),
         );
 
         $this->assertSame([], TaskActions::createPrefill([
             'title' => str_repeat('x', 201),
             'due' => '17:00 2026-10-08',
-            'assignee' => '1 OR 1=1',
+            'assignees' => ['1 OR 1=1'],
             'priority' => ['high'],
         ], $this->admin));
     }

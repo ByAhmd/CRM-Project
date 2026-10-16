@@ -8,6 +8,7 @@ use App\Enums\ActivityLogEvent;
 use App\Enums\TaskKind;
 use App\Enums\TaskStatus;
 use App\Filament\Pages\Calendar;
+use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Settings\SettingsRepository;
@@ -396,7 +397,7 @@ final class CalendarPageTest extends TestCase
             ->test(Calendar::class)
             ->mountAction('editTask', ['task' => $task->getKey()])
             ->assertActionMounted('editTask')
-            ->assertActionDataSet(['title' => 'Before', 'owner_id' => $rep->getKey()])
+            ->assertActionDataSet(['title' => 'Before', TaskForm::ASSIGNEES => [$rep->getKey()]])
             ->fillForm(['title' => 'After'])
             ->callMountedAction()
             ->assertHasNoActionErrors()

@@ -10,6 +10,7 @@ use App\Notifications\TaskOverdueNotification;
 use App\Notifications\TaskReminderNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 use Throwable;
@@ -27,14 +28,23 @@ use Throwable;
  * stamped all the same. Only open tasks with an assignee qualify; the stamps are
  * written quietly, outside the workflow guard, because they are
  * bookkeeping rather than a business change worth an audit row.
+ *
+ * A shared task (D-28) is every assignee's: the pass tells each of them —
+ * the first assignee and every co-assignee, each in their own locale — and a
+ * failure for one does not keep the notice from the others. The stamp stays
+ * the task's, written once when the pass has told everyone it could, so a
+ * shared task is reminded about once, like any other. The assignees come
+ * eager-loaded with each chunk; an account that was deleted is nobody's
+ * recipient, and a task whose every assignee was deleted is left unstamped,
+ * as before sharing existed.
  */
 final class TaskReminderService
 {
     private const int CHUNK = 100;
 
     /**
-     * Reminds the assignee of every open task whose reminder time has
-     * passed and returns how many were sent.
+     * Reminds every assignee of every open task whose reminder time has
+     * passed and returns how many reminders were sent.
      */
     public function sendDueReminders(Carbon $now): int
     {
@@ -49,8 +59,8 @@ final class TaskReminderService
     }
 
     /**
-     * Tells the assignee once that an open task is past its due date and
-     * returns how many were notified.
+     * Tells every assignee once that an open task is past its due date and
+     * returns how many notices were sent.
      */
     public function notifyOverdue(Carbon $now): int
     {
@@ -65,14 +75,24 @@ final class TaskReminderService
     }
 
     /**
+     * The open tasks somebody holds: a first assignee, or at least one
+     * co-assignee (D-28).
+     *
      * @return Builder<Task>
      */
     private function candidates(): Builder
     {
         return Task::query()
             ->open()
-            ->whereNotNull('assignee_id')
-            ->with('assignee');
+            ->where(static function (Builder $held): void {
+                $held->whereNotNull('tasks.assignee_id')
+                    ->orWhereExists(static function (QueryBuilder $coAssigned): void {
+                        $coAssigned->selectRaw('1')
+                            ->from('task_co_assignees')
+                            ->whereColumn('task_co_assignees.task_id', 'tasks.id');
+                    });
+            })
+            ->with(Task::ASSIGNEE_RELATIONS);
     }
 
     /**
@@ -85,36 +105,43 @@ final class TaskReminderService
 
         $query->chunkById(self::CHUNK, function (Collection $tasks) use ($notification, $stamp, $now, &$count): void {
             foreach ($tasks as $task) {
-                $assignee = $task->assignee;
+                // Deleted accounts are nobody's recipient: the first assignee
+                // relation already skips them, the co-assignees keep them so
+                // the task can name who held it.
+                $assignees = array_values(array_filter(
+                    $task->assignees(),
+                    static fn (User $assignee): bool => ! $assignee->trashed(),
+                ));
 
-                if (! $assignee instanceof User) {
+                if ($assignees === []) {
                     continue;
                 }
 
-                // An assignee who may no longer sign in (disabled, pending) is
-                // not told; the task is still stamped, so the pass stays
-                // idempotent and a later re-activation does not replay old
-                // reminders.
-                if (! $assignee->status->canAuthenticate()) {
-                    Task::withoutWorkflowGuard(static fn (): bool => $task->forceFill([$stamp => $now])->saveQuietly());
+                foreach ($assignees as $assignee) {
+                    // An assignee who may no longer sign in (disabled,
+                    // pending) is not told; the task is still stamped below,
+                    // so the pass stays idempotent and a later re-activation
+                    // does not replay old reminders.
+                    if (! $assignee->status->canAuthenticate()) {
+                        continue;
+                    }
 
-                    continue;
-                }
+                    try {
+                        $assignee->notify($notification($task)->locale($assignee->preferredLocale()));
+                    } catch (Throwable $exception) {
+                        // The channels are delivered in order and the database
+                        // (bell) entry comes first, so a mail failure leaves an
+                        // in-app notice behind: the task is stamped so the next
+                        // pass does not repeat that entry, the failure is
+                        // reported and the pass carries on with the remaining
+                        // assignees and tasks.
+                        report($exception);
+                    }
 
-                try {
-                    $assignee->notify($notification($task)->locale($assignee->preferredLocale()));
-                } catch (Throwable $exception) {
-                    // The channels are delivered in order and the database
-                    // (bell) entry comes first, so a mail failure leaves an
-                    // in-app notice behind: the task is stamped so the next
-                    // pass does not repeat that entry, the failure is reported
-                    // and the pass carries on with the remaining tasks.
-                    report($exception);
+                    $count++;
                 }
 
                 Task::withoutWorkflowGuard(static fn (): bool => $task->forceFill([$stamp => $now])->saveQuietly());
-
-                $count++;
             }
         });
 

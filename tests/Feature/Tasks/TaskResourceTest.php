@@ -13,6 +13,7 @@ use App\Filament\Resources\Tasks\Pages\CreateTask;
 use App\Filament\Resources\Tasks\Pages\EditTask;
 use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Filament\Resources\Tasks\Pages\ViewTask;
+use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Models\Activity;
 use App\Models\Deal;
@@ -146,7 +147,7 @@ final class TaskResourceTest extends TestCase
     }
 
     #[Test]
-    public function an_admin_reassigns_from_the_edit_form_through_the_owner_field(): void // D-14 (2026-09-21): task assignment is admin-only
+    public function an_admin_reassigns_from_the_edit_form_through_the_assignees_field(): void // D-14 (2026-09-21): task assignment is admin-only; D-28: the workspace names every assignee
     {
         Notification::fake();
 
@@ -156,12 +157,14 @@ final class TaskResourceTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(EditTask::class, ['record' => $task->getRouteKey()])
-            ->assertFormSet(['owner_id' => $admin->getKey()])
-            ->fillForm(['owner_id' => $rep->getKey()])
+            ->assertFormFieldDoesNotExist('owner_id')
+            ->assertFormSet([TaskForm::ASSIGNEES => [$admin->getKey()]])
+            ->fillForm([TaskForm::ASSIGNEES => [$rep->getKey()]])
             ->call('save')
             ->assertHasNoFormErrors();
 
         $this->assertSame($rep->getKey(), (int) $task->refresh()->assignee_id);
+        $this->assertSame([$rep->getKey()], $task->assigneeIds(), 'the first assignee changed hands; nobody shares the task');
 
         // The edit is an assignment: ledger row and notice to the new assignee, as the assign action does.
         $this->assertDatabaseHas('activity_log', ['description' => ActivityLogEvent::TaskAssigned->value, 'subject_id' => $task->getKey(), 'causer_id' => $admin->getKey()]);

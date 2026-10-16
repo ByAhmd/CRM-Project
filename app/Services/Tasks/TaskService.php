@@ -17,6 +17,7 @@ use App\Exceptions\Access\UnassignableUserException;
 use App\Exceptions\Tasks\InvalidTaskTransitionException;
 use App\Filament\Support\SubjectPickers;
 use App\Models\Task;
+use App\Models\TaskCoAssignee;
 use App\Models\TaskUpdate;
 use App\Models\TaskUpdateMention;
 use App\Models\User;
@@ -99,6 +100,26 @@ use Spatie\Activitylog\CauserResolver;
  *   unticked items is allowed, and the completion's ledger entry and the
  *   assigner's notice carry how many were left.
  *
+ * - a task may be shared (D-28): `assignee_ids` names every assignee, the
+ *   first one first — the one the task is filed under (`assignee_id`) — and
+ *   the others become its co-assignees, who hold the same task with its one
+ *   status, checklist and thread. Sharing is handing out: naming anyone but
+ *   the actor needs `task.assign`, every newly named user must be within the
+ *   actor's assignment reach, and any change to who holds an existing task
+ *   — its first assignee, its co-assignees or their order — needs
+ *   `task.assign` too, whichever key carries it; each newly added
+ *   co-assignee is told exactly as a first assignee is (D-14), keeps who
+ *   added them and when (their own `assigned_by` / `assigned_at`, D-21), and
+ *   the ledger gets one `task.assignees_changed` entry naming who joined and
+ *   who left. Someone moved between first assignee and co-assignee already
+ *   holds the task: they keep who handed it to them and since when, and are
+ *   not told again. Anyone joining or leaving is an edit of the task, so its
+ *   `updated_at` moves even when no column of its own changed. An edit
+ *   without `assignee_ids` keeps the co-assignees as they are; the older
+ *   `assignee_id` / `owner_id` keys still name the first assignee alone, and
+ *   clearing it makes the next co-assignee first. A comment tells every
+ *   assignee.
+ *
  * Reassignment is RecordAssignmentService's job (audit + notification), so
  * the `assign` verb is not duplicated here: an edit that changes the
  * assignee hands that change to the assignment service.
@@ -127,10 +148,12 @@ final class TaskService
     public function create(array $data, User $actor): Task
     {
         $attributes = $this->attributes($data, null, $actor);
+        $coAssigneeIds = self::coAssigneeIds($data) ?? [];
         $this->assertAssignableOnCreate($attributes['assignee_id'], $actor);
+        $this->assertShareableOnCreate($coAssigneeIds, $actor);
         $checklist = array_key_exists('checklist', $data) ? TaskChecklist::normalise($data['checklist']) : [];
 
-        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($attributes, $actor, $checklist): Task {
+        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($attributes, $coAssigneeIds, $actor, $checklist): Task {
             $task = new Task([
                 ...$attributes,
                 'status' => TaskStatus::Pending,
@@ -157,6 +180,8 @@ final class TaskService
                 $this->assignment->announce($task, $assignee, $actor);
             }
 
+            $this->recordCoAssigneeChange($task, $actor, ['added' => $this->addCoAssignees($task, $coAssigneeIds, $actor), 'removed' => []]);
+
             return $task;
         }));
     }
@@ -174,18 +199,20 @@ final class TaskService
 
         $attributes = $this->attributes($data, $task, $actor);
 
-        // A change of assignee is an assignment (audit row + notification),
-        // so it leaves the attribute diff and goes through the assignment
-        // service after the other attributes are saved.
-        $newAssigneeId = $attributes['assignee_id'];
-        $reassigned = $newAssigneeId !== ($task->assignee_id === null ? null : (int) $task->assignee_id);
+        // Who holds the task (the first assignee and the co-assignees, D-28)
+        // leaves the attribute diff: a change is an assignment, written after
+        // the other attributes by applyHolders().
         unset($attributes['assignee_id']);
+
+        $before = ['first' => $task->assignee_id === null ? null : (int) $task->assignee_id, 'co' => self::currentCoAssigneeIds($task)];
+        $after = self::holdersAfter($data, $before);
+        $this->assertHoldersChangeable($before, $after, $actor);
 
         // Absent means unchanged, like every other key; present — even
         // empty — means "this is the checklist now" (D-25).
         $checklist = array_key_exists('checklist', $data) ? TaskChecklist::normalise($data['checklist']) : null;
 
-        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($task, $attributes, $reassigned, $newAssigneeId, $actor, $checklist): Task {
+        return $this->asCauser($actor, fn (): Task => DB::transaction(function () use ($task, $attributes, $before, $after, $actor, $checklist): Task {
             // The row lock orders this edit with a concurrent tick or
             // completion, so the checklist sync below judges the items and the
             // status as they stand, and nobody's tick is lost to the sync.
@@ -193,8 +220,8 @@ final class TaskService
 
             $this->saveRearming($task, $attributes);
 
-            if ($reassigned) {
-                $this->assignment->assign($task, $newAssigneeId === null ? null : User::query()->findOrFail($newAssigneeId), $actor);
+            if ($after !== $before) {
+                $this->applyHolders($task, $before, $after, $actor);
             }
 
             if ($checklist !== null) {
@@ -755,8 +782,8 @@ final class TaskService
     }
 
     /**
-     * Who hears about a comment on the task (D-17): its participants — the
-     * assignee, the assigner (or the creator when no assigner was ever
+     * Who hears about a comment on the task (D-17): its participants — every
+     * assignee (D-28), the assigner (or the creator when no assigner was ever
      * recorded, as for a completion), everyone who commented on it before and
      * everyone a comment on it mentioned (D-20). Never the author, never a
      * deleted account or one that may no longer sign in (D-11), and — as on
@@ -774,6 +801,7 @@ final class TaskService
             ->distinct()
             ->pluck('user_id')
             ->merge(TaskUpdateMention::query()->where('task_id', $task->getKey())->distinct()->pluck('user_id'))
+            ->merge(TaskCoAssignee::query()->where('task_id', $task->getKey())->pluck('user_id'))
             ->push($task->assignee_id, $task->assigned_by ?? $task->created_by)
             ->filter(static fn (mixed $id): bool => $id !== null)
             ->map(static fn (mixed $id): int => (int) $id)
@@ -955,6 +983,313 @@ final class TaskService
     }
 
     /**
+     * Sharing a new task is handing it out (D-28): naming co-assignees needs
+     * `task.assign`, and every one of them must be within the actor's
+     * assignment reach — the same rule as a first assignee. An edit follows
+     * assertHoldersChangeable().
+     *
+     * @param  list<int>  $coAssigneeIds
+     */
+    private function assertShareableOnCreate(array $coAssigneeIds, User $actor): void
+    {
+        if ($coAssigneeIds === []) {
+            return;
+        }
+
+        if (! $actor->can(Permission::TaskAssign->value)) {
+            throw UnassignableUserException::make();
+        }
+
+        if ($this->resolver->assignableUsers($actor, Task::permissionGroup())->whereKey($coAssigneeIds)->count() !== count($coAssigneeIds)) {
+            throw UnassignableUserException::make();
+        }
+    }
+
+    /**
+     * Who holds the task after an edit (D-28), from what the edit submitted
+     * and who holds it now: `assignee_ids` names everyone, the first one
+     * first; the older `assignee_id` / `owner_id` keys (the Sales task tabs)
+     * name the first assignee alone and keep the co-assignees — and clearing
+     * the first assignee there makes the next co-assignee first, so a shared
+     * task never drops to unassigned while others still hold it (the earliest
+     * whose account is not deleted, so the task is not filed under a removed
+     * account while a colleague still holds it; the earliest of all when only
+     * deleted ones remain); without any of them nothing changes. The
+     * co-assignees are in the order they were added (or named), the first
+     * assignee never among them.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array{first: ?int, co: list<int>}  $before
+     * @return array{first: ?int, co: list<int>}
+     */
+    private static function holdersAfter(array $data, array $before): array
+    {
+        if (array_key_exists('assignee_ids', $data)) {
+            $ids = self::ids(is_array($data['assignee_ids']) ? $data['assignee_ids'] : []);
+
+            return ['first' => $ids[0] ?? null, 'co' => array_slice($ids, 1)];
+        }
+
+        $key = match (true) {
+            array_key_exists('assignee_id', $data) => 'assignee_id',
+            array_key_exists('owner_id', $data) => 'owner_id',
+            default => null,
+        };
+
+        if ($key === null) {
+            return $before;
+        }
+
+        $first = self::id($data[$key]);
+        $co = array_values(array_filter($before['co'], static fn (int $id): bool => $id !== $first));
+
+        if ($first === null && $co !== []) {
+            $live = User::query()->whereKey($co)->pluck('id')->map(static fn (mixed $id): int => (int) $id)->all();
+            $next = array_values(array_filter($co, static fn (int $id): bool => in_array($id, $live, true)))[0] ?? $co[0];
+            $first = $next;
+            $co = array_values(array_filter($co, static fn (int $id): bool => $id !== $next));
+        }
+
+        return ['first' => $first, 'co' => $co];
+    }
+
+    /**
+     * Only a holder of `task.assign` changes who holds an existing task
+     * (D-14, D-28) — its first assignee, its co-assignees, or which of them
+     * comes first — whichever key the edit used, and everyone who newly
+     * joins it must be within the actor's assignment reach. Keeping the
+     * holders as they are (a disabled colleague among them) needs nothing;
+     * neither does the reach of someone who already holds the task.
+     *
+     * @param  array{first: ?int, co: list<int>}  $before
+     * @param  array{first: ?int, co: list<int>}  $after
+     */
+    private function assertHoldersChangeable(array $before, array $after, User $actor): void
+    {
+        $sorted = static function (array $ids): array {
+            sort($ids);
+
+            return $ids;
+        };
+
+        if ($after['first'] === $before['first'] && $sorted($after['co']) === $sorted($before['co'])) {
+            return;
+        }
+
+        if (! $actor->can(Permission::TaskAssign->value)) {
+            throw UnassignableUserException::make();
+        }
+
+        $joining = array_values(array_diff(self::everyone($after), self::everyone($before)));
+
+        if ($joining !== [] && $this->resolver->assignableUsers($actor, Task::permissionGroup())->whereKey($joining)->count() !== count($joining)) {
+            throw UnassignableUserException::make();
+        }
+    }
+
+    /**
+     * Writes a change of who holds the task (D-28), in the order that keeps
+     * it whole: the co-assignees who leave it altogether go first, then the
+     * first assignee changes through RecordAssignmentService (audit, notice;
+     * a co-assignee moved up keeps who handed them the task and since when,
+     * and is not told again), then the co-assignees who join get their rows.
+     * A first assignee moved down to co-assignee keeps the task's stamps —
+     * who handed it to them and when it reached them (D-14, D-21) — and is
+     * not told either; only those who truly joined or left are named in the
+     * `task.assignees_changed` ledger entry.
+     *
+     * @param  array{first: ?int, co: list<int>}  $before
+     * @param  array{first: ?int, co: list<int>}  $after
+     */
+    private function applyHolders(Task $task, array $before, array $after, User $actor): void
+    {
+        $previous = ['assigned_by' => $task->assigned_by, 'assigned_at' => $task->assigned_at];
+
+        $removed = $this->dropCoAssignees($task, self::everyone($after));
+
+        if ($after['first'] !== $before['first']) {
+            $first = $after['first'] === null ? null : User::withTrashed()->find($after['first']);
+
+            if ($after['first'] !== null && ! $first instanceof User) {
+                throw UnassignableUserException::make();
+            }
+
+            $this->assignment->assign($task, $first, $actor);
+        }
+
+        $carried = $before['first'] !== null && in_array($before['first'], $after['co'], true)
+            ? [$before['first'] => $previous]
+            : [];
+
+        $added = $this->addCoAssignees($task, $after['co'], $actor, $carried);
+
+        // Someone joining or leaving changes the task, though only rows beside
+        // it were written: its `updated_at` moves as a change of the first
+        // assignee moves it, so an occurrence an administrator has shared
+        // further is never read as untouched and withdrawn by the undo of the
+        // completion that scheduled it (D-27, TaskRecurrence::untouchedSuccessor()).
+        if ($added !== [] || $removed !== []) {
+            $task->touch();
+        }
+
+        $this->recordCoAssigneeChange($task, $actor, ['added' => $added, 'removed' => $removed]);
+    }
+
+    /**
+     * Removes the co-assignee rows of everyone not among the given holders
+     * (D-28), one by one as models so the visibility memo hears of it, and
+     * returns who left.
+     *
+     * @param  list<int>  $keep
+     * @return list<User>
+     */
+    private function dropCoAssignees(Task $task, array $keep): array
+    {
+        $removed = [];
+
+        $leaving = TaskCoAssignee::query()
+            ->where('task_id', $task->getKey())
+            ->when($keep !== [], static fn (Builder $rows): Builder => $rows->whereNotIn('user_id', $keep))
+            ->with('user')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($leaving as $row) {
+            if ($row->user instanceof User) {
+                $removed[] = $row->user;
+            }
+
+            $row->delete();
+        }
+
+        $task->unsetRelation('coAssignees');
+
+        return $removed;
+    }
+
+    /**
+     * Writes a row for each of the given co-assignees who holds none yet
+     * (D-28) and returns who joined. A joiner is added by the actor and
+     * reached by the task now, and told once the write commits, as a first
+     * assignee is (D-14). A user in $carried already held the task — its
+     * first assignee moved down — so their row keeps the given stamps, they
+     * are not told and they did not join.
+     *
+     * @param  list<int>  $coAssigneeIds
+     * @param  array<int, array{assigned_by: ?int, assigned_at: ?Carbon}>  $carried
+     * @return list<User>
+     */
+    private function addCoAssignees(Task $task, array $coAssigneeIds, User $actor, array $carried = []): array
+    {
+        $current = TaskCoAssignee::query()->where('task_id', $task->getKey())->pluck('user_id')->map(static fn (mixed $id): int => (int) $id)->all();
+        $firstId = $task->assignee_id === null ? null : (int) $task->assignee_id;
+
+        $joining = array_values(array_filter(
+            array_diff($coAssigneeIds, $current),
+            static fn (int $id): bool => $id !== $firstId,
+        ));
+
+        if ($joining === []) {
+            return [];
+        }
+
+        $users = User::withTrashed()->whereKey($joining)->get()->keyBy(static fn (User $user): int => (int) $user->getKey());
+        $added = [];
+
+        foreach ($joining as $userId) {
+            $user = $users->get($userId);
+
+            if (! $user instanceof User) {
+                continue;
+            }
+
+            $stamps = $carried[$userId] ?? null;
+
+            TaskCoAssignee::query()->create([
+                'task_id' => $task->getKey(),
+                'user_id' => $userId,
+                'assigned_by' => $stamps === null ? $actor->getKey() : $stamps['assigned_by'],
+                'assigned_at' => $stamps['assigned_at'] ?? now(),
+            ]);
+
+            if ($stamps === null) {
+                $this->assignment->announce($task, $user, $actor);
+                $added[] = $user;
+            }
+        }
+
+        $task->unsetRelation('coAssignees');
+
+        return $added;
+    }
+
+    /**
+     * Everyone who holds the task in the given state: the first assignee and
+     * the co-assignees.
+     *
+     * @param  array{first: ?int, co: list<int>}  $holders
+     * @return list<int>
+     */
+    private static function everyone(array $holders): array
+    {
+        return array_values(array_filter([$holders['first'], ...$holders['co']], static fn (?int $id): bool => $id !== null));
+    }
+
+    /**
+     * Writes a change of co-assignees to the ledger on the task (D-28), when
+     * there is one: the names of who joined and who left.
+     *
+     * @param  array{added: list<User>, removed: list<User>}  $changes
+     */
+    private function recordCoAssigneeChange(Task $task, User $actor, array $changes): void
+    {
+        if ($changes['added'] === [] && $changes['removed'] === []) {
+            return;
+        }
+
+        $names = static fn (array $users): array => array_map(static fn (User $user): string => $user->name, $users);
+
+        $this->audit->record(ActivityLogEvent::TaskAssigneesChanged, $task, $actor, array_filter([
+            'subject_label' => $task->title,
+            'assignees_added' => $names($changes['added']),
+            'assignees_removed' => $names($changes['removed']),
+        ], static fn (mixed $value): bool => $value !== []));
+    }
+
+    /**
+     * The co-assignees a create or an edit asks for (D-28): every id of
+     * `assignee_ids` after the first (the first assignee), in order, each
+     * once; null when the data carries no `assignee_ids` (unchanged).
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<int>|null
+     */
+    private static function coAssigneeIds(array $data): ?array
+    {
+        if (! array_key_exists('assignee_ids', $data)) {
+            return null;
+        }
+
+        return array_slice(self::ids(is_array($data['assignee_ids']) ? $data['assignee_ids'] : []), 1);
+    }
+
+    /**
+     * The task's current co-assignees, in the order they were added.
+     *
+     * @return list<int>
+     */
+    private static function currentCoAssigneeIds(Task $task): array
+    {
+        return TaskCoAssignee::query()
+            ->where('task_id', $task->getKey())
+            ->orderBy('id')
+            ->pluck('user_id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * The row locked for the transition, so two concurrent completions cannot
      * both spawn the next occurrence. A deleted task has no transitions — and
      * takes no comments — until it is restored.
@@ -979,7 +1314,8 @@ final class TaskService
      * The attributes a create or an edit writes, resolved from the submitted
      * data with the existing task (on edit) or the defaults (on create) filling
      * the keys the caller left out. The form's `owner_id` (OwnerSelect) is an
-     * alias of `assignee_id`; the guarded workflow columns are never read.
+     * alias of `assignee_id`, and the first of `assignee_ids` (D-28) wins over
+     * both; the guarded workflow columns are never read.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
@@ -1001,9 +1337,13 @@ final class TaskService
         $frequency = self::enum(RecurrenceFrequency::class, $value('recurrence_frequency')) ?? RecurrenceFrequency::None;
         $interval = $value('recurrence_interval');
 
-        $assigneeId = array_key_exists('assignee_id', $data)
-            ? $data['assignee_id']
-            : (array_key_exists('owner_id', $data) ? $data['owner_id'] : ($existing === null ? $actor->getKey() : $existing->assignee_id));
+        $assigneeId = match (true) {
+            // D-28: every assignee, the first one first.
+            array_key_exists('assignee_ids', $data) => self::ids(is_array($data['assignee_ids']) ? $data['assignee_ids'] : [])[0] ?? null,
+            array_key_exists('assignee_id', $data) => $data['assignee_id'],
+            array_key_exists('owner_id', $data) => $data['owner_id'],
+            default => $existing === null ? $actor->getKey() : $existing->assignee_id,
+        };
 
         $attributes = [
             'title' => $title,
