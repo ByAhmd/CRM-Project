@@ -7,6 +7,7 @@ namespace App\Filament\Pages\System;
 use App\Enums\NavigationGroup;
 use App\Enums\Permission;
 use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
+use App\Filament\Support\LtrText;
 use App\Models\User;
 use App\Services\Settings\SettingsRepository;
 use App\Services\System\BackupService;
@@ -69,19 +70,18 @@ final class Backups extends Page implements HasTable
         return $table
             ->records(fn (): array => $this->records())
             ->columns([
-                TextColumn::make('created_at')
-                    ->label(__('backups.fields.created_at'))
-                    ->extraAttributes(['dir' => 'ltr']),
-                TextColumn::make('database_size')
-                    ->label(__('backups.fields.database'))
-                    ->extraAttributes(['dir' => 'ltr']),
-                TextColumn::make('files_size')
-                    ->label(__('backups.fields.files'))
-                    ->extraAttributes(['dir' => 'ltr']),
-                TextColumn::make('total_size')
+                // Latin values (a timestamp, sizes in KB/MB) read left to right
+                // inside an inline span (LtrText); the cells keep the table's
+                // direction, so each value lines up with its header in Arabic.
+                LtrText::column(TextColumn::make('created_at')
+                    ->label(__('backups.fields.created_at'))),
+                LtrText::column(TextColumn::make('database_size')
+                    ->label(__('backups.fields.database'))),
+                LtrText::column(TextColumn::make('files_size')
+                    ->label(__('backups.fields.files'))),
+                LtrText::column(TextColumn::make('total_size')
                     ->label(__('backups.fields.total'))
-                    ->weight('medium')
-                    ->extraAttributes(['dir' => 'ltr']),
+                    ->weight('medium')),
             ])
             ->recordActions([
                 $this->downloadAction('downloadDatabase', BackupSet::DATABASE, __('backups.actions.download_database'), Heroicon::OutlinedCircleStack),

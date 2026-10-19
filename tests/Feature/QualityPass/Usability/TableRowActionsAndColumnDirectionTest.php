@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace Tests\Feature\QualityPass\Usability;
 
 use App\Contracts\OwnedRecord;
+use App\Filament\Pages\System\Backups;
 use App\Filament\Support\LtrText;
+use App\Filament\Widgets\UpcomingFollowUpsWidget;
 use App\Models\User;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -206,9 +209,15 @@ final class TableRowActionsAndColumnDirectionTest extends TestCase
             'extraHeaderAttributes' => static fn (Column $column): array => $column->getExtraHeaderAttributes(),
         ];
 
-        $tables = $this->tables($this->superAdmin());
+        // Resource and relation-manager tables, plus the tables on pages and
+        // widgets (the backups table, 2026-10-19, was misaligned outside the walk).
+        $admin = $this->superAdmin();
+        $tables = [...$this->tables($admin), ...$this->pageAndWidgetTables($admin)];
         $offenders = [];
         $columns = 0;
+
+        $this->assertArrayHasKey(Backups::class, $tables, 'the walk reaches the tables on pages');
+        $this->assertArrayHasKey(UpcomingFollowUpsWidget::class, $tables, 'the walk reaches the table widgets');
 
         foreach ($tables as $label => $table) {
             foreach ($table->getColumns() as $column) {
@@ -234,6 +243,42 @@ final class TableRowActionsAndColumnDirectionTest extends TestCase
 
         $this->assertGreaterThan(80, $columns, 'sanity: the walk covers the panel columns');
         $this->assertSame([], $offenders, "columns whose direction is declared on the cell:\n".implode("\n", $offenders));
+    }
+
+    /**
+     * The other way a column's values leave its header (the table audit of
+     * 2026-10-19): Filament maps a physical alignment differently on the two
+     * sides — `.fi-align-left` / `.fi-align-right` make the header text-left /
+     * text-right, while a text value maps right to text-end and has no left
+     * rule at all — so in Arabic the header and the values of such a column
+     * sit on opposite edges. Columns align through the logical cases only
+     * (Start, Center, End), which Filament applies to both alike.
+     */
+    #[Test]
+    public function no_table_column_uses_a_physical_left_or_right_alignment(): void
+    {
+        $this->seedAccess();
+        $this->seedLookups();
+        $this->usePanel();
+
+        $admin = $this->superAdmin();
+        $offenders = [];
+        $columns = 0;
+
+        foreach ([...$this->tables($admin), ...$this->pageAndWidgetTables($admin)] as $label => $table) {
+            foreach ($table->getColumns() as $column) {
+                $columns++;
+                $alignment = $column->getAlignment();
+                $value = $alignment instanceof Alignment ? $alignment->value : $alignment;
+
+                if (in_array($value, [Alignment::Left->value, Alignment::Right->value], true)) {
+                    $offenders[] = "{$label}.{$column->getName()}: aligned {$value}; use Alignment::Start or Alignment::End so the header and the values share an edge in both directions";
+                }
+            }
+        }
+
+        $this->assertGreaterThan(80, $columns, 'sanity: the walk covers the panel columns');
+        $this->assertSame([], $offenders, "columns with a physical alignment:\n".implode("\n", $offenders));
     }
 
     /**

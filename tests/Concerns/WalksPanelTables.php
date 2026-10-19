@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Concerns;
 
 use App\Models\User;
+use App\Support\Filament\WorkspacePanelRegistry;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
@@ -12,11 +13,14 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Livewire;
+use ReflectionClass;
 use Throwable;
 
 /**
  * The table walk the usability probes share: every registered resource's
- * listing plus every relation manager, exactly as $actor sees them. Extracted
+ * listing plus every relation manager, exactly as $actor sees them — and,
+ * for the probes that read every table, the tables of the registered pages
+ * and widgets (pageAndWidgetTables()). Extracted
  * so the mobile-column-budget and row-action-menu tests read the SAME set of
  * tables — two private copies had already begun to drift when this trait was
  * made, which is the drift CLAUDE.md's "never copy a helper into a test
@@ -64,6 +68,44 @@ trait WalksPanelTables
 
                 if ($component instanceof HasTable) {
                     $tables[$manager] = $component->getTable();
+                }
+            }
+        }
+
+        return $tables;
+    }
+
+    /**
+     * The tables that live outside resources (the owner's report,
+     * 2026-10-19: the backups table on /admin/backups was misaligned and no
+     * probe had walked it): every page and widget the workspace registry
+     * lists that carries a table — Backups, the Inbox pages, the table
+     * widgets — mounted as $actor sees them. Abstract classes and components
+     * the actor may not mount are left out; the counts each test asserts
+     * catch a walk that fell silent.
+     *
+     * @return array<string, Table>
+     */
+    private function pageAndWidgetTables(User $actor): array
+    {
+        $this->actingAs($actor);
+
+        $tables = [];
+
+        foreach (WorkspacePanelRegistry::panelIds() as $panelId) {
+            foreach ([...WorkspacePanelRegistry::pages($panelId), ...WorkspacePanelRegistry::widgets($panelId)] as $class) {
+                if (isset($tables[$class]) || ! is_subclass_of($class, HasTable::class) || (new ReflectionClass($class))->isAbstract()) {
+                    continue;
+                }
+
+                try {
+                    $component = Livewire::actingAs($actor)->test($class)->instance();
+                } catch (Throwable) {
+                    continue;
+                }
+
+                if ($component instanceof HasTable) {
+                    $tables[$class] = $component->getTable();
                 }
             }
         }
