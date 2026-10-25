@@ -14,6 +14,7 @@ return [
     'sections' => [
         'summary' => 'Import run',
         'failed_rows' => 'Failed rows',
+        'undo' => 'Undo',
     ],
 
     'fields' => [
@@ -30,6 +31,13 @@ return [
         'duplicate_strategy' => 'Duplicates',
         'row_data' => 'Row',
         'error' => 'Reason',
+        'mode' => 'Type',
+        'dry_run' => 'Check only, write nothing',
+        'undo_requested_at' => 'Undo requested',
+        'undone_at' => 'Undo completed',
+        'undone_by' => 'Undone by',
+        'undone_rows' => 'Records deleted',
+        'kept_rows' => 'Records kept',
     ],
 
     'columns' => [
@@ -166,7 +174,14 @@ return [
         ],
     ],
 
+    // A real import, or a check-only run that wrote nothing (D-29).
+    'modes' => [
+        'import' => 'Import',
+        'dry_run' => 'Check only',
+    ],
+
     'helpers' => [
+        'dry_run' => 'The whole file is read and validated, and the import history shows the rows that would be refused with their reasons; no record is created or changed. Untick it to import the file for real.',
         'file' => 'CSV files and Excel workbooks (.xlsx). Excel 97-2003 (.xls) and OpenDocument (.ods) are not supported; open the file and save it as .xlsx, then upload that. Only the first worksheet is read, and its first row is the header row.',
         'duplicate_strategy' => 'A duplicate is an existing record you can see with the same email or phone (accounts: the same name or email; deals: the same title on the same account).',
         'failed_rows' => '{1} The first failed row is shown here; the download holds every failed row with its reason.|[2,*] The first :limit failed rows are shown here; the download holds every failed row with its reason.',
@@ -176,6 +191,8 @@ return [
         'completed' => 'Completed',
         'failed' => 'Failed',
         'processing' => 'Processing',
+        'undoing' => 'Undoing',
+        'undone' => 'Undone',
     ],
 
     'notifications' => [
@@ -188,6 +205,23 @@ return [
         'multiple_sheets' => [
             'title' => 'Only the first worksheet was read',
             'body' => '{0} The file holds no worksheets.|{1} The file holds one worksheet, ":sheet".|[2,*] The file holds :count worksheets; the first one, ":sheet", was read and the rest were left out.',
+        ],
+        // A check-only run (D-29): what would have been imported, and that nothing was written.
+        'dry_run' => [
+            'title' => 'File check completed',
+            'valid' => '{0} No rows would be imported.|{1} 1 row would be imported.|[2,*] :count rows would be imported.',
+            'nothing_written' => 'Nothing was written.',
+            'started_body' => 'Check only: the file is read in the background and nothing is written; the result reaches your notifications.',
+        ],
+        // Undoing a run (D-29): the toast when the actor confirms, the bell notice when the job is done.
+        'undo_started' => [
+            'title' => 'Import undo started',
+            'body' => 'What the import created is being deleted in the background, usually starting within a minute. The result reaches your notifications when it is done.',
+        ],
+        'undo_completed' => [
+            'title' => 'Import undo completed',
+            'undone' => '{0} No records were deleted.|{1} 1 record deleted.|[2,*] :count records deleted.',
+            'kept' => '{0}|{1} 1 record kept.|[2,*] :count records kept.',
         ],
     ],
 
@@ -213,6 +247,24 @@ return [
         'download_failed_rows' => 'Download failed rows',
         'view' => 'View',
         'track_progress' => 'Track progress',
+        'undo' => 'Undo import',
+    ],
+
+    // The undo confirmation (D-29): the counts are said before anything happens;
+    // each `keeps_*` sentence is shown only when its count is above zero.
+    'confirmations' => [
+        'undo' => [
+            'heading' => 'Undo this import?',
+            'submit' => 'Undo',
+            'will_delete' => '{0} There is no record to delete.|{1} 1 record this import created and nobody has touched since will be deleted.|[2,*] :count records this import created and nobody has touched since will be deleted.',
+            'restorable' => 'The deletion can be reversed from Deleted records.',
+            'keeps_updated' => '{0}|{1} 1 record stays: it was updated, not created.|[2,*] :count records stay: they were updated, not created.',
+            'keeps_touched' => '{0}|{1} 1 record stays: it was changed or worked on after the import.|[2,*] :count records stay: they were changed or worked on after the import.',
+            'keeps_forbidden' => '{0}|{1} 1 record stays: you may not delete it.|[2,*] :count records stay: you may not delete them.',
+            'keeps_deleted' => '{0}|{1} 1 record is already deleted.|[2,*] :count records are already deleted.',
+            'nothing' => 'There is nothing to undo: everything this import created has since been changed or deleted, or is outside what you may delete.',
+            'queued' => 'The undo runs in the background, usually starting within a minute; the result reaches your notifications.',
+        ],
     ],
 
     'filters' => [

@@ -14,6 +14,7 @@ use App\Services\Access\RecordVisibilityResolver;
 use BackedEnum;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\Models\Import;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,9 +52,10 @@ use Illuminate\Support\Str;
  * row names, as the create pages do. A row that names another owner for an
  * EXISTING record is a change of owner, so it is never written as a column:
  * the owner is kept aside while the row's other values are saved and then
- * handed to RecordAssignmentService inside the same savepoint, which writes
- * the `{entity}.assigned` audit event and notifies the new owner. A target
- * the service refuses fails the row and rolls the whole row back.
+ * handed to RecordAssignmentService inside the row's savepoint (__invoke),
+ * which writes the `{entity}.assigned` audit event and notifies the new
+ * owner. A target the service refuses fails the row and rolls the whole row
+ * back — as does anything else refused after the save (afterSave hooks).
  *
  * The importing user is the run's owner: ImportCsv authenticates the job as
  * that user before any row is processed, so audit rows carry the right causer.
@@ -63,6 +65,9 @@ trait ResolvesImportLookups
     public const DUPLICATE_SKIP = 'skip';
 
     public const DUPLICATE_UPDATE = 'update';
+
+    /** The modal option of a check-only run (D-29), named on ImportExportActions so classes without the trait can read it. */
+    public const DRY_RUN_OPTION = ImportExportActions::DRY_RUN_OPTION;
 
     /**
      * Tag ids resolved while filling the current row, synced after the save;
@@ -81,6 +86,17 @@ trait ResolvesImportLookups
     protected ?User $pendingOwner = null;
 
     /**
+     * Runs the whole row in one savepoint of the chunk's transaction (ImportCsv
+     * holds the transaction; a nested DB::transaction() is a savepoint), so the
+     * save, the owner reassignment and every afterSave hook — tags, the
+     * primary-contact rule, custom-field values — stand or fall together.
+     * CustomFieldValueService::fill() authorises `update` on the saved record
+     * and validates the values only once it has an id, so a row can still be
+     * refused after its save; ImportCsv then counts the row as failed, and
+     * without the savepoint the record would stay, stamped with a run that
+     * never counted it (D-29: the undo infers the updated duplicates from
+     * successful_rows minus the records carrying `import_id`).
+     *
      * @param  array<string, mixed>  $data
      */
     public function __invoke(array $data): void
@@ -90,22 +106,53 @@ trait ResolvesImportLookups
         $this->pendingTagIds = null;
         $this->pendingOwner = null;
 
-        parent::__invoke($data);
+        DB::transaction(function () use ($data): void {
+            parent::__invoke($data);
+        });
     }
 
     /**
      * Saves the row and, when its owner cell reassigns an existing record,
      * hands that change to RecordAssignmentService (audit + notification,
-     * D-4, A-20). Both run in one savepoint inside the chunk's transaction,
-     * so a refused reassignment leaves nothing of the row behind.
+     * D-4, A-20) — inside the row's savepoint (__invoke), so a refused
+     * reassignment leaves nothing of the row behind.
+     *
+     * A check-only run (D-29) stops here: every lookup, duplicate and policy
+     * check above has run and the row counts as valid, but nothing is written
+     * — the importers' afterSave hooks (tags, custom fields) stand down too.
+     * A record the run creates is stamped with the run (`import_id`) so the
+     * run can be undone; an updated duplicate is never marked.
      */
     public function saveRecord(): void
     {
-        DB::transaction(function (): void {
-            parent::saveRecord();
+        if ($this->isDryRun()) {
+            return;
+        }
 
-            $this->reassignPendingOwner();
-        });
+        $record = $this->record;
+
+        if ($record !== null && ! $record->exists) {
+            $record->setAttribute('import_id', $this->import->getKey());
+        }
+
+        parent::saveRecord();
+
+        $this->reassignPendingOwner();
+    }
+
+    /** Whether the run only checks the file (D-29): nothing is written, by this trait or by any importer hook. */
+    protected function isDryRun(): bool
+    {
+        return (bool) ($this->options[self::DRY_RUN_OPTION] ?? false);
+    }
+
+    /** The check-only option every importer offers (D-29), off by default. */
+    public static function dryRunCheckbox(): Checkbox
+    {
+        return Checkbox::make(self::DRY_RUN_OPTION)
+            ->label(__('imports.fields.dry_run'))
+            ->helperText(__('imports.helpers.dry_run'))
+            ->default(false);
     }
 
     /** The duplicate-strategy option every importer offers (skip by default). */
@@ -444,12 +491,12 @@ trait ResolvesImportLookups
             ->all();
     }
 
-    /** Syncs the row's tags on the saved record (afterSave hook). */
+    /** Syncs the row's tags on the saved record (afterSave hook); a check-only run syncs nothing (D-29). */
     protected function syncTags(): void
     {
         $record = $this->record;
 
-        if ($this->pendingTagIds === null || $record === null || ! $record->exists || ! method_exists($record, 'tags')) {
+        if ($this->isDryRun() || $this->pendingTagIds === null || $record === null || ! $record->exists || ! method_exists($record, 'tags')) {
             return;
         }
 
@@ -470,23 +517,36 @@ trait ResolvesImportLookups
     {
         ImportExportActions::applyLocale($import->getOptions());
 
+        if ((bool) $import->getAttribute('dry_run')) {
+            return __('imports.notifications.dry_run.title');
+        }
+
         return parent::getCompletedNotificationTitle($import);
     }
 
     /**
      * The completion notification body: each count with its own plural form
      * (Arabic has six, English two), the failed part only when rows failed.
-     * The caller applies the run's locale first.
+     * A check-only run (D-29) reports the rows that would have been imported
+     * and says that nothing was written. The caller applies the run's locale
+     * first.
      */
     protected static function completedNotificationBody(Import $import): string
     {
         $successful = (int) $import->successful_rows;
         $failed = (int) $import->getFailedRowsCount();
+        $dryRun = (bool) $import->getAttribute('dry_run');
 
-        $body = trans_choice('imports.notifications.completed', $successful, ['count' => (string) $successful]);
+        $body = $dryRun
+            ? trans_choice('imports.notifications.dry_run.valid', $successful, ['count' => (string) $successful])
+            : trans_choice('imports.notifications.completed', $successful, ['count' => (string) $successful]);
 
         if ($failed > 0) {
             $body .= ' '.trans_choice('imports.notifications.failed', $failed, ['count' => (string) $failed]);
+        }
+
+        if ($dryRun) {
+            $body .= ' '.__('imports.notifications.dry_run.nothing_written');
         }
 
         return $body;

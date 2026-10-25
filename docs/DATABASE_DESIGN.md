@@ -69,7 +69,7 @@ Legend: **PK** primary key · **FK→** foreign key · **U** unique · **I** ind
 | `notifications` | Laravel/Filament database notifications (`php artisan make:notifications-table`) |
 | `roles`, `permissions`, `model_has_roles`, `model_has_permissions`, `role_has_permissions` | spatie/laravel-permission defaults; `teams` feature off (D-2) |
 | `activity_log` | spatie/laravel-activitylog default + extra migration adding I `(subject_type, subject_id, created_at)`, I `(causer_type, causer_id, created_at)`, I `(log_name, created_at)`, I `event` |
-| `imports`, `failed_import_rows`, `exports` | Filament actions migrations (`vendor:publish --tag=filament-actions-migrations`) |
+| `imports`, `failed_import_rows`, `exports` | Filament actions migrations (`vendor:publish --tag=filament-actions-migrations`). `imports` gains, by `2026_10_25_100005` (D-29): `dry_run` bool default false (a check-only run: validated and recorded, nothing written; never undoable), `undo_requested_at` DATETIME N (the actor confirmed the undo), `undone_at` DATETIME N, `undone_by` FK→users N SET NULL (I `imports_undone_by_index`), `undone_rows` and `kept_rows` INT UNSIGNED default 0 (the records the undo deleted, and those it kept because they were updated rather than created, touched since the run, outside the actor's reach or already deleted; their sum is `successful_rows` once the undo is done). Written only by `ImportUndoService` and, for `dry_run`, by the `ImportStarted` listener. |
 | `settings` | `key` VARCHAR(100) U, `value` JSON N, `group` VARCHAR(50) I, timestamps. Typed access through `SettingsRepository`; audited. |
 | `teams` | `name_ar`, `name_en`, `manager_user_id` FK→users N SET NULL, `is_active` bool, `sort` SMALLINT, timestamps, SD. U (`name_en`), U (`name_ar`). |
 | `notification_preferences` | `user_id` FK→users CASCADE, `event` VARCHAR(64) (CHECK from `NotificationEvent`, rebuilt through `EnumCheck` whenever a case is added — last by `2026_10_04_100002` for `task_mention`, D-20, whose `down()` deletes that event's rows and restores the earlier list), `database` bool default 1, `mail` bool default 0 (a missing row means the event's default: mail on for `record_assigned`, `task_mention`, `weekly_summary`, `backup_failed`), timestamps. U (`user_id`,`event`). |
@@ -118,6 +118,7 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `customer_since` | DATE N | set when `type` becomes `customer` |
 | `description` | TEXT N | |
 | `created_by` | FK→users N SET NULL | |
+| `import_id` | FK→imports N SET NULL | I `accounts_import_id_index`; the import run that created the record (D-29, migration `2026_10_25_100003`): stamped by `ResolvesImportLookups::saveRecord()` on creation only, never on an updated duplicate, cleared when the run is pruned; read by `ImportUndoService` |
 | timestamps, SD | | |
 
 ### `contacts`
@@ -137,6 +138,7 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `lead_id` | FK→leads N SET NULL | origin lead |
 | `description` | TEXT N | |
 | `created_by` | FK→users N SET NULL | |
+| `import_id` | FK→imports N SET NULL | I `contacts_import_id_index`; the import run that created the record (D-29, migration `2026_10_25_100002`), as on `accounts` |
 | timestamps, SD | | |
 
 ### `leads`
@@ -168,6 +170,7 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `stale_notified_at` | DATETIME N | I; stamped by `LeadStaleService` once the owner was told the lead is stale, cleared by `ActivityRecorder` when `last_activity_at` moves forward |
 | `description` | TEXT N | |
 | `created_by` | FK→users N SET NULL | |
+| `import_id` | FK→imports N SET NULL | I `leads_import_id_index`; the import run that created the record (D-29, migration `2026_10_25_100001`), as on `accounts` |
 | timestamps, SD | | |
 
 ### `lead_status_logs` (append-only)
@@ -199,6 +202,7 @@ databases mid-history, and the drop migration's `down()` recreates the table exa
 | `last_activity_at` | DATETIME N | I |
 | `description` | TEXT N | |
 | `created_by` | FK→users N SET NULL | |
+| `import_id` | FK→imports N SET NULL | I `deals_import_id_index`; the import run that created the record (D-29, migration `2026_10_25_100004`), as on `accounts` |
 | timestamps, SD | | |
 
 ### `deal_stage_logs` (append-only)
@@ -394,10 +398,11 @@ on the routine (`settings.lookup_updated`: `checklist_added`, `checklist_removed
 
 - User `hasMany` leads/contacts/accounts/deals/tasks (as owner/assignee), `belongsTo` team, `hasMany` notificationPreferences.
 - Team `hasMany` users, `belongsTo` manager.
-- Account `hasMany` contacts, deals, activities, tasks, notes, attachments (morph), `belongsToMany` tags; `belongsTo` industry, owner, parent.
-- Contact `belongsTo` account, owner; `belongsToMany` deals (`deal_contacts` with role), tags; `hasMany` activities, tasks, notes; morph attachments.
-- Lead `belongsTo` source, status, owner; `hasMany` statusLogs, activities, tasks, notes; morph attachments; `belongsToMany` tags; `belongsTo` convertedAccount/Contact/Deal.
-- Deal `belongsTo` account, contact, pipeline, stage, owner, closeReason, lead; `hasMany` stageLogs, activities, tasks, notes, products; `belongsToMany` contacts, competitors, tags; morph attachments.
+- Account `hasMany` contacts, deals, activities, tasks, notes, attachments (morph), `belongsToMany` tags; `belongsTo` industry, owner, parent, import (`import_id`, D-29).
+- Contact `belongsTo` account, owner, import (D-29); `belongsToMany` deals (`deal_contacts` with role), tags; `hasMany` activities, tasks, notes; morph attachments.
+- Lead `belongsTo` source, status, owner, import (D-29); `hasMany` statusLogs, activities, tasks, notes; morph attachments; `belongsToMany` tags; `belongsTo` convertedAccount/Contact/Deal.
+- Deal `belongsTo` account, contact, pipeline, stage, owner, closeReason, lead, import (D-29); `hasMany` stageLogs, activities, tasks, notes, products; `belongsToMany` contacts, competitors, tags; morph attachments.
+- Import `belongsTo` user, undoneBy (`undone_by`, D-29); `hasMany` failedRows.
 - Pipeline `hasMany` stages, deals.
 - Activity/Task/Note `belongsTo` lead/contact/account/deal (nullable), owner/assignee/author; morph attachments.
 - Task `hasMany` updates (`task_updates`, newest first), `belongsTo` assigner (`assigned_by`), `belongsTo` template (`template_id`, D-22); TaskUpdate `belongsTo` task, author, `hasMany` mentions (`task_update_mentions`, D-20).
@@ -424,6 +429,7 @@ Step-13 amendments (migrations dated 2026-09-15, from the EXPLAIN evidence on vo
 - Routine tasks (D-22): `RoutineTaskService` is the only writer of `task_templates` and `task_template_user`; every save checks the assignees against the saver's assignment reach; the hourly pass locks each due routine, re-checks it, creates one task per assignee who may sign in and holds `task.view_any` (with `assigned_by` and `template_id` force-filled) for the latest matching day only, and advances `next_run_on` / `last_run_on` in the same transaction. Each task gets the routine's checklist, unticked (D-25).
 - Task checklists (D-25): written only through `TaskService`; an edit without the `checklist` key keeps the checklist, so every fill path of the task form (edit page, relation-manager modal, calendar modal) loads the stored items; a completed, cancelled or deleted task's checklist is frozen (structure changes refused, no ticks) and reopening keeps the ticks; completing with unticked items is allowed and the `task.completed` entry carries `checklist_open`/`checklist_total`; the next occurrence of a repeating task copies the checklist unticked; the list, board and export read the counts with `withCount` on their own queries (`TaskChecklist::withCounts`), never on `TaskResource::getEloquentQuery()`; a tick counts as progress for the weekly summary's stalled rule (D-18).
 - Notes: body trimmed and capped at 5000 characters in the service; a note on a contact or deal is listed on the account only when the reader may read that contact or deal.
+- Imports (D-29): `import_id` on leads, contacts, accounts and deals is stamped by `ResolvesImportLookups::saveRecord()` when the row creates the record and never afterwards (an updated duplicate keeps its own value, usually null). A check-only run (`imports.dry_run`) runs every lookup, duplicate and policy check of a real run and writes nothing but the `imports` counters and `failed_import_rows`: `saveRecord()`, `syncTags()` and every importer's `afterSave()` stand down. `ImportUndoService` is the only writer of `undo_requested_at`, `undone_at`, `undone_by`, `undone_rows` and `kept_rows`; it soft-deletes through each model's own `delete()` (so `LogsActivity` records `{entity}.deleted` with the actor as causer) and only the records carrying the run's `import_id` that are not already deleted, not touched since the run completed (an `activity_log` entry for the record, or a note, activity, task, attachment, status/stage log, product line, deal contact, child contact or deal dated after `completed_at`; a converted lead; a closed deal) and within the actor's `delete` policy; the job re-classifies every batch at run time, so what the confirmation counted is a forecast and the stored counts are the fact.
 - Qualification: moving a lead into a status of kind `qualified` requires a non-empty note on the `lead_status_logs` row (D-7); conversion is refused unless the current status kind is `qualified` (D-7).
 - Sending a templated email writes an outbound `email` activity with the rendered subject and body in `payload` (D-10).
 - Normalised email/phone recomputed on save; duplicate warning surfaces on create/import when an exact normalised match exists in the same entity.

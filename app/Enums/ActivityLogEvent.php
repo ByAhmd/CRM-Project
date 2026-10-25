@@ -126,6 +126,9 @@ enum ActivityLogEvent: string implements HasLabel
     case BackupFailed = 'backup.failed';
     case BackupDownloaded = 'backup.downloaded';
 
+    // Imports (D-29): undoing a run is one deliberate act on top of the per-record deletions it causes.
+    case ImportUndone = 'import.undone';
+
     // Settings and configurable lookups (statuses, sources, pipelines, stages, types, reasons, tags, products…)
     case SettingsUpdated = 'settings.updated';
     case LookupCreated = 'settings.lookup_created';

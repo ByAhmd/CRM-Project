@@ -35,6 +35,11 @@ use Illuminate\Validation\Rule;
  * contact is owned by the importer unless the owner column names someone
  * else. The one-primary-contact-per-account rule is applied after every
  * save through ContactService (D-6).
+ *
+ * A check-only run (D-29) validates every row exactly as above — lookups,
+ * duplicates, policy verbs — and writes nothing: the trait skips the save and
+ * the owner change, and afterSave() stands down (tags, the primary rule,
+ * custom-field values).
  */
 final class ContactImporter extends Importer
 {
@@ -183,7 +188,7 @@ final class ContactImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect()];
+        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -228,6 +233,10 @@ final class ContactImporter extends Importer
 
     protected function afterSave(): void
     {
+        if ($this->isDryRun()) {
+            return; // a check-only run writes no tags, no primary-contact change and no custom-field values; the record was never saved and has no id (D-29)
+        }
+
         $this->syncTags();
 
         $record = $this->record;

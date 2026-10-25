@@ -6,6 +6,7 @@ namespace Tests\Feature\ImportExport;
 
 use App\Enums\ActivityLogEvent;
 use App\Enums\CrmRole;
+use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
 use App\Enums\LeadStatusKind;
 use App\Enums\Permission;
@@ -13,6 +14,9 @@ use App\Filament\Imports\AccountImporter;
 use App\Filament\Imports\ContactImporter;
 use App\Filament\Imports\DealImporter;
 use App\Filament\Imports\LeadImporter;
+use App\Filament\Support\CustomFieldsSchema;
+use App\Models\ActivityLog;
+use App\Models\CustomField;
 use App\Models\Import;
 use App\Models\Lead;
 use App\Models\LeadStatus;
@@ -22,6 +26,7 @@ use Filament\Actions\Imports\Jobs\ImportCsv;
 use Filament\Actions\Imports\Models\FailedImportRow;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Concerns\CreatesCrmFixtures;
@@ -188,7 +193,8 @@ final class LeadImporterTest extends TestCase
     {
         $components = LeadImporter::getOptionsFormComponents();
 
-        $this->assertCount(1, $components);
+        // The duplicate strategy first, then the check-only option (D-29; ImportDryRunTest covers it).
+        $this->assertCount(2, $components);
         $this->assertInstanceOf(Select::class, $components[0]);
         $this->assertSame('duplicate_strategy', $components[0]->getName());
 
@@ -229,6 +235,41 @@ final class LeadImporterTest extends TestCase
         $this->assertSame(__('imports.validation.owner_out_of_reach', ['value' => 'teammate@example.com']), $this->failedImportReason($handed, 'email', 'handed@example.com'));
         $this->assertFalse(Lead::query()->where('email_normalized', 'handed@example.com')->exists(), 'a reachable teammate is still not an owner without the assign verb (D-4)');
         $this->assertSame($importer->getKey(), Lead::query()->where('email_normalized', 'kept@example.com')->firstOrFail()->owner_id);
+    }
+
+    /**
+     * CustomFieldValueService::fill() authorises `update` on the saved record
+     * and validates the values only once it has an id, so a row can be refused
+     * after its save. ResolvesImportLookups::__invoke runs the whole row in one
+     * savepoint, so the refusal takes the record and its ledger entry with it:
+     * no record carries a run that counted it as failed (D-29 infers the
+     * updated duplicates from successful_rows minus the carried records).
+     */
+    #[Test]
+    public function a_row_refused_after_its_save_leaves_no_record_and_no_ledger_entry_behind(): void
+    {
+        $team = $this->makeTeam();
+        // May create leads but not update them: the custom-field write after the save is refused.
+        $importer = $this->userWithPermissions($team, [Permission::LeadViewAny, Permission::LeadViewTeam, Permission::LeadImport, Permission::LeadCreate]);
+        CustomField::factory()->forEntity(CustomFieldEntity::Lead)->create(['key' => 'budget', 'label_ar' => 'الميزانية', 'label_en' => 'Budget']);
+        $budget = CustomFieldsSchema::NAME_PREFIX.'budget';
+
+        $import = $this->runImport($importer, [
+            ['first_name' => 'Valued', 'last_name' => 'Row', 'email' => 'valued@example.com', $budget => 'Big'],
+            ['first_name' => 'Plain', 'last_name' => 'Row', 'email' => 'plain@example.com', $budget => ''],
+        ]);
+
+        $this->assertSame(1, $import->successful_rows);
+        $this->assertSame(1, $import->getFailedRowsCount());
+        $this->assertFalse(Lead::query()->where('email_normalized', 'valued@example.com')->exists(), 'the row refused after its save left no record');
+        $this->assertSame(0, DB::table('custom_field_values')->count());
+        $this->assertSame(1, ActivityLog::query()->where('description', ActivityLogEvent::LeadCreated->value)->count(), 'only the successful row left a ledger entry');
+        $this->assertSame(
+            [$import->getKey()],
+            Lead::query()->where('email_normalized', 'plain@example.com')->pluck('import_id')->all(),
+            'exactly the successful rows carry the run',
+        );
+        $this->assertSame(1, Lead::query()->where('import_id', $import->getKey())->count());
     }
 
     /**

@@ -13,6 +13,7 @@ use App\Enums\StageKind;
 use App\Enums\TaskStatus;
 use App\Enums\TaskUpdateKind;
 use App\Enums\WorkspacePanel;
+use App\Filament\Imports\LeadImporter;
 use App\Models\ActivityType;
 use App\Models\Deal;
 use App\Models\DealCloseReason;
@@ -359,6 +360,34 @@ trait CreatesCrmFixtures
         $reader->setHeaderOffset(0);
 
         return array_values(iterator_to_array($reader->getRecords()));
+    }
+
+    /**
+     * A completed import run of the importer by the user, as Filament leaves
+     * one: every row successful unless the attributes say otherwise (pass
+     * `total_rows` and `processed_rows` for a run that refused rows), completed
+     * at the current (travelled) moment. The records a run created are made
+     * separately, stamped with it (`import_id`, D-29).
+     *
+     * @param  class-string  $importer
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function makeImport(User $user, string $importer = LeadImporter::class, int $successfulRows = 2, array $attributes = []): Import
+    {
+        $import = new Import;
+        $import->user()->associate($user);
+        $import->forceFill([
+            'file_name' => 'rows.csv',
+            'file_path' => 'rows.csv',
+            'importer' => $importer,
+            'total_rows' => $successfulRows,
+            'processed_rows' => $successfulRows,
+            'successful_rows' => $successfulRows,
+            'completed_at' => now(),
+            ...$attributes,
+        ])->save();
+
+        return $import->refresh();
     }
 
     /** The reason the import refused the row whose $column holds $value; fails the test when no such row failed. */

@@ -37,6 +37,10 @@ use Illuminate\Validation\Rule;
  * else, starts in the default status when the column is blank, and never
  * starts in a Qualified or Converted status. An existing lead keeps its status: status
  * moves go through the workflow only (D-7).
+ *
+ * A check-only run (D-29) validates every row exactly as above — lookups,
+ * duplicates, policy verbs — and writes nothing: the trait skips the save and
+ * the owner change, and afterSave() stands down (tags, custom-field values).
  */
 final class LeadImporter extends Importer
 {
@@ -204,7 +208,7 @@ final class LeadImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect()];
+        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -252,6 +256,10 @@ final class LeadImporter extends Importer
 
     protected function afterSave(): void
     {
+        if ($this->isDryRun()) {
+            return; // a check-only run writes no tags and no custom-field values; the record was never saved and has no id (D-29)
+        }
+
         $this->syncTags();
 
         // The row's values, now that the record has an id (D-9).

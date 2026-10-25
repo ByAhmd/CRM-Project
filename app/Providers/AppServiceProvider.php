@@ -59,8 +59,11 @@ final class AppServiceProvider extends ServiceProvider
         $this->configureSecurity();
         $this->configureImportExportAuthorisation();
         $this->registerCustomFieldRegistryFlush();
-        // Listeners in app/Listeners are auto-discovered; registering them here
-        // as well ran every handler twice per event.
+        // Listeners in app/Listeners are auto-discovered (PersistUserLocale,
+        // ActivateInvitedUser, StampCheckOnlyImport — the D-29 check-only flag
+        // on Filament's ImportStarted event — …); registering them here as
+        // well ran every handler twice per event. Only a subscriber, which
+        // discovery does not see, is registered by hand below.
         $this->registerAuditing();
         $this->configureLanguageSwitch();
         $this->configureFilamentDefaults();

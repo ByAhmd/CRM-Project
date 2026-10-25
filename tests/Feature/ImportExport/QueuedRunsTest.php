@@ -24,20 +24,18 @@ use App\Models\Export;
 use App\Models\Import;
 use App\Models\Lead;
 use App\Models\Tag;
-use App\Models\User;
 use Filament\Actions\Testing\TestAction;
-use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Notifications\DatabaseNotification;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCrmFixtures;
+use Tests\Concerns\DrainsQueueLikeTheScheduler;
+use Tests\Concerns\ReadsFilamentNotifications;
 use Tests\TestCase;
 
 /**
@@ -56,6 +54,8 @@ use Tests\TestCase;
 final class QueuedRunsTest extends TestCase
 {
     use CreatesCrmFixtures;
+    use DrainsQueueLikeTheScheduler;
+    use ReadsFilamentNotifications;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -257,8 +257,7 @@ final class QueuedRunsTest extends TestCase
 
         // A drain stops after 50 seconds and the next minute's drain carries
         // on; one chunk here stands for everything one cut drain got through.
-        $this->enterConsoleContext();
-        $this->assertSame(0, Artisan::call('queue:work --once --sleep=0 --memory=1024'), Artisan::output());
+        $this->drainOneJobLikeACutScheduler();
 
         $import->refresh();
         $this->assertSame(100, $import->processed_rows);
@@ -385,33 +384,6 @@ final class QueuedRunsTest extends TestCase
     }
 
     /**
-     * Runs the scheduler's drain the way production runs it (routes/console.php,
-     * D-1): a console process, so no current panel and no signed-in user, in
-     * the locale the application starts with rather than the one the run was
-     * started in. `--sleep=0` skips the worker's idle pause and `--memory`
-     * lifts the cap the test process itself would trip; nothing else differs
-     * from the scheduled line. Returns the worker's output for failure messages.
-     */
-    private function drainQueueLikeTheScheduler(string $consoleLocale = 'ar'): string
-    {
-        $this->enterConsoleContext($consoleLocale);
-
-        $exit = Artisan::call('queue:work --stop-when-empty --max-time=50 --sleep=0 --memory=1024');
-        $output = Artisan::output();
-
-        $this->assertSame(0, $exit, $output);
-
-        return $output;
-    }
-
-    private function enterConsoleContext(string $locale = 'ar'): void
-    {
-        Filament::setCurrentPanel(null);
-        auth()->forgetGuards();
-        app()->setLocale($locale);
-    }
-
-    /**
      * Every importer column mapped to the CSV header of the same name.
      *
      * @return array<string, string>
@@ -422,41 +394,5 @@ final class QueuedRunsTest extends TestCase
         $headers = array_values(array_filter($headers, static fn (?string $header): bool => $header !== null && $header !== ''));
 
         return array_combine($headers, $headers);
-    }
-
-    /**
-     * The toast Filament queued for the browser under this title: still in the
-     * session, or already claimed for the response by Filament's render hook.
-     *
-     * @return array<string, mixed>
-     */
-    private function sessionNotification(string $title): array
-    {
-        $notifications = [
-            ...(array) session('filament.claimed_notifications', []),
-            ...(array) session('filament.notifications', []),
-        ];
-
-        foreach ($notifications as $notification) {
-            if (is_array($notification) && ($notification['title'] ?? null) === $title) {
-                return $notification;
-            }
-        }
-
-        $this->fail("no toast titled {$title} was sent");
-    }
-
-    /** The bell notice stored for the user under this title; fails the test when there is none. */
-    private function databaseNotification(User $user, string $title): DatabaseNotification
-    {
-        $notification = DatabaseNotification::query()
-            ->where('notifiable_type', $user->getMorphClass())
-            ->where('notifiable_id', $user->getKey())
-            ->get()
-            ->first(static fn (DatabaseNotification $notification): bool => ($notification->data['title'] ?? null) === $title);
-
-        $this->assertInstanceOf(DatabaseNotification::class, $notification, "no bell notice titled {$title} for {$user->email}");
-
-        return $notification;
     }
 }

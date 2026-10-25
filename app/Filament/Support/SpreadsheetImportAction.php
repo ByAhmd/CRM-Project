@@ -44,6 +44,9 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
  * own «import started» notice names the row count and nothing else, and a user
  * who expects the rows at once reads the quiet list that follows as a failed
  * import — so sendSuccessNotification() completes the notice (A-7 amendment).
+ * A check-only run (D-29, the importers' «تحقق فقط دون كتابة» option) gets the
+ * matching sentence instead: the file is read in the background and nothing is
+ * written.
  */
 final class SpreadsheetImportAction extends ImportAction
 {
@@ -154,11 +157,13 @@ final class SpreadsheetImportAction extends ImportAction
 
     /**
      * The «import started» notice, said in full: Filament's sentence (the row
-     * count), then when the work begins and where its result lands, with a
-     * button to the import history — which refreshes itself while a run is
-     * processing (ImportsTable). The history button goes through PanelUrl like
-     * every link between panels (D-23) and is left out for a reader the
-     * ImportPolicy refuses; the notice itself never is.
+     * count), then when the work begins and where its result lands — or, for
+     * a check-only run (D-29), that the file is read in the background and
+     * nothing is written — with a button to the import history, which
+     * refreshes itself while a run is processing (ImportsTable). The history
+     * button goes through PanelUrl like every link between panels (D-23) and
+     * is left out for a reader the ImportPolicy refuses; the notice itself
+     * never is.
      *
      * Filament sets the notice inside its action closure, on the queued
      * connections only: on the sync connection (tests) the rows are already
@@ -236,8 +241,12 @@ final class SpreadsheetImportAction extends ImportAction
 
     private function describeQueuedRun(Notification $notification): void
     {
+        $sentence = $this->isCheckOnlyRun()
+            ? __('imports.notifications.dry_run.started_body')
+            : __('imports.notifications.started.body');
+
         $notification
-            ->body(trim(((string) $notification->getBody()).' '.__('imports.notifications.started.body')))
+            ->body(trim(((string) $notification->getBody()).' '.$sentence))
             ->seconds(self::STARTED_NOTICE_SECONDS);
 
         $user = auth()->user();
@@ -258,6 +267,17 @@ final class SpreadsheetImportAction extends ImportAction
                 ->button()
                 ->url($url),
         ]);
+    }
+
+    /**
+     * Whether the modal that was just submitted asked for a check-only run
+     * (D-29). The option travels in the action's validated data like the
+     * duplicate strategy, and that data is still in hand when the success
+     * notice is sent: Filament resets it only when the action is unmounted.
+     */
+    private function isCheckOnlyRun(): bool
+    {
+        return (bool) ($this->getData()[ImportExportActions::DRY_RUN_OPTION] ?? false);
     }
 
     private function convert(TemporaryUploadedFile $file): ?SpreadsheetConversion

@@ -234,7 +234,11 @@ final class CustomFieldActions
      * one transaction and rolls nothing back per row, so an unmapped required
      * column would otherwise leave a half-populated record live next to a
      * failed row. `requiredMappingForNewRecordsOnly()` moves the refusal ahead
-     * of the save, where the row fails and nothing is written.
+     * of the save, where the row fails and nothing is written. Since D-29 the
+     * importers' trait holds a per-row savepoint (ResolvesImportLookups::
+     * __invoke), so a refusal after the save rolls the row back too; refusing
+     * an unmapped required column before the save still spares the row a
+     * save-and-rollback.
      *
      * @return list<ImportColumn>
      */

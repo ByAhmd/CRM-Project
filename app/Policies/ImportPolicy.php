@@ -25,9 +25,10 @@ use Filament\Actions\Imports\Models\Import;
  *
  * The policy is registered for Filament's base Import model as well
  * (AppServiceProvider), because Filament's download route binds that class
- * rather than App\Models\Import. Rows are written by Filament's ImportAction
- * only and never edited or removed by hand — retention pruning is the only
- * way one disappears.
+ * rather than App\Models\Import. Rows are written by Filament's ImportAction,
+ * by the ImportStarted listener (`dry_run`, D-29) and by ImportUndoService
+ * (the undo stamps and counts, D-29); nobody edits or removes one by hand —
+ * retention pruning is the only way one disappears.
  */
 final class ImportPolicy
 {
@@ -75,6 +76,34 @@ final class ImportPolicy
     }
 
     /**
+     * Undoing a run (D-29): a real import (not a dry run) that completed and
+     * has neither been undone nor asked to be, read by its owner or by a
+     * reviewer, who must hold the entity's `delete` key. Each record is then
+     * re-checked against the entity's own `delete` policy by
+     * ImportUndoService, so a team manager undoes a run only as far as the
+     * team's records go, and the rest are reported as kept.
+     */
+    public function undo(User $user, Import $import): bool
+    {
+        if (! $this->view($user, $import)) {
+            return false;
+        }
+
+        if (
+            (bool) $import->getAttribute('dry_run')
+            || $import->getAttribute('completed_at') === null
+            || $import->getAttribute('undo_requested_at') !== null
+            || $import->getAttribute('undone_at') !== null
+        ) {
+            return false;
+        }
+
+        $model = self::entityOf((string) $import->importer);
+
+        return $model !== null && $user->can($model::permissionGroup().'.delete');
+    }
+
+    /**
      * Whether the user may review other users' runs of this importer:
      * `imports.view` plus all-level reach on the importer's entity.
      */
@@ -84,17 +113,28 @@ final class ImportPolicy
             return false;
         }
 
+        $model = self::entityOf($importer);
+
+        return $model !== null && $user->can($model::permissionGroup().'.view_all');
+    }
+
+    /**
+     * The owned entity an importer class writes, or null for a class that is
+     * not one of the application's importers (a run whose importer was
+     * removed, or a forged class name) — such a run is neither reviewed nor
+     * undone.
+     *
+     * @return class-string<OwnedRecord>|null
+     */
+    public static function entityOf(string $importer): ?string
+    {
         if (! is_subclass_of($importer, Importer::class)) {
-            return false;
+            return null;
         }
 
         $model = $importer::getModel();
 
-        if (! is_subclass_of($model, OwnedRecord::class)) {
-            return false;
-        }
-
-        return $user->can($model::permissionGroup().'.view_all');
+        return is_subclass_of($model, OwnedRecord::class) ? $model : null;
     }
 
     public function create(User $user): bool

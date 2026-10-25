@@ -110,8 +110,8 @@ final class ImportExportHistoryTest extends TestCase
     {
         $rep = $this->importingRep();
         $reviewer = $this->admin();
-        $import = $this->makeImport($rep, ['total_rows' => 3, 'processed_rows' => 3, 'successful_rows' => 1]);
-        $clean = $this->makeImport($rep, ['total_rows' => 1, 'processed_rows' => 1, 'successful_rows' => 1]);
+        $import = $this->makeImport($rep, LeadImporter::class, 1, ['total_rows' => 3, 'processed_rows' => 3]);
+        $clean = $this->makeImport($rep, LeadImporter::class, 1);
 
         FailedImportRow::query()->create([
             'import_id' => $import->getKey(),
@@ -268,27 +268,6 @@ final class ImportExportHistoryTest extends TestCase
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return $rep->fresh() ?? $rep;
-    }
-
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    private function makeImport(User $user, array $attributes = []): Import
-    {
-        $import = new Import;
-        $import->user()->associate($user);
-        $import->forceFill([
-            'file_name' => 'leads.csv',
-            'file_path' => 'leads.csv',
-            'importer' => LeadImporter::class,
-            'total_rows' => 3,
-            'processed_rows' => 3,
-            'successful_rows' => 2,
-            'completed_at' => now(),
-            ...$attributes,
-        ])->save();
-
-        return $import->refresh();
     }
 
     /**

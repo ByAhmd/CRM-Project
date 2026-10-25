@@ -38,6 +38,12 @@ final class ImportInfolist
                                 ->formatStateUsing(fn (string $state): string => ImportResource::entityLabel($state))
                                 ->badge()
                                 ->color('gray'),
+                            TextEntry::make('mode')
+                                ->label(__('imports.fields.mode'))
+                                ->state(fn (Import $record): string => ImportResource::mode($record))
+                                ->formatStateUsing(fn (string $state): string => __('imports.modes.'.$state))
+                                ->badge()
+                                ->color(fn (string $state): string => $state === ImportResource::MODE_DRY_RUN ? 'info' : 'gray'),
                             TextEntry::make('user.name')->label(__('imports.fields.user'))->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('status')
                                 ->label(__('imports.fields.status'))
@@ -57,6 +63,21 @@ final class ImportInfolist
                                 ->state(fn (Import $record): int => $record->getFailedRowsCount())
                                 ->numeric()
                                 ->color(fn (int $state): ?string => $state > 0 ? 'danger' : null),
+                        ]),
+                    ])
+                    ->columns(1),
+
+                // The undo of the run (D-29): when it was asked for, when it
+                // finished and by whom, and what it deleted and kept.
+                Section::make(__('imports.sections.undo'))
+                    ->visible(fn (Import $record): bool => $record->undo_requested_at !== null)
+                    ->schema([
+                        Grid::make(3)->schema([
+                            TextEntry::make('undo_requested_at')->label(__('imports.fields.undo_requested_at'))->dateTime('Y-m-d H:i'),
+                            TextEntry::make('undone_at')->label(__('imports.fields.undone_at'))->dateTime('Y-m-d H:i')->placeholder(__('common.placeholders.empty')),
+                            TextEntry::make('undoneBy.name')->label(__('imports.fields.undone_by'))->placeholder(__('common.placeholders.empty')),
+                            TextEntry::make('undone_rows')->label(__('imports.fields.undone_rows'))->numeric(),
+                            TextEntry::make('kept_rows')->label(__('imports.fields.kept_rows'))->numeric(),
                         ]),
                     ])
                     ->columns(1),

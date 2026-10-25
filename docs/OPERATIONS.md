@@ -129,6 +129,32 @@ and why. Keeping two active super admins avoids the situation.
 - History: *System → Imports* and *System → Exports*. A user always sees and downloads their own runs;
   `imports.view` / `exports.view` open other users' runs only for entities the holder reaches at all level. An import
   run shows its failed rows and offers them as a CSV download.
+- **Check only (D-29):** the import modal's «تحقق فقط دون كتابة» option reads and validates the whole file exactly as
+  a real import would — lookups, duplicates, the policy verbs — and records the valid and refused rows in the history
+  without creating or changing anything (no record, tag, custom-field value or reassignment). The history marks such a
+  run «تحقق فقط», its completion notice says «لم يُكتب شيء», and it cannot be undone. Tell a user who is unsure of a
+  file to run it checked first, read the refused rows, then import it for real. One limit: a check-only run compares
+  each row with the records that exist, so two rows of the same file that duplicate each other (same e-mail or phone,
+  same account name, same deal title on one account) are found only by the real import — nothing is written for the
+  first row to be matched against — and the check-only count of valid rows can be higher than the real run's by those
+  rows.
+- **Undoing an import (D-29):** on a completed run's page, *Undo import* («تراجع عن الاستيراد») soft-deletes the
+  records **that run created** and that nobody has touched since; it never touches the duplicates the run updated, the
+  owner changes it caused, or anything created from the records afterwards. A record is kept — and counted in the
+  confirmation before anything happens — when the audit ledger holds any entry for it after the run completed, when a
+  note, activity, task, attachment or child record was added after the run (a product line or contact of a deal, a
+  status or stage move; an imported account is kept as soon as *any* contact, deal or child account names it, and an
+  imported contact as soon as *any* deal names it as primary contact or a lead was converted into it, whenever that
+  happened — the run created none of those links, so they can only have come afterwards, and their audit entry sits on
+  the child, not on the imported record), when a lead was converted or a deal closed, when it is already deleted, or
+  when the actor may not delete it under the entity's own `delete` policy (a team manager undoes a run only as far as
+  the team's records go). The deletion is the ordinary soft delete, audited per record as
+  `{entity}.deleted` with the actor as causer, so *Deleted records* (section 4) restores any of them one by one. The
+  undo runs queued like the import (section 8): the run shows *Undoing* and the list refreshes itself, then *Undone*
+  with the records deleted and kept, who undid it and when; one `import.undone` audit entry records the act and a bell
+  notice reports the result. Who: the run's owner, or an `imports.view` reviewer of the entity, holding the entity's
+  `delete` key. A run is undone once, while it is still in the history (90 days); records remember their run
+  (`import_id`) until it is pruned.
 - **Pruning:** `model:prune` runs daily. Import runs are kept 90 days (`Import::RETENTION_DAYS`), export runs and their
   files 30 days (`Export::RETENTION_DAYS`); failed import rows leave with their import.
 
@@ -179,6 +205,7 @@ five minutes.
 |---|---|---|
 | Preflight: "No scheduler heartbeat" | Is the cron entry present? Does its PHP binary print 8.3 (`<php> -v`)? Is the site in maintenance mode (`storage/framework/down` exists)? | Restore the cron line with the absolute PHP 8.3 path; `php artisan up` if a release was left down. |
 | Heartbeat present, but reminders, notifications or imports do not arrive | `php artisan schedule:list` (next due times); `php artisan queue:failed`; the log. | Run `php artisan schedule:run` by hand and read its output; fix the failing job. |
+| An import run stays *Undoing* for more than a few minutes (D-29) | `php artisan queue:failed` for an `App\Jobs\UndoImport` entry: one batch failed (`tries = 1`), and the run keeps `undo_requested_at` without `undone_at`, so it cannot be asked again. | Fix the cause, then `php artisan queue:retry <id>`: the batch classifies its records again and carries on from its cursor; the run reads *Undone* when the last batch ends. |
 | Heartbeat warning right after a release | Maintenance mode pauses the scheduler and `optimize:clear` empties the cache. | Expected; rerun `app:preflight` two minutes after `php artisan up`. |
 | An entry never runs after a killed process | `withoutOverlapping` locks expire on their own (10 minutes for the drain, 5 for the reminder and overdue passes, 30 for routine tasks). | Wait, or `php artisan schedule:clear-cache` to release the locks. |
 | The heartbeat "cannot be read from the cache" | `CACHE_STORE`, cache directory permissions or the `cache` table. | Fix the cache store (DEPLOYMENT.md, section 3.6). |

@@ -139,7 +139,8 @@ final class AccountImporterTest extends TestCase
     {
         $components = AccountImporter::getOptionsFormComponents();
 
-        $this->assertCount(1, $components);
+        // The duplicate strategy first, then the check-only option (D-29; ImportDryRunTest covers it).
+        $this->assertCount(2, $components);
         $this->assertInstanceOf(Select::class, $components[0]);
         $this->assertSame('duplicate_strategy', $components[0]->getName());
 

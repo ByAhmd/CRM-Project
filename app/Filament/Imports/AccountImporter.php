@@ -38,6 +38,10 @@ use Illuminate\Validation\Rule;
  * prospect unless the file says otherwise (D-6); a type other than the one
  * the account already has (prospect for a new one) needs `account.set_type`,
  * otherwise the row is refused.
+ *
+ * A check-only run (D-29) validates every row exactly as above — lookups,
+ * duplicates, policy verbs — and writes nothing: the trait skips the save and
+ * the owner change, and afterSave() stands down (tags, custom-field values).
  */
 final class AccountImporter extends Importer
 {
@@ -198,7 +202,7 @@ final class AccountImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect()];
+        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -242,6 +246,10 @@ final class AccountImporter extends Importer
 
     protected function afterSave(): void
     {
+        if ($this->isDryRun()) {
+            return; // a check-only run writes no tags and no custom-field values; the record was never saved and has no id (D-29)
+        }
+
         $this->syncTags();
 
         // The row's values, now that the record has an id (D-9).

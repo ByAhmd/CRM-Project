@@ -55,6 +55,14 @@ final class ImportsTable
                     ->color('gray')
                     ->visibleFrom('md'),
 
+                TextColumn::make('mode')
+                    ->label(__('imports.fields.mode'))
+                    ->state(fn (Import $record): string => ImportResource::mode($record))
+                    ->formatStateUsing(fn (string $state): string => __('imports.modes.'.$state))
+                    ->badge()
+                    ->color(fn (string $state): string => $state === ImportResource::MODE_DRY_RUN ? 'info' : 'gray')
+                    ->visibleFrom('md'),
+
                 TextColumn::make('user.name')
                     ->label(__('imports.fields.user'))
                     ->placeholder(__('common.placeholders.empty'))
@@ -130,12 +138,21 @@ final class ImportsTable
             ->emptyStateDescription(__('imports.empty.description'));
     }
 
-    /** Whether a run the reader may see (the list's own scope) started within a day and has not completed. */
+    /**
+     * Whether a run the reader may see (the list's own scope) is in flight:
+     * started within a day and not completed, or an undo (D-29) confirmed
+     * within a day and not finished.
+     */
     private static function hasRunInFlight(): bool
     {
+        $cutoff = now()->subDay();
+
         return ImportResource::getEloquentQuery()
-            ->whereNull('completed_at')
-            ->where('created_at', '>=', now()->subDay())
+            ->where(static function (Builder $runs) use ($cutoff): void {
+                $runs
+                    ->where(static fn (Builder $run): Builder => $run->whereNull('completed_at')->where('created_at', '>=', $cutoff))
+                    ->orWhere(static fn (Builder $run): Builder => $run->whereNotNull('undo_requested_at')->whereNull('undone_at')->where('undo_requested_at', '>=', $cutoff));
+            })
             ->exists();
     }
 }

@@ -59,6 +59,7 @@ return [
         'attachment' => 'Attachments',
         'email' => 'Email',
         'backup' => 'Backups',
+        'import' => 'Imports',
     ],
 
     'events' => [
@@ -142,6 +143,7 @@ return [
         'backup.created' => 'Backup taken',
         'backup.failed' => 'Backup failed',
         'backup.downloaded' => 'Backup file downloaded',
+        'import.undone' => 'Import undone',
         'settings.updated' => 'Settings updated',
         'settings.lookup_created' => 'Settings item added',
         'settings.lookup_updated' => 'Settings item updated',
@@ -345,6 +347,14 @@ return [
             'removed' => 'Assignees removed',
             'assigner' => 'Now handed out by',
             'previous_assigner' => 'Previously handed out by',
+        ],
+        'Import' => [
+            'undone' => 'Records deleted',
+            'kept' => 'Records kept',
+            'updated' => 'Kept: updated, not created',
+            'touched' => 'Kept: changed or worked on after the import',
+            'forbidden' => 'Kept: outside the delete permission',
+            'already_deleted' => 'Kept: already deleted',
         ],
     ],
 

@@ -45,6 +45,14 @@ final class ImportExportActions
     public const LOCALE_OPTION = 'locale';
 
     /**
+     * The modal option of a check-only run (D-29), carried in the run's options
+     * like the duplicate strategy. Named here, on a class, because PHP reads a
+     * trait constant only through a class that uses the trait: the listener
+     * that marks the run and the action that words its toast read it from here.
+     */
+    public const DRY_RUN_OPTION = 'dry_run';
+
+    /**
      * Imports that may be started per minute per client IP address per list page (Filament's action rate limit is
      * keyed on the component, the mounted action and request()->ip(), not on the user); Filament refuses the rest
      * with its throttle notice. Behind an untrusted proxy every user shares it (CRM_TRUSTED_PROXIES).

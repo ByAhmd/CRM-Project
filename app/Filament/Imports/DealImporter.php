@@ -42,6 +42,10 @@ use Illuminate\Support\Str;
  * names someone else, carries the organisation currency and starts Open
  * (DealObserver). An existing deal keeps its pipeline and stage: stage
  * moves go through DealStageWorkflow only (D-8).
+ *
+ * A check-only run (D-29) validates every row exactly as above — lookups,
+ * duplicates, policy verbs — and writes nothing: the trait skips the save and
+ * the owner change, and afterSave() stands down (tags, custom-field values).
  */
 final class DealImporter extends Importer
 {
@@ -195,7 +199,7 @@ final class DealImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect()];
+        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -266,6 +270,10 @@ final class DealImporter extends Importer
 
     protected function afterSave(): void
     {
+        if ($this->isDryRun()) {
+            return; // a check-only run writes no tags and no custom-field values; the record was never saved and has no id (D-29)
+        }
+
         $this->syncTags();
 
         // The row's values, now that the record has an id (D-9).

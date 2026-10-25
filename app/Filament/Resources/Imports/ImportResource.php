@@ -25,10 +25,12 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Import history (module 18, decisions D-4, D-13): read-only. A user sees
- * their own runs; holders of `imports.view` see other users' runs of the
- * entities they reach at all level (ImportPolicy). The rows are written by
- * Filament's ImportAction and pruned by retention only.
+ * Import history (module 18, decisions D-4, D-13, D-29). A user sees their
+ * own runs; holders of `imports.view` see other users' runs of the entities
+ * they reach at all level (ImportPolicy). The rows are written by Filament's
+ * ImportAction, marked check-only by the ImportStarted listener and stamped
+ * by ImportUndoService when a run is undone (D-29) — the one write the
+ * resource offers, from the run page — and pruned by retention.
  */
 final class ImportResource extends Resource
 {
@@ -39,6 +41,14 @@ final class ImportResource extends Resource
     public const STATUS_COMPLETED = 'completed';
 
     public const STATUS_FAILED = 'failed';
+
+    public const STATUS_UNDOING = 'undoing';
+
+    public const STATUS_UNDONE = 'undone';
+
+    public const MODE_IMPORT = 'import';
+
+    public const MODE_DRY_RUN = 'dry_run';
 
     protected static ?string $model = Import::class;
 
@@ -148,9 +158,19 @@ final class ImportResource extends Resource
     /**
      * Processing until Filament stamps completed_at; then failed when no row
      * made it, completed otherwise (partial failures show in the counts).
+     * An undone run (D-29) shows as such, and as undoing between the actor's
+     * confirmation and the queued job's end.
      */
     public static function status(Import $import): string
     {
+        if ($import->isUndone()) {
+            return self::STATUS_UNDONE;
+        }
+
+        if ($import->isUndoing()) {
+            return self::STATUS_UNDOING;
+        }
+
         if ($import->completed_at === null) {
             return self::STATUS_PROCESSING;
         }
@@ -167,7 +187,14 @@ final class ImportResource extends Resource
         return match ($status) {
             self::STATUS_COMPLETED => 'success',
             self::STATUS_FAILED => 'danger',
+            self::STATUS_UNDONE => 'gray',
             default => 'warning',
         };
+    }
+
+    /** A real import, or a check-only run that wrote nothing (D-29). */
+    public static function mode(Import $import): string
+    {
+        return $import->isDryRun() ? self::MODE_DRY_RUN : self::MODE_IMPORT;
     }
 }

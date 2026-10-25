@@ -129,6 +129,17 @@ final class Contact extends Model implements HasLocalePreference, OwnedRecord
     }
 
     /**
+     * The import run that created the record, while that run is still in the
+     * history (D-29); null for a record made by hand or an updated duplicate.
+     *
+     * @return BelongsTo<Import, $this>
+     */
+    public function import(): BelongsTo
+    {
+        return $this->belongsTo(Import::class, 'import_id');
+    }
+
+    /**
      * Activities logged against the contact, newest first (decision A-10).
      *
      * @return HasMany<Activity, $this>
