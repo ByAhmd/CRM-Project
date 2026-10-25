@@ -27,12 +27,21 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * Downloads stream through Filament's own downloaders from the private
  * disk, authorised by ExportPolicy::view — the owner always, `exports.view`
  * holders for every run. Nothing under storage is ever web-served.
+ *
+ * A run is written by the scheduler's queue drain (D-1), so while one of the
+ * listed runs is still processing the list asks for itself again every
+ * POLL_INTERVAL and the download menu appears without a reload; once nothing
+ * is in flight it stops asking. A run stuck in processing for over a day is
+ * not in flight any more and must not keep every later visit polling.
  */
 final class ExportsTable
 {
+    public const POLL_INTERVAL = '10s';
+
     public static function configure(Table $table): Table
     {
         return $table
+            ->poll(static fn (): ?string => self::hasRunInFlight() ? self::POLL_INTERVAL : null)
             // Phone budget: the file, its status and when it ran stay at every
             // width; the entity and the row counts step in from `md`, the
             // launcher and the success count from `lg`. CSS breakpoints only —
@@ -130,6 +139,15 @@ final class ExportsTable
             ])
             ->emptyStateHeading(__('exports.empty.heading'))
             ->emptyStateDescription(__('exports.empty.description'));
+    }
+
+    /** Whether a run the reader may see (the list's own scope) started within a day and has not completed. */
+    private static function hasRunInFlight(): bool
+    {
+        return ExportResource::getEloquentQuery()
+            ->whereNull('completed_at')
+            ->where('created_at', '>=', now()->subDay())
+            ->exists();
     }
 
     /**

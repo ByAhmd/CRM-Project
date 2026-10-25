@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Support;
 
+use App\Filament\Resources\Imports\ImportResource;
+use App\Models\User;
 use App\Services\ImportExport\SpreadsheetConversion;
 use App\Services\ImportExport\SpreadsheetImportException;
 use App\Services\ImportExport\SpreadsheetToCsvConverter;
+use App\Support\Filament\PanelUrl;
 use Closure;
+use Filament\Actions\Action;
 use Filament\Actions\ImportAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
@@ -15,7 +19,8 @@ use Illuminate\Support\Number;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
- * Filament's import action, taught to accept a real spreadsheet (module 18).
+ * Filament's import action, taught to accept a real spreadsheet and to say
+ * when the rows arrive (module 18).
  *
  * Filament reads every upload with league/csv. This subclass converts an Excel
  * (.xlsx) workbook to CSV the moment the upload is read, so the column
@@ -32,9 +37,19 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
  * the importer cannot read faithfully is never offered. The modal's helper text
  * names .xlsx as the workbook format to save, so a user holding either one
  * knows what to do rather than guessing from a rejected upload.
+ *
+ * The rows themselves are written by the queue, not by the request: Filament
+ * batches them in chunks of 100 on the database connection, and the scheduler
+ * drains that connection every minute for at most 50 seconds (D-1). Filament's
+ * own «import started» notice names the row count and nothing else, and a user
+ * who expects the rows at once reads the quiet list that follows as a failed
+ * import — so sendSuccessNotification() completes the notice (A-7 amendment).
  */
 final class SpreadsheetImportAction extends ImportAction
 {
+    /** How long the completed «started» notice stays on screen: two sentences and a button need more than Filament's six seconds. */
+    public const STARTED_NOTICE_SECONDS = 10;
+
     /**
      * What the file picker offers and the `mimetypes` rule accepts: Filament's
      * own CSV list, minus `application/vnd.ms-excel` (that is .xls), plus the
@@ -137,6 +152,28 @@ final class SpreadsheetImportAction extends ImportAction
         return $rules;
     }
 
+    /**
+     * The «import started» notice, said in full: Filament's sentence (the row
+     * count), then when the work begins and where its result lands, with a
+     * button to the import history — which refreshes itself while a run is
+     * processing (ImportsTable). The history button goes through PanelUrl like
+     * every link between panels (D-23) and is left out for a reader the
+     * ImportPolicy refuses; the notice itself never is.
+     *
+     * Filament sets the notice inside its action closure, on the queued
+     * connections only: on the sync connection (tests) the rows are already
+     * written and the completion notice has already been shown, so it sets
+     * none, and this method adds none.
+     */
+    public function sendSuccessNotification(): static
+    {
+        if ($this->successNotification instanceof Notification && ! $this->isSuccessNotificationDisabled) {
+            $this->describeQueuedRun($this->successNotification);
+        }
+
+        return parent::sendSuccessNotification();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -195,6 +232,32 @@ final class SpreadsheetImportAction extends ImportAction
             ]))
             ->warning()
             ->send();
+    }
+
+    private function describeQueuedRun(Notification $notification): void
+    {
+        $notification
+            ->body(trim(((string) $notification->getBody()).' '.__('imports.notifications.started.body')))
+            ->seconds(self::STARTED_NOTICE_SECONDS);
+
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! ImportResource::canViewAny()) {
+            return;
+        }
+
+        $url = PanelUrl::forReader($user, ImportResource::class, static fn (): string => ImportResource::getUrl());
+
+        if ($url === null) {
+            return;
+        }
+
+        $notification->actions([
+            Action::make('history')
+                ->label(__('imports.actions.track_progress'))
+                ->button()
+                ->url($url),
+        ]);
     }
 
     private function convert(TemporaryUploadedFile $file): ?SpreadsheetConversion

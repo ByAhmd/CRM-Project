@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Exports;
 
+use App\Filament\Exports\Concerns\LocalisesCompletionNotice;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Task;
 use App\Models\User;
@@ -28,6 +29,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class TaskExporter extends Exporter
 {
+    use LocalisesCompletionNotice;
+
     protected static ?string $model = Task::class;
 
     /**

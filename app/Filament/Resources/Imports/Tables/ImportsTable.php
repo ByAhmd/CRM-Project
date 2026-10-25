@@ -19,12 +19,22 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * The import history listing (module 18): one row per run, newest first,
  * with the entity, the launcher, the counts and a derived status.
+ *
+ * A run is written by the scheduler's queue drain, chunk by chunk (D-1), so
+ * while one of the listed runs is still processing the list asks for itself
+ * again every POLL_INTERVAL and the counts move without a reload; once
+ * nothing is in flight it stops asking. A run stuck in processing for over a
+ * day (a job that failed for good) is not in flight any more and must not
+ * keep every later visit polling.
  */
 final class ImportsTable
 {
+    public const POLL_INTERVAL = '10s';
+
     public static function configure(Table $table): Table
     {
         return $table
+            ->poll(static fn (): ?string => self::hasRunInFlight() ? self::POLL_INTERVAL : null)
             // Phone budget: the file, its status and when it ran stay at every
             // width; the entity and the row counts step in from `md`, the
             // launcher and the success count from `lg`. CSS breakpoints only —
@@ -118,5 +128,14 @@ final class ImportsTable
             ])
             ->emptyStateHeading(__('imports.empty.heading'))
             ->emptyStateDescription(__('imports.empty.description'));
+    }
+
+    /** Whether a run the reader may see (the list's own scope) started within a day and has not completed. */
+    private static function hasRunInFlight(): bool
+    {
+        return ImportResource::getEloquentQuery()
+            ->whereNull('completed_at')
+            ->where('created_at', '>=', now()->subDay())
+            ->exists();
     }
 }

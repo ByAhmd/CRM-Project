@@ -179,6 +179,10 @@ return [
     ],
 
     'notifications' => [
+        // Appended to Filament's own «import started» notice (A-7 amendment, 2026-10-25).
+        'started' => [
+            'body' => 'Processing usually starts within a minute, and the result reaches your notifications when it is done.',
+        ],
         'completed' => '{0} No rows were imported.|{1} 1 row imported.|[2,*] :count rows imported.',
         'failed' => '{0} No rows failed.|{1} 1 row failed.|[2,*] :count rows failed.',
         'multiple_sheets' => [
@@ -208,6 +212,7 @@ return [
         'import' => 'Import :label',
         'download_failed_rows' => 'Download failed rows',
         'view' => 'View',
+        'track_progress' => 'Track progress',
     ],
 
     'filters' => [

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Exports;
 
 use App\Enums\CustomFieldEntity;
+use App\Filament\Exports\Concerns\LocalisesCompletionNotice;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Deal;
@@ -27,6 +28,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class DealExporter extends Exporter
 {
+    use LocalisesCompletionNotice;
+
     protected static ?string $model = Deal::class;
 
     /**

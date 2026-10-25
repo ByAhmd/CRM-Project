@@ -179,6 +179,10 @@ return [
     ],
 
     'notifications' => [
+        // Appended to Filament's own «import started» notice (A-7 amendment, 2026-10-25).
+        'started' => [
+            'body' => 'تبدأ المعالجة عادةً خلال دقيقة، وتصلك النتيجة في الإشعارات عند الاكتمال.',
+        ],
         'completed' => '{0} لم يُستورد أي صف.|{1} استُورد صف واحد.|{2} استُورد صفّان.|[3,10] استُورد :count صفوف.|[11,99] استُورد :count صفاً.|[100,*] استُورد :count صف.',
         'failed' => '{0} لم يُرفض أي صف.|{1} رُفض صف واحد.|{2} رُفض صفّان.|[3,10] رُفض :count صفوف.|[11,99] رُفض :count صفاً.|[100,*] رُفض :count صف.',
         'multiple_sheets' => [
@@ -208,6 +212,7 @@ return [
         'import' => 'استيراد :label',
         'download_failed_rows' => 'تنزيل الصفوف المرفوضة',
         'view' => 'عرض',
+        'track_progress' => 'متابعة التقدم',
     ],
 
     'filters' => [

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Exports;
 
+use App\Filament\Exports\Concerns\LocalisesCompletionNotice;
 use App\Filament\Support\ImportExportActions;
 use App\Models\Activity;
 use Carbon\CarbonInterface;
@@ -23,6 +24,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class ActivityExporter extends Exporter
 {
+    use LocalisesCompletionNotice;
+
     protected static ?string $model = Activity::class;
 
     /**

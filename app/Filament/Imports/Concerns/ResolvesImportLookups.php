@@ -458,6 +458,22 @@ trait ResolvesImportLookups
     }
 
     /**
+     * The completion notification's title in the run's locale (D-5), applied
+     * by the title itself as the body already does. Filament builds the notice
+     * in the batch's finally callback, title first. That callback normally
+     * runs right after the last chunk, whose rows have already switched the
+     * process to the run's locale (__invoke), but a chunk that failed before
+     * its first row leaves the process in whatever locale it had — the
+     * console's default — and the title would then not match the body.
+     */
+    public static function getCompletedNotificationTitle(Import $import): string
+    {
+        ImportExportActions::applyLocale($import->getOptions());
+
+        return parent::getCompletedNotificationTitle($import);
+    }
+
+    /**
      * The completion notification body: each count with its own plural form
      * (Arabic has six, English two), the failed part only when rows failed.
      * The caller applies the run's locale first.

@@ -120,7 +120,12 @@ and why. Keeping two active super admins avoids the situation.
   not on the user). Behind an untrusted proxy every user shares that limit (DEPLOYMENT.md, section 3.6,
   `CRM_TRUSTED_PROXIES`).
 - Both run on the queue: nothing happens until the scheduler's drain picks them up (section 8). Completion notices
-  arrive in the bell.
+  arrive in the bell. **Timing:** the drain starts every minute and stops as soon as the queue is empty or after 50 seconds, and an
+  import is handed to it in chunks of 100 rows, so a run queued between two ticks usually begins within a minute, a
+  short file is done at the first drain and a 5 000-row file takes a few minutes across several drains. The «import started» notice says so and offers *Track
+  progress*; the history lists (*System → Imports / Exports*) refresh themselves every ten seconds while one of the
+  listed runs is processing (started within a day, not completed) and stop once nothing is in flight. A run still
+  *Processing* long after that is a stopped drain or a failed job: see the troubleshooting table in section 8.
 - History: *System → Imports* and *System → Exports*. A user always sees and downloads their own runs;
   `imports.view` / `exports.view` open other users' runs only for entities the holder reaches at all level. An import
   run shows its failed rows and offers them as a CSV download.
