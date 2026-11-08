@@ -41,6 +41,10 @@ use Illuminate\Validation\Rule;
  * A check-only run (D-29) validates every row exactly as above — lookups,
  * duplicates, policy verbs — and writes nothing: the trait skips the save and
  * the owner change, and afterSave() stands down (tags, custom-field values).
+ *
+ * The run writes into the project the modal named (D-30): a new lead is
+ * stamped with it and a duplicate is looked for inside it only, so the same
+ * e-mail in another project is a new lead here.
  */
 final class LeadImporter extends Importer
 {
@@ -208,7 +212,7 @@ final class LeadImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
+        return [self::projectSelect(), self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -278,9 +282,10 @@ final class LeadImporter extends Importer
     }
 
     /**
-     * An existing lead inside the importer's visible scope (D-4) with the
-     * same normalised email or phone; leads outside that scope are invisible
-     * to the importer, so the row creates a new lead.
+     * An existing lead inside the importer's visible scope (D-4) and the
+     * run's project (D-30) with the same normalised email or phone; leads
+     * outside that scope or in another project are invisible to the
+     * importer, so the row creates a new lead.
      */
     private function findDuplicate(): ?Lead
     {
@@ -291,7 +296,7 @@ final class LeadImporter extends Importer
             return null;
         }
 
-        return $this->visible(Lead::query())
+        return $this->inChosenProject($this->visible(Lead::query()))
             ->where(function (Builder $query) use ($email, $phone): void {
                 $query->whereRaw('1 = 0');
 

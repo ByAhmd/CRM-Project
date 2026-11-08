@@ -56,6 +56,9 @@ final class DealsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('title')
+            // The readable deals (D-4) of every project: the account's deals sit
+            // in its own project already, so the account opened from a link
+            // while another project is current still lists them (D-30).
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->whereIn('deals.id', DealResource::getEloquentQuery()->select('deals.id'))
                 ->with(['stage', 'owner']))

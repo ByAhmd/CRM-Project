@@ -18,7 +18,7 @@ use App\Filament\Resources\Imports\Pages\ViewImport;
 use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\ImportExportActions;
-use App\Listeners\StampCheckOnlyImport;
+use App\Listeners\StampImportRunOptions;
 use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CustomField;
@@ -93,11 +93,13 @@ final class ImportDryRunTest extends TestCase
         foreach ([LeadImporter::class, ContactImporter::class, AccountImporter::class, DealImporter::class] as $importer) {
             $components = $importer::getOptionsFormComponents();
 
-            $this->assertCount(2, $components, $importer);
-            $this->assertInstanceOf(Select::class, $components[0], $importer);
-            $this->assertSame('duplicate_strategy', $components[0]->getName(), $importer);
+            // The project select comes first since D-30 (ImportProjectTest covers it); the
+            // duplicate strategy follows, then the check-only option.
+            $this->assertCount(3, $components, $importer);
+            $this->assertInstanceOf(Select::class, $components[1], $importer);
+            $this->assertSame('duplicate_strategy', $components[1]->getName(), $importer);
 
-            $checkbox = $components[1];
+            $checkbox = $components[2];
             $this->assertInstanceOf(Checkbox::class, $checkbox, $importer);
             $this->assertSame(ImportExportActions::DRY_RUN_OPTION, $checkbox->getName(), $importer);
             $this->assertSame(__('imports.fields.dry_run'), $checkbox->getLabel(), $importer);
@@ -131,7 +133,7 @@ final class ImportDryRunTest extends TestCase
     {
         $registrations = array_filter(
             Event::getRawListeners()[ImportStarted::class] ?? [],
-            static fn (mixed $listener): bool => is_string($listener) && str_starts_with($listener, StampCheckOnlyImport::class),
+            static fn (mixed $listener): bool => is_string($listener) && str_starts_with($listener, StampImportRunOptions::class),
         );
         $this->assertCount(1, $registrations, 'discovered from app/Listeners, and not registered a second time by hand');
 
@@ -276,7 +278,7 @@ final class ImportDryRunTest extends TestCase
         $import = Import::query()->latest('id')->firstOrFail();
 
         // The flag is on the row before any job runs: the listener ran in the request.
-        $this->assertTrue($import->dry_run, 'stamped by StampCheckOnlyImport in the request, before the drain');
+        $this->assertTrue($import->dry_run, 'stamped by StampImportRunOptions in the request, before the drain');
         $this->assertSame(ImportResource::MODE_DRY_RUN, ImportResource::mode($import));
         $this->assertSame(0, $import->processed_rows);
         $this->assertNull($import->completed_at);

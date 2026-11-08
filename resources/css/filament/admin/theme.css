@@ -1766,8 +1766,12 @@ a.crm-workspace-card:focus-visible {
     color: var(--crm-muted);
 }
 
-/* The top-bar switcher: the current workspace's icon and name, then a chevron. */
-.crm-workspace-switcher-trigger {
+/*
+ | The top-bar switchers: the current workspace's icon and name, then a
+ | chevron — and, in Sales, the project switcher (D-30) drawn the same way.
+ */
+.crm-workspace-switcher-trigger,
+.crm-project-switcher-trigger {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
@@ -1781,12 +1785,14 @@ a.crm-workspace-card:focus-visible {
     font-weight: 600;
 }
 
-.crm-workspace-switcher-trigger:hover {
+.crm-workspace-switcher-trigger:hover,
+.crm-project-switcher-trigger:hover {
     background-color: var(--crm-accent-soft);
     color: var(--crm-accent-text);
 }
 
-.crm-workspace-switcher-trigger:focus-visible {
+.crm-workspace-switcher-trigger:focus-visible,
+.crm-project-switcher-trigger:focus-visible {
     outline: 2px solid var(--crm-accent-text);
     outline-offset: 2px;
 }
@@ -1894,6 +1900,171 @@ a.crm-workspace-card:focus-visible {
     color: var(--crm-text-2);
     font-size: 0.875rem;
     line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------------
+ | Projects (decision D-30)
+ |
+ | The project switcher in the Sales top bar shares the workspace switcher's
+ | trigger rules above; what it adds is the colour dot — a badge stripped to
+ | a disc that paints with the badge's own text colour (`currentColor`), so
+ | the panel palette and both themes carry it with no colour named here. The
+ | «المشاريع» page lays its cards out like the workspace screen: one column on
+ | a phone, two from 40rem, three from 80rem; the current card wears the
+ | accent border. Tokens and logical properties only; the motion sits in the
+ | «روح» block below.
+ * ------------------------------------------------------------------------- */
+
+.crm-project-switcher {
+    display: inline-flex;
+    align-items: center;
+}
+
+.crm-project-dot {
+    display: inline-block;
+    flex: none;
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: 0;
+    border-radius: 999px;
+    background-color: currentColor;
+    vertical-align: middle;
+}
+
+.crm-project-switcher-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-inline-size: 0;
+}
+
+.crm-projects {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (min-width: 40rem) {
+    .crm-projects {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 80rem) {
+    .crm-projects {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.crm-projects-item {
+    display: flex;
+}
+
+.crm-project-card {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--radius-crm);
+    background-color: var(--crm-card);
+    box-shadow: var(--shadow-crm);
+    color: var(--crm-text);
+}
+
+.crm-project-card-current {
+    border-color: var(--crm-accent-text);
+}
+
+.crm-project-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.625rem;
+}
+
+.crm-project-card-head .crm-project-dot {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+}
+
+.crm-project-card-title {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.crm-project-card-counts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+    margin: 0;
+}
+
+.crm-project-card-count {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.crm-project-card-count dt {
+    color: var(--crm-text-2);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.crm-project-card-count dd {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.crm-project-card-amount {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0.75rem;
+    border-radius: var(--radius-crm-sm);
+    background-color: var(--crm-accent-soft);
+    color: var(--crm-accent-text);
+}
+
+.crm-project-card-amount-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.crm-project-card-amount-count {
+    font-weight: 500;
+}
+
+.crm-project-card-amount-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.crm-project-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-block-start: auto;
+}
+
+.crm-projects-scope {
+    margin: 0;
+    color: var(--crm-text-2);
+    font-size: 0.875rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2168,8 +2339,22 @@ a.crm-employee-list-title:focus-visible,
         transform: translateY(0) scale(0.98);
     }
 
-    .crm-workspace-switcher-trigger {
+    .crm-workspace-switcher-trigger,
+    .crm-project-switcher-trigger {
         transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    /* The project cards (D-30) rise in like the workspace cards, one beat apart. */
+    html:not(.crm-settled) .crm-project-card {
+        animation: crm-rise 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+    }
+
+    html:not(.crm-settled) .crm-projects-item:nth-child(2) .crm-project-card { animation-delay: 0.05s; }
+    html:not(.crm-settled) .crm-projects-item:nth-child(3) .crm-project-card { animation-delay: 0.1s; }
+    html:not(.crm-settled) .crm-projects-item:nth-child(n + 4) .crm-project-card { animation-delay: 0.15s; }
+
+    .crm-project-card {
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
     }
 
     /* Overlays pop from their trigger instead of appearing. */

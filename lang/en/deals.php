@@ -32,6 +32,7 @@ return [
     ],
 
     'fields' => [
+        'project' => 'Project',
         'title' => 'Title',
         'account' => 'Account',
         'contact' => 'Primary contact',
@@ -128,6 +129,8 @@ return [
     ],
 
     'validation' => [
+        'account_project' => 'The account belongs to another project; a deal and its account are always in the same project.',
+        'contact_project' => 'The contact belongs to another project; a deal and its contact are always in the same project.',
         'stage_outside_pipeline' => 'That stage does not belong to the deal\'s pipeline.',
         'initial_stage_must_be_open' => 'A deal must start in an open stage. Win or lose it afterwards through the "Mark as won" and "Mark as lost" actions.',
         'already_closed' => 'This deal is closed. Reopen it before changing its stage.',

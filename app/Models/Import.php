@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property ?Carbon $undone_at
  * @property-read User $user
  * @property-read ?User $undoneBy
+ * @property-read ?Project $project
  */
 final class Import extends FilamentImport
 {
@@ -65,6 +66,18 @@ final class Import extends FilamentImport
     public function undoneBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'undone_by');
+    }
+
+    /**
+     * The project the run wrote into (D-30), stamped by the ImportStarted
+     * listener from the modal's option; null for runs from before D-30 or
+     * whose project was removed.
+     *
+     * @return BelongsTo<Project, $this>
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'project_id');
     }
 
     /** A check-only run: validated and recorded, nothing written (D-29). */

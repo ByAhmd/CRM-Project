@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Deals;
 
 use App\Enums\NavigationGroup;
 use App\Filament\Concerns\BuildsUrlsInOwningPanel;
+use App\Filament\Concerns\ScopesQueriesToCurrentProject;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Deals\Pages\CreateDeal;
 use App\Filament\Resources\Deals\Pages\EditDeal;
@@ -41,6 +42,7 @@ use Illuminate\Support\Number;
 final class DealResource extends Resource
 {
     use BuildsUrlsInOwningPanel;
+    use ScopesQueriesToCurrentProject;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Deal::class;
@@ -81,12 +83,20 @@ final class DealResource extends Resource
         return DealInfolist::configure($schema);
     }
 
+    /** The Sales list shows the current project only (D-30); the scope sits on the table, never on getEloquentQuery(). */
     public static function table(Table $table): Table
     {
-        return DealsTable::configure($table);
+        return DealsTable::configure($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => self::constrainToCurrentProject($query));
     }
 
     /**
+     * The readable deals (D-4) of every project: the route binding, the
+     * relation managers, the task and activity readers and the subject pickers
+     * all build on this query, so a record opens from any link whatever the
+     * current project (D-30, ScopesQueriesToCurrentProject). The board narrows
+     * it to the current project itself (DealBoard::deals()).
+     *
      * @return Builder<Deal>
      */
     public static function getEloquentQuery(): Builder
@@ -95,6 +105,7 @@ final class DealResource extends Resource
             ->with(['account', 'stage', 'pipeline', 'owner', 'tags']);
     }
 
+    /** The soft-deleted records included, for the restore pages. */
     public static function getRecordRouteBindingEloquentQuery(): Builder
     {
         return parent::getRecordRouteBindingEloquentQuery()
@@ -137,7 +148,7 @@ final class DealResource extends Resource
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
-        return self::constrainToVisible(parent::getGlobalSearchEloquentQuery())->with(['account', 'stage']);
+        return self::constrainToCurrentProject(self::constrainToVisible(parent::getGlobalSearchEloquentQuery()))->with(['account', 'stage']);
     }
 
     /**

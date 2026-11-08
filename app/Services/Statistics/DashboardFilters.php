@@ -10,13 +10,16 @@ use App\Models\Pipeline;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use App\Services\Settings\SettingsRepository;
 use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * The dashboard filters as the statistics services read them (decision D-4).
+ * The dashboard filters as the statistics services read them (decisions
+ * D-4, D-30).
  *
  * Built from the page's filters form through fromArray(), which never
  * widens the viewer's reach: an owner outside assignableUsers() is ignored,
@@ -27,6 +30,16 @@ use Illuminate\Support\Carbon;
  * the whole first day to the whole last day — and periodStart() /
  * periodEnd() hand the bounds to queries in the application timezone,
  * which is what every stored timestamp is in.
+ *
+ * The project is not a filter the form offers: the sales dashboard is the
+ * current project's page (D-30), so constrainProject() narrows every lead
+ * and deal query to the viewer's current project through CurrentProject —
+ * read at query time, never held here, so the DTO stays the same whoever
+ * asks and a switch is honoured on the next render. Activities carry no
+ * `project_id` and are narrowed the same way through the records they were
+ * logged against (ActivityMetrics, Activity::inProject()); the follow-up
+ * tasks (UpcomingFollowUpsWidget) are the viewer's own to-dos, personal ones
+ * included, and follow no project.
  */
 final readonly class DashboardFilters
 {
@@ -120,6 +133,22 @@ final readonly class DashboardFilters
         }
 
         return $query;
+    }
+
+    /**
+     * Narrow an already visibility-scoped lead or deal query to the viewer's
+     * current project (D-30). Always narrows: the dashboard shows the project
+     * the viewer is working in and nothing else. The query's model must carry
+     * `project_id` (Models\Concerns\BelongsToProject).
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    public function constrainProject(User $viewer, Builder $query): Builder
+    {
+        return app(CurrentProject::class)->scope($viewer, $query);
     }
 
     /** The period's length in whole days, both ends inclusive. */

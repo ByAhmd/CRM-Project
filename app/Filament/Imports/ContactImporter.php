@@ -40,6 +40,11 @@ use Illuminate\Validation\Rule;
  * duplicates, policy verbs — and writes nothing: the trait skips the save and
  * the owner change, and afterSave() stands down (tags, the primary rule,
  * custom-field values).
+ *
+ * The run writes into the project the modal named (D-30): a new contact is
+ * stamped with it, a duplicate is looked for inside it only, and the named
+ * account must belong to it — a contact's account is always of the contact's
+ * own project — so a same-named account of another project is not found.
  */
 final class ContactImporter extends Importer
 {
@@ -188,7 +193,7 @@ final class ContactImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
+        return [self::projectSelect(), self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -257,8 +262,9 @@ final class ContactImporter extends Importer
     }
 
     /**
-     * The named account, inside the importer's visible scope (D-4); a name
-     * the importer cannot see fails the row.
+     * The named account, inside the importer's visible scope (D-4) and the
+     * run's project (D-30); a name the importer cannot see, or that only
+     * another project holds, fails the row.
      */
     private function resolveAccount(?string $name): ?Account
     {
@@ -270,7 +276,7 @@ final class ContactImporter extends Importer
         }
 
         // The raw column (case-insensitive collation) keeps accounts_name_index usable.
-        $account = $this->visible(Account::query())->where('accounts.name', $name)->orderBy('id')->first();
+        $account = $this->inChosenProject($this->visible(Account::query()))->where('accounts.name', $name)->orderBy('id')->first();
 
         if (! $account instanceof Account) {
             $this->failRow('account_not_found', ['value' => $raw]);
@@ -280,9 +286,10 @@ final class ContactImporter extends Importer
     }
 
     /**
-     * An existing contact inside the importer's visible scope (D-4) with the
-     * same normalised email or mobile; contacts outside that scope are
-     * invisible to the importer, so the row creates a new contact.
+     * An existing contact inside the importer's visible scope (D-4) and the
+     * run's project (D-30) with the same normalised email or mobile; contacts
+     * outside that scope or in another project are invisible to the
+     * importer, so the row creates a new contact.
      */
     private function findDuplicate(): ?Contact
     {
@@ -293,7 +300,7 @@ final class ContactImporter extends Importer
             return null;
         }
 
-        return $this->visible(Contact::query())
+        return $this->inChosenProject($this->visible(Contact::query()))
             ->where(function (Builder $query) use ($email, $mobile): void {
                 $query->whereRaw('1 = 0');
 

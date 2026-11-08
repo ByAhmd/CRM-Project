@@ -46,6 +46,12 @@ use Illuminate\Support\Str;
  * A check-only run (D-29) validates every row exactly as above — lookups,
  * duplicates, policy verbs — and writes nothing: the trait skips the save and
  * the owner change, and afterSave() stands down (tags, custom-field values).
+ *
+ * The run writes into the project the modal named (D-30): a new deal is
+ * stamped with it, and its account, its primary contact and any duplicate
+ * are looked for inside it only — a deal's account and contact are always of
+ * the deal's own project — so a same-named account of another project fails
+ * the row as not found.
  */
 final class DealImporter extends Importer
 {
@@ -199,7 +205,7 @@ final class DealImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
+        return [self::projectSelect(), self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -292,8 +298,9 @@ final class DealImporter extends Importer
     }
 
     /**
-     * The named account, inside the importer's visible scope (D-4). A deal
-     * needs one: a blank or unknown name fails the row.
+     * The named account, inside the importer's visible scope (D-4) and the
+     * run's project (D-30). A deal needs one: a blank or unknown name, or a
+     * name only another project holds, fails the row.
      */
     private function resolveAccount(?string $name): Account
     {
@@ -303,7 +310,7 @@ final class DealImporter extends Importer
         $account = $name === null
             ? null
             // The raw column (case-insensitive collation) keeps accounts_name_index usable.
-            : $this->visible(Account::query())->where('accounts.name', $name)->orderBy('id')->first();
+            : $this->inChosenProject($this->visible(Account::query()))->where('accounts.name', $name)->orderBy('id')->first();
 
         if (! $account instanceof Account) {
             $this->failRow('account_not_found', ['value' => $raw]);
@@ -312,7 +319,12 @@ final class DealImporter extends Importer
         return $account;
     }
 
-    /** The primary contact by full name, within the row's account. */
+    /**
+     * The primary contact by full name, within the row's account — and so
+     * within the run's project (D-30), said explicitly so the lookup never
+     * depends on the integrity guard that keeps a contact in its account's
+     * project.
+     */
     private function resolveContact(?string $name): ?Contact
     {
         $raw = Str::squish((string) $name);
@@ -322,7 +334,7 @@ final class DealImporter extends Importer
             return null;
         }
 
-        $contact = Contact::query()
+        $contact = $this->inChosenProject(Contact::query())
             ->where('account_id', $this->rowAccount->getKey())
             // Narrowed by the indexed account first; the collation ignores case.
             ->whereRaw("CONCAT(first_name, ' ', last_name) = ?", [$name])
@@ -391,9 +403,11 @@ final class DealImporter extends Importer
     }
 
     /**
-     * An existing deal inside the importer's visible scope (D-4) with the
-     * same title on the same account; deals outside that scope are invisible
-     * to the importer, so the row creates a new deal.
+     * An existing deal inside the importer's visible scope (D-4) and the
+     * run's project (D-30) with the same title on the same account; deals
+     * outside that scope are invisible to the importer, so the row creates a
+     * new deal. The account is already of the run's project, so the project
+     * clause restates the isolation rather than adding to it.
      */
     private function findDuplicate(Account $account): ?Deal
     {
@@ -403,7 +417,7 @@ final class DealImporter extends Importer
             return null;
         }
 
-        return $this->visible(Deal::query())
+        return $this->inChosenProject($this->visible(Deal::query()))
             ->where('account_id', $account->getKey())
             ->where('deals.title', $title)
             ->orderBy('id')

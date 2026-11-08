@@ -9,6 +9,7 @@ use App\Filament\Resources\Leads\Schemas\LeadForm;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Models\LeadStatus;
 use App\Models\User;
+use App\Services\Projects\CurrentProject;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -36,9 +37,17 @@ final class CreateLead extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['created_by'] = auth()->id();
-        $data['owner_id'] = $data['owner_id'] ?? auth()->id();
+        $actor = auth()->user();
+        assert($actor instanceof User);
+
+        $data['created_by'] = $actor->getKey();
+        $data['owner_id'] = $data['owner_id'] ?? $actor->getKey();
         $data['lead_status_id'] = $data['lead_status_id'] ?? LeadStatus::query()->where('is_default', true)->value('id');
+
+        // The lead is born in the project the user is working in (D-30): the
+        // form shows it as a badge and never offers a choice, so the page
+        // stamps it instead of reading it from the payload.
+        $data['project_id'] = app(CurrentProject::class)->for($actor)->getKey();
 
         $this->refuseReservedInitialStatus($data['lead_status_id']);
 

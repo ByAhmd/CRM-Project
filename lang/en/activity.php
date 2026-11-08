@@ -152,6 +152,7 @@ return [
     ],
 
     'subject_types' => [
+        'Project' => 'Project',
         'User' => 'User',
         'Role' => 'Role',
         'Team' => 'Team',

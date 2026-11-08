@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Contacts;
 
 use App\Enums\ActivityLogEvent;
+use App\Exceptions\Projects\CrossProjectLinkException;
 use App\Models\Account;
 use App\Models\Activity;
 use App\Models\Attachment;
@@ -46,6 +47,10 @@ use Illuminate\Support\Facades\DB;
  * updates: activities are immutable events (A-10) and the converted_* lead
  * columns are workflow-guarded, so an attribute save is not the right tool —
  * their moves are recorded in the merge event instead.
+ *
+ * A merge works inside one project (D-30): the same e-mail in two projects is
+ * not a duplicate, so two records of different projects are refused before
+ * anything else happens.
  */
 final class RecordMerger
 {
@@ -146,6 +151,10 @@ final class RecordMerger
     {
         if ($keep->is($duplicate)) {
             throw new \InvalidArgumentException('A record cannot be merged into itself.');
+        }
+
+        if ((int) $keep->getAttribute('project_id') !== (int) $duplicate->getAttribute('project_id')) {
+            throw CrossProjectLinkException::merge($keep, $duplicate);
         }
     }
 

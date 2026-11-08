@@ -10,6 +10,7 @@ use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
 use App\Filament\Support\OwnerSelect;
+use App\Filament\Support\ProjectBadge;
 use App\Filament\Support\TagsSelect;
 use App\Models\Contact;
 use App\Models\User;
@@ -23,15 +24,18 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Component as LivewireComponent;
 
 /**
- * Create / edit contact (decisions D-4, D-6).
+ * Create / edit contact (decisions D-4, D-6, D-30).
  *
- * The account picker offers only the accounts the actor may read, plus the
- * contact's current account even when it has since been deleted or moved
- * out of the actor's scope; ContactService::mayLinkAccount() re-checks the
- * submitted id server-side, so a crafted id cannot attach the contact to a
- * company the actor cannot see.
+ * The account picker offers only the accounts the actor may read in the
+ * contact's project (the project the form is about, shown as a badge and
+ * never a choice), plus the contact's current account even when it has since
+ * been deleted or moved out of the actor's scope; ContactService::mayLinkAccount()
+ * and the project rule re-check the submitted id server-side, so a crafted id
+ * cannot attach the contact to a company the actor cannot see or to one of
+ * another project (ProjectConsistencyObserver refuses the latter again on save).
  */
 final class ContactForm
 {
@@ -41,6 +45,9 @@ final class ContactForm
             ->components([
                 Section::make(__('contacts.sections.details'))
                     ->schema([
+                        ProjectBadge::entry(__('contacts.fields.project'))
+                            ->columnSpanFull(),
+
                         TextInput::make('first_name')
                             ->label(__('contacts.fields.first_name'))
                             ->required()
@@ -56,17 +63,27 @@ final class ContactForm
                         Select::make('account_id')
                             ->label(__('contacts.fields.account'))
                             ->helperText(__('contacts.helpers.account'))
-                            ->relationship('account', 'name', fn (Builder $query, ?Contact $record): Builder => AccountForm::constrainToPickableAccounts(
+                            ->relationship('account', 'name', fn (Builder $query, ?Contact $record, ?LivewireComponent $livewire): Builder => AccountForm::constrainToPickableAccounts(
                                 $query,
                                 $record?->getOriginal('account_id') === null ? null : (int) $record->getOriginal('account_id'),
+                                ProjectBadge::projectIdFor($record, $livewire),
                             ))
-                            ->rule(fn (?Contact $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record): void {
+                            ->rule(fn (?Contact $record, ?LivewireComponent $livewire): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record, $livewire): void {
                                 $actor = auth()->user();
 
                                 if (! $actor instanceof User || ! app(ContactService::class)->mayLinkAccount($actor, $value, $record)) {
                                     $fail(__('contacts.validation.account_out_of_reach'));
+
+                                    return;
+                                }
+
+                                if (! AccountForm::accountBelongsToProject($value, ProjectBadge::projectIdFor($record, $livewire))) {
+                                    $fail(__('contacts.validation.account_project'));
                                 }
                             })
+                            ->validationMessages([
+                                'in' => fn (mixed $state, ?Contact $record, ?LivewireComponent $livewire): ?string => AccountForm::crossProjectAccountMessage($state, ProjectBadge::projectIdFor($record, $livewire), __('contacts.validation.account_project')),
+                            ])
                             ->searchable()
                             ->preload()
                             ->nullable()

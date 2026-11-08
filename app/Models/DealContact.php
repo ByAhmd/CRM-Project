@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\DealContactRole;
+use App\Observers\ProjectConsistencyObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 
 /**
  * The pivot between a deal and one of its contacts, carrying the contact's
- * role in the deal (decision D-6).
+ * role in the deal (decision D-6). The deal and the contact belong to one
+ * project (D-30): ProjectConsistencyObserver refuses the row otherwise, as
+ * it refuses a deal's primary contact of another project.
  *
  * @property ?DealContactRole $role
  */
+#[ObservedBy(ProjectConsistencyObserver::class)]
 final class DealContact extends Pivot
 {
     /**

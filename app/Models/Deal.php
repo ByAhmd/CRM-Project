@@ -9,12 +9,14 @@ use App\Enums\ActivityLogEvent;
 use App\Enums\CustomFieldEntity;
 use App\Enums\DealStatus;
 use App\Enums\ForecastCategory;
+use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\GuardsWorkflowFields;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
 use App\Observers\DealObserver;
+use App\Observers\ProjectConsistencyObserver;
 use Database\Factories\DealFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -50,11 +52,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
 #[Fillable([
     'title', 'account_id', 'contact_id', 'pipeline_id', 'stage_id', 'owner_id',
     'amount', 'currency', 'probability', 'expected_close_date', 'forecast_category',
-    'lead_source_id', 'lead_id', 'last_activity_at', 'description', 'created_by',
+    'lead_source_id', 'lead_id', 'last_activity_at', 'description', 'created_by', 'project_id',
 ])]
-#[ObservedBy(DealObserver::class)]
+#[ObservedBy([DealObserver::class, ProjectConsistencyObserver::class])]
 final class Deal extends Model implements OwnedRecord
 {
+    use BelongsToProject;
     use GuardsWorkflowFields;
     use HasAttachments;
     use HasCustomFields;

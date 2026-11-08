@@ -11,6 +11,7 @@ use App\Filament\Pages\Calendar;
 use App\Filament\Pages\DealBoard;
 use App\Filament\Pages\Inbox;
 use App\Filament\Pages\NotificationPreferences;
+use App\Filament\Pages\Projects;
 use App\Filament\Pages\Reports\ActivityReportPage;
 use App\Filament\Pages\Reports\ConversionFunnelReportPage;
 use App\Filament\Pages\Reports\EmployeeDashboardPage;
@@ -50,6 +51,7 @@ use App\Filament\Resources\LeadSources\LeadSourceResource;
 use App\Filament\Resources\LeadStatuses\LeadStatusResource;
 use App\Filament\Resources\Pipelines\PipelineResource;
 use App\Filament\Resources\Products\ProductResource;
+use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Roles\RoleResource;
 use App\Filament\Resources\Tags\TagResource;
 use App\Filament\Resources\Tasks\TaskResource;
@@ -125,6 +127,8 @@ final class WorkspacePanelRegistry
                 UserResource::class,
                 RoleResource::class,
                 TeamResource::class,
+                // D-30: the projects the customer base is partitioned by, a Settings lookup.
+                ProjectResource::class,
                 ActivityTypeResource::class,
                 CompetitorResource::class,
                 DealCloseReasonResource::class,
@@ -157,6 +161,8 @@ final class WorkspacePanelRegistry
             ],
             WorkspacePanel::Sales->id() => [
                 SalesDashboard::class,
+                // D-30: the «المشاريع» page — a card per active project, «دخول» makes it current.
+                Projects::class,
                 DealBoard::class,
                 // D-27: each workspace reads the Inbox in place, its sidebar kept (InboxPage).
                 SalesInbox::class,

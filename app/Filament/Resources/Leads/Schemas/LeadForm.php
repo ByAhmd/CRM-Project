@@ -12,6 +12,7 @@ use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\DuplicateWarning;
 use App\Filament\Support\OwnerSelect;
+use App\Filament\Support\ProjectBadge;
 use App\Filament\Support\TagsSelect;
 use App\Models\Lead;
 use App\Models\LeadSource;
@@ -33,6 +34,9 @@ use Illuminate\Database\Eloquent\Model;
  * LeadStatusWorkflow records, and conversion needs a qualified lead, so the
  * initial status offers neither kind (CreateLead and LeadImporter refuse them
  * server-side too).
+ *
+ * The lead's project (D-30) is shown as a badge — the project the user is
+ * working in on create, the lead's own on edit — and is never a choice.
  */
 final class LeadForm
 {
@@ -49,6 +53,9 @@ final class LeadForm
             ->components([
                 Section::make(__('leads.sections.person'))
                     ->schema([
+                        ProjectBadge::entry(__('leads.fields.project'))
+                            ->columnSpanFull(),
+
                         TextInput::make('first_name')
                             ->label(__('leads.fields.first_name'))
                             ->required()

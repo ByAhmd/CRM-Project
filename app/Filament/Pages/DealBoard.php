@@ -29,7 +29,8 @@ use Livewire\Attributes\Locked;
 
 /**
  * The deal kanban (decision D-12): one column per stage of the chosen
- * pipeline, cards within the actor's visibility scope (D-4).
+ * pipeline, cards within the actor's visibility scope (D-4) and the project
+ * the actor is working in (D-30).
  *
  * Dragging a card into an open stage calls DealStageWorkflow through the same
  * rules as the "change stage" action; dropping it on the Won or Lost column
@@ -178,7 +179,7 @@ final class DealBoard extends Page
      */
     public function moveDeal(int $dealId, int $stageId): void
     {
-        $deal = DealResource::getEloquentQuery()->find($dealId);
+        $deal = self::deals()->find($dealId);
 
         if (! $deal instanceof Deal) {
             abort(404);
@@ -286,20 +287,33 @@ final class DealBoard extends Page
             return null;
         }
 
-        $deal = DealResource::getEloquentQuery()->find((int) $dealId);
+        $deal = self::deals()->find((int) $dealId);
 
         return $deal instanceof Deal ? $deal : null;
     }
 
     /**
-     * The visible deals sitting in a stage: open deals of an open stage, and
+     * The deals the board works on: the readable ones (D-4) of the project
+     * the actor is working in (D-30) — the cards, the dragged card and the
+     * card a close modal is opened for all come from here, so a deal of
+     * another project is neither shown nor moved from this board.
+     *
+     * @return Builder<Deal>
+     */
+    private static function deals(): Builder
+    {
+        return DealResource::constrainToCurrentProject(DealResource::getEloquentQuery());
+    }
+
+    /**
+     * The board's deals sitting in a stage: open deals of an open stage, and
      * for a closed stage the deals closed there within the recent window.
      *
      * @return Builder<Deal>
      */
     private function dealsIn(PipelineStage $stage): Builder
     {
-        $query = DealResource::getEloquentQuery()
+        $query = self::deals()
             ->where('stage_id', $stage->getKey())
             ->where('status', DealStatus::fromStageKind($stage->kind)->value);
 

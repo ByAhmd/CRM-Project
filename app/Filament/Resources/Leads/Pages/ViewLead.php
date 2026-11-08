@@ -26,10 +26,10 @@ final class ViewLead extends ViewRecord
     /**
      * Every relation the infolist and the header actions read: the status
      * history with its statuses and authors would otherwise cost queries per
-     * log (plan section 8).
+     * log (plan section 8); the project feeds the badge (D-30).
      */
     private const array RELATIONS = [
-        'status', 'source', 'owner', 'qualifier', 'converter', 'creator', 'tags',
+        'project', 'status', 'source', 'owner', 'qualifier', 'converter', 'creator', 'tags',
         'convertedAccount', 'convertedContact', 'convertedDeal',
         'statusLogs.fromStatus', 'statusLogs.toStatus', 'statusLogs.changer',
     ];

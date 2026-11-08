@@ -20,9 +20,9 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * The open deals nobody touched for a fortnight (plan section 3.9), the
  * longest untouched first, each row opening the deal. Fed by
- * PipelineMetrics inside the viewer's scope (D-4) and narrowed by the
- * owner, team and pipeline filters; capped at the ten oldest. Money is in
- * the organisation currency (D-8).
+ * PipelineMetrics inside the viewer's scope (D-4) and their current project
+ * (D-30) and narrowed by the owner, team and pipeline filters; capped at
+ * the ten oldest. Money is in the organisation currency (D-8).
  */
 final class StaleDealsWidget extends TableWidget
 {

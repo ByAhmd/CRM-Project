@@ -6,13 +6,14 @@ namespace App\Filament\Support;
 
 use App\Enums\LeadStatusKind;
 use App\Exceptions\Leads\InvalidLeadTransitionException;
-use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Leads\Pages\ViewLead;
+use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Pipeline;
 use App\Models\User;
+use App\Services\Access\RecordVisibilityResolver;
 use App\Services\Contacts\DuplicateFinder;
 use App\Services\Leads\ConversionRequest;
 use App\Services\Leads\LeadConversionWorkflow;
@@ -41,6 +42,11 @@ use Livewire\Component as LivewireComponent;
  * produces — a new or existing account (or none for an individual), a new
  * or existing contact, an optional deal — and defaults every choice from the
  * lead itself. LeadConversionWorkflow enforces every rule server-side.
+ *
+ * The existing-account and existing-contact pickers, and the contact the
+ * modal suggests, look only inside the lead's project (D-30), whatever
+ * project the actor is working in: what the conversion links must share the
+ * lead's project, and the workflow refuses anything else.
  */
 final class LeadConversionActions
 {
@@ -116,8 +122,8 @@ final class LeadConversionActions
                     Select::make('account_id')
                         ->label(__('leads.fields.account_id'))
                         ->searchable()
-                        ->getSearchResultsUsing(fn (string $search): array => self::searchAccounts($search))
-                        ->getOptionLabelUsing(fn (mixed $value): ?string => self::accountLabel($value))
+                        ->getSearchResultsUsing(fn (string $search, ?Model $record): array => $record instanceof Lead ? self::searchAccounts($search, $record) : [])
+                        ->getOptionLabelUsing(fn (mixed $value, ?Model $record): ?string => $record instanceof Lead ? self::accountLabel($value, $record) : null)
                         ->native(false)
                         ->required(fn (Get $get): bool => $get('account_mode') === ConversionRequest::ACCOUNT_EXISTING)
                         ->visible(fn (Get $get): bool => $get('account_mode') === ConversionRequest::ACCOUNT_EXISTING),
@@ -143,8 +149,8 @@ final class LeadConversionActions
                     Select::make('contact_id')
                         ->label(__('leads.fields.contact_id'))
                         ->searchable()
-                        ->getSearchResultsUsing(fn (string $search): array => self::searchContacts($search))
-                        ->getOptionLabelUsing(fn (mixed $value): ?string => self::contactLabel($value))
+                        ->getSearchResultsUsing(fn (string $search, ?Model $record): array => $record instanceof Lead ? self::searchContacts($search, $record) : [])
+                        ->getOptionLabelUsing(fn (mixed $value, ?Model $record): ?string => $record instanceof Lead ? self::contactLabel($value, $record) : null)
                         ->native(false)
                         ->required(fn (Get $get): bool => $get('contact_mode') === ConversionRequest::CONTACT_EXISTING)
                         ->visible(fn (Get $get): bool => $get('contact_mode') === ConversionRequest::CONTACT_EXISTING),
@@ -219,7 +225,7 @@ final class LeadConversionActions
         ];
     }
 
-    /** The first visible contact sharing the lead's normalised email, if any. */
+    /** The first visible contact of the lead's project sharing the lead's normalised email, if any. */
     private static function matchingContact(Lead $record): ?Contact
     {
         if (blank($record->email)) {
@@ -232,17 +238,17 @@ final class LeadConversionActions
             return null;
         }
 
-        // The finder is confined to the actor's reach, so a contact outside it
-        // is neither suggested nor named, and the five-match limit applies to
-        // contacts the actor may pick (D-4, A-11).
-        $matches = app(DuplicateFinder::class)->contacts(email: $record->email, phone: null, viewer: $viewer);
+        // The finder is confined to the actor's reach and to the lead's
+        // project, so a contact outside either is neither suggested nor
+        // named, and the five-match limit applies to contacts the actor may
+        // pick (D-4, A-11, D-30).
+        $matches = app(DuplicateFinder::class)->contacts(email: $record->email, phone: null, viewer: $viewer, projectId: (int) $record->project_id);
 
         if ($matches->isEmpty()) {
             return null;
         }
 
-        $contact = ContactResource::getEloquentQuery()
-            ->withoutEagerLoads()
+        $contact = self::offeredContacts($record)
             ->whereIn('contacts.id', $matches->modelKeys())
             ->orderBy('contacts.id')
             ->first();
@@ -251,15 +257,15 @@ final class LeadConversionActions
     }
 
     /**
-     * Accounts within the actor's reach matching the typed search, resolved
-     * on the database side so the modal never loads the whole universe.
+     * Accounts within the actor's reach and the lead's project matching the
+     * typed search, resolved on the database side so the modal never loads
+     * the whole universe.
      *
      * @return array<int, string>
      */
-    private static function searchAccounts(string $search): array
+    private static function searchAccounts(string $search, Lead $lead): array
     {
-        return AccountResource::getEloquentQuery()
-            ->withoutEagerLoads()
+        return self::offeredAccounts($lead)
             ->select(['accounts.id', 'accounts.name'])
             ->where('accounts.name', 'like', '%'.self::escapeLike($search).'%')
             ->orderBy('accounts.name')
@@ -268,15 +274,14 @@ final class LeadConversionActions
             ->all();
     }
 
-    /** The visible account's name, or null when it is outside the actor's reach (so validation rejects it). */
-    private static function accountLabel(mixed $value): ?string
+    /** The offered account's name, or null when it is outside the actor's reach or the lead's project (so validation rejects it). */
+    private static function accountLabel(mixed $value, Lead $lead): ?string
     {
         if (! is_numeric($value)) {
             return null;
         }
 
-        $name = AccountResource::getEloquentQuery()
-            ->withoutEagerLoads()
+        $name = self::offeredAccounts($lead)
             ->select(['accounts.id', 'accounts.name'])
             ->whereKey((int) $value)
             ->value('accounts.name');
@@ -285,17 +290,16 @@ final class LeadConversionActions
     }
 
     /**
-     * Contacts within the actor's reach matching the typed search on name or
-     * e-mail, labelled by full name.
+     * Contacts within the actor's reach and the lead's project matching the
+     * typed search on name or e-mail, labelled by full name.
      *
      * @return array<int, string>
      */
-    private static function searchContacts(string $search): array
+    private static function searchContacts(string $search, Lead $lead): array
     {
         $term = '%'.self::escapeLike($search).'%';
 
-        return ContactResource::getEloquentQuery()
-            ->withoutEagerLoads()
+        return self::offeredContacts($lead)
             ->select(['contacts.id', 'contacts.first_name', 'contacts.last_name'])
             ->where(function (Builder $query) use ($term): void {
                 $query->where('contacts.first_name', 'like', $term)
@@ -306,24 +310,57 @@ final class LeadConversionActions
             ->orderBy('contacts.first_name')
             ->limit(self::SEARCH_LIMIT)
             ->get()
-            ->mapWithKeys(fn (Model $contact): array => [(int) $contact->getKey() => (string) $contact->getAttribute('full_name')])
+            ->mapWithKeys(fn (Contact $contact): array => [(int) $contact->getKey() => $contact->full_name])
             ->all();
     }
 
-    /** The visible contact's full name, or null when it is outside the actor's reach (so validation rejects it). */
-    private static function contactLabel(mixed $value): ?string
+    /** The offered contact's full name, or null when it is outside the actor's reach or the lead's project (so validation rejects it). */
+    private static function contactLabel(mixed $value, Lead $lead): ?string
     {
         if (! is_numeric($value)) {
             return null;
         }
 
-        $contact = ContactResource::getEloquentQuery()
-            ->withoutEagerLoads()
+        $contact = self::offeredContacts($lead)
             ->select(['contacts.id', 'contacts.first_name', 'contacts.last_name'])
             ->whereKey((int) $value)
             ->first();
 
-        return $contact instanceof Model ? (string) $contact->getAttribute('full_name') : null;
+        return $contact instanceof Contact ? $contact->full_name : null;
+    }
+
+    /**
+     * The accounts the modal may offer: the actor's reach (D-4) inside the
+     * lead's project (D-30); nothing without a signed-in actor.
+     *
+     * @return Builder<Account>
+     */
+    private static function offeredAccounts(Lead $lead): Builder
+    {
+        $actor = auth()->user();
+
+        if (! $actor instanceof User) {
+            return Account::query()->whereRaw('1 = 0');
+        }
+
+        return app(RecordVisibilityResolver::class)->visible($actor, Account::query())->inProject((int) $lead->project_id);
+    }
+
+    /**
+     * The contacts the modal may offer: the actor's reach (D-4) inside the
+     * lead's project (D-30); nothing without a signed-in actor.
+     *
+     * @return Builder<Contact>
+     */
+    private static function offeredContacts(Lead $lead): Builder
+    {
+        $actor = auth()->user();
+
+        if (! $actor instanceof User) {
+            return Contact::query()->whereRaw('1 = 0');
+        }
+
+        return app(RecordVisibilityResolver::class)->visible($actor, Contact::query())->inProject((int) $lead->project_id);
     }
 
     private static function escapeLike(string $value): string

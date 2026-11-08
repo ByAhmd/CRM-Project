@@ -18,7 +18,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * The import history listing (module 18): one row per run, newest first,
- * with the entity, the launcher, the counts and a derived status.
+ * with the entity, the project the run wrote into (D-30, as the project's
+ * own coloured badge; a dash for a run from before projects), the launcher,
+ * the counts and a derived status.
  *
  * A run is written by the scheduler's queue drain, chunk by chunk (D-1), so
  * while one of the listed runs is still processing the list asks for itself
@@ -36,9 +38,9 @@ final class ImportsTable
         return $table
             ->poll(static fn (): ?string => self::hasRunInFlight() ? self::POLL_INTERVAL : null)
             // Phone budget: the file, its status and when it ran stay at every
-            // width; the entity and the row counts step in from `md`, the
-            // launcher and the success count from `lg`. CSS breakpoints only —
-            // the cells stay in the DOM.
+            // width; the entity, the project, the type and the row counts step
+            // in from `md`, the launcher and the success count from `lg`. CSS
+            // breakpoints only — the cells stay in the DOM.
             ->columns([
                 LtrText::column(
                     TextColumn::make('file_name')
@@ -53,6 +55,16 @@ final class ImportsTable
                     ->formatStateUsing(fn (string $state): string => ImportResource::entityLabel($state))
                     ->badge()
                     ->color('gray')
+                    ->visibleFrom('md'),
+
+                // The project the run wrote into (D-30), in the project's own
+                // colour; a run from before projects shows the empty marker.
+                TextColumn::make('project')
+                    ->label(__('imports.fields.project'))
+                    ->state(fn (Import $record): ?string => $record->project?->display_name)
+                    ->badge()
+                    ->color(fn (Import $record): string => $record->project?->color->value ?? 'gray')
+                    ->placeholder(__('common.placeholders.empty'))
                     ->visibleFrom('md'),
 
                 TextColumn::make('mode')

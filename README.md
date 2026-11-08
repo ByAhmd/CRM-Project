@@ -57,7 +57,7 @@ following the engineering standards established by the Stockflow (ZonKSA) projec
 - **Notifications:** in-app bell and opt-in e-mail per event, with a preferences page that shows only what each user
   can receive (D-19); a weekly summary e-mail to the people who hand out work (D-18); templated e-mail to contacts (D-10).
 - **Administration:** roles and permissions with own/team/all record scope (D-3, D-4), invite-only users with optional
-  MFA (D-11), an append-only audit log kept 730 days (D-13), imports and exports within scope, a weekly self-backup
+  MFA (D-11), an append-only audit log kept 730 days (D-13), imports and exports within scope (with a check-only run and an undo, D-29), projects that partition the customer base (D-30), a weekly self-backup
   with download and an external uptime-and-scheduler monitor (D-16).
 - **Everywhere:** Arabic (default, right to left) and English, light and dark themes.
 

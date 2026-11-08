@@ -69,6 +69,10 @@ final class EditLead extends EditRecord
         // against the saved record by afterSave() (D-9).
         unset($data[CustomFieldsSchema::STATE_PATH]);
 
+        // The project is set at creation and never edited (D-30): the form
+        // shows it as a badge only, and a crafted payload is dropped here.
+        unset($data['project_id']);
+
         // A change of owner is a reassignment (audit row + notification, D-4),
         // handed to RecordAssignmentService by afterSave().
         $record = $this->getRecord();

@@ -32,6 +32,7 @@ return [
         'row_data' => 'Row',
         'error' => 'Reason',
         'mode' => 'Type',
+        'project' => 'Project',
         'dry_run' => 'Check only, write nothing',
         'undo_requested_at' => 'Undo requested',
         'undone_at' => 'Undo completed',
@@ -181,6 +182,7 @@ return [
     ],
 
     'helpers' => [
+        'project' => 'New records are created in this project, and duplicates and accounts are looked up inside it only.',
         'dry_run' => 'The whole file is read and validated, and the import history shows the rows that would be refused with their reasons; no record is created or changed. Untick it to import the file for real.',
         'file' => 'CSV files and Excel workbooks (.xlsx). Excel 97-2003 (.xls) and OpenDocument (.ods) are not supported; open the file and save it as .xlsx, then upload that. Only the first worksheet is read, and its first row is the header row.',
         'duplicate_strategy' => 'A duplicate is an existing record you can see with the same email or phone (accounts: the same name or email; deals: the same title on the same account).',

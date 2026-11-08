@@ -20,9 +20,10 @@ use Illuminate\Database\Eloquent\Model;
  * CSV / XLSX export of contacts (module 18, decision D-13).
  *
  * Exports the rows of the table query it is launched from — already inside
- * the actor's visible scope — with the account by name, the owner by name,
- * tags joined, booleans as yes/no in the actor's locale, dates as Y-m-d H:i.
- * All text cells are protected against spreadsheet formula injection.
+ * the actor's visible scope and the current project — with the project by
+ * name (D-30), the account by name, the owner by name, tags joined, booleans
+ * as yes/no in the actor's locale, dates as Y-m-d H:i. All text cells are
+ * protected against spreadsheet formula injection.
  */
 final class ContactExporter extends Exporter
 {
@@ -37,6 +38,7 @@ final class ContactExporter extends Exporter
     {
         return [
             ExportColumn::make('id')->label(__('exports.columns.contact.id')),
+            ExportColumn::make('project.display_name')->label(__('exports.columns.contact.project'))->preventFormulaInjection(),
             ExportColumn::make('first_name')->label(__('exports.columns.contact.first_name'))->preventFormulaInjection(),
             ExportColumn::make('last_name')->label(__('exports.columns.contact.last_name'))->preventFormulaInjection(),
             ExportColumn::make('account.name')->label(__('exports.columns.contact.account'))->preventFormulaInjection(),
@@ -90,7 +92,8 @@ final class ContactExporter extends Exporter
 
     /**
      * Every custom column reads the record's values, so the relation is
-     * loaded with the chunk instead of once per cell (D-9).
+     * loaded with the chunk instead of once per cell (D-9); the project
+     * column reads the project the same way (D-30).
      *
      * @template TModel of Model
      *
@@ -99,7 +102,7 @@ final class ContactExporter extends Exporter
      */
     public static function modifyQuery(Builder $query): Builder
     {
-        return CustomFieldsSchema::eagerLoad($query);
+        return CustomFieldsSchema::eagerLoad($query)->with('project');
     }
 
     public static function getCompletedNotificationBody(Export $export): string

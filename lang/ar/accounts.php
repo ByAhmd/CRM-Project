@@ -22,6 +22,7 @@ return [
     ],
 
     'fields' => [
+        'project' => 'المشروع',
         'name' => 'اسم الشركة',
         'type' => 'النوع',
         'industry' => 'القطاع',

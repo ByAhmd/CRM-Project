@@ -39,6 +39,10 @@ use Illuminate\Support\Facades\DB;
  *   within reach, which then remembers the lead;
  * - the deal, when asked for, starts in the chosen pipeline's default stage —
  *   an initial value, not a transition, so no stage log is written;
+ * - everything the conversion creates carries the lead's project, and an
+ *   existing account or contact it links must already be in that project
+ *   (D-30): one outside it is treated exactly like one outside the actor's
+ *   reach — not found, so refused;
  * - the lead then takes the Converted status, remembers what it produced and
  *   freezes; the move is logged in lead_status_logs and audited.
  *
@@ -152,7 +156,7 @@ final class LeadConversionWorkflow
     {
         if ($request->wantsExistingAccount()) {
             $account = $request->accountId !== null
-                ? $this->visibility->visible($actor, Account::query())->find($request->accountId)
+                ? $this->visibility->visible($actor, Account::query())->inProject((int) $lead->project_id)->find($request->accountId)
                 : null;
 
             if ($account === null) {
@@ -173,6 +177,7 @@ final class LeadConversionWorkflow
         }
 
         $account = Account::query()->create([
+            'project_id' => $lead->project_id,
             'name' => $name,
             'type' => AccountType::Prospect,
             'industry_id' => null,
@@ -197,7 +202,7 @@ final class LeadConversionWorkflow
     {
         if ($request->wantsExistingContact()) {
             $contact = $request->contactId !== null
-                ? $this->visibility->visible($actor, Contact::query())->find($request->contactId)
+                ? $this->visibility->visible($actor, Contact::query())->inProject((int) $lead->project_id)->find($request->contactId)
                 : null;
 
             if ($contact === null) {
@@ -224,6 +229,7 @@ final class LeadConversionWorkflow
         $isPrimary = $this->accountNeedsPrimaryContact($account);
 
         $contact = Contact::query()->create([
+            'project_id' => $lead->project_id,
             'account_id' => $account?->getKey(),
             'lead_id' => $lead->getKey(),
             'first_name' => $lead->first_name,
@@ -284,6 +290,7 @@ final class LeadConversionWorkflow
         }
 
         return Deal::query()->create([
+            'project_id' => $lead->project_id,
             'title' => $title,
             'account_id' => $account?->getKey(),
             'contact_id' => $contact->getKey(),

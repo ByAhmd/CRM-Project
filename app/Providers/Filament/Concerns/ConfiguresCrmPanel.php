@@ -12,6 +12,7 @@ use App\Filament\Pages\NotificationPreferences;
 use App\Http\Middleware\AuthenticateWorkspace;
 use App\Http\Middleware\KeepOutOfSearchEngines;
 use App\Http\Middleware\SecurityHeaders;
+use App\Livewire\ProjectSwitcher;
 use App\Support\Filament\FilamentLanguageMenuItems;
 use App\Support\Filament\PanelUrl;
 use App\Support\Filament\WorkspacePanelRegistry;
@@ -33,7 +34,9 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Livewire\Livewire;
 
 /**
  * The configuration every CRM panel shares (decision D-23): the home panel
@@ -73,6 +76,16 @@ trait ConfiguresCrmPanel
             ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
                 static fn (): View => view('filament.partials.workspace-switcher'),
+            )
+            // The project switcher (D-30), beside the workspace switcher in
+            // the Sales top bar only — hooks render in registration order, so
+            // it follows the workspace switcher. The other workspaces are not
+            // partitioned by project and render nothing here.
+            ->renderHook(
+                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
+                static fn (): HtmlString => filament()->getId() === WorkspacePanel::Sales->id()
+                    ? new HtmlString(Livewire::mount(ProjectSwitcher::class))
+                    : new HtmlString(''),
             )
             // Install as an app (D-27): the web manifest, the theme colour and
             // the home-screen icon in every panel's head (the landing page

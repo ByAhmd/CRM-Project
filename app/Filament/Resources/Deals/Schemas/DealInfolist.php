@@ -11,6 +11,7 @@ use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\LtrText;
+use App\Filament\Support\ProjectBadge;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -39,6 +40,9 @@ final class DealInfolist
                 Section::make(__('deals.sections.summary'))
                     ->schema([
                         Grid::make(4)->schema([
+                            // The deal's project first (D-30): a page opened from a
+                            // link says which customer base it belongs to.
+                            ProjectBadge::entry(__('deals.fields.project')),
                             TextEntry::make('stage.display_name')
                                 ->label(__('deals.fields.stage'))
                                 ->badge()

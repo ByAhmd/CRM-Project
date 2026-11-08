@@ -8,18 +8,21 @@ use App\Enums\CustomFieldEntity;
 use App\Enums\ForecastCategory;
 use App\Enums\StageKind;
 use App\Filament\Resources\Accounts\Schemas\AccountForm;
-use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Deals\DealResource;
 use App\Filament\Support\CustomFieldActions;
 use App\Filament\Support\OwnerSelect;
+use App\Filament\Support\ProjectBadge;
 use App\Filament\Support\TagsSelect;
 use App\Models\Account;
+use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\DealProduct;
 use App\Models\LeadSource;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\Access\RecordVisibilityResolver;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -48,6 +51,11 @@ use Livewire\Component;
  *
  * `$withAccount` is false when the form is embedded in the account page, where
  * the account comes from the owner record.
+ *
+ * The deal's project (D-30) is the project the form is about — shown as a
+ * badge, never a choice — and its account and contact pickers offer only
+ * records of that project; a crafted id is refused by the pickers' rules and
+ * again by ProjectConsistencyObserver on save.
  */
 final class DealForm
 {
@@ -63,6 +71,9 @@ final class DealForm
             ->components([
                 Section::make(__('deals.sections.details'))
                     ->schema([
+                        ProjectBadge::entry(__('deals.fields.project'))
+                            ->columnSpanFull(),
+
                         TextInput::make('title')
                             ->label(__('deals.fields.title'))
                             ->required()
@@ -71,7 +82,15 @@ final class DealForm
 
                         Select::make('account_id')
                             ->label(__('deals.fields.account'))
-                            ->relationship('account', 'name', fn (Builder $query, ?Deal $record): Builder => AccountForm::constrainToPickableAccounts($query, $record?->account_id))
+                            ->relationship('account', 'name', fn (Builder $query, ?Deal $record, Component $livewire): Builder => AccountForm::constrainToPickableAccounts($query, $record?->account_id, ProjectBadge::projectIdFor($record, $livewire)))
+                            ->rule(fn (?Deal $record, Component $livewire): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record, $livewire): void {
+                                if (! AccountForm::accountBelongsToProject($value, ProjectBadge::projectIdFor($record, $livewire))) {
+                                    $fail(__('deals.validation.account_project'));
+                                }
+                            })
+                            ->validationMessages([
+                                'in' => fn (mixed $state, ?Deal $record, Component $livewire): ?string => AccountForm::crossProjectAccountMessage($state, ProjectBadge::projectIdFor($record, $livewire), __('deals.validation.account_project')),
+                            ])
                             ->searchable()
                             ->preload()
                             ->nullable()
@@ -82,7 +101,15 @@ final class DealForm
 
                         Select::make('contact_id')
                             ->label(__('deals.fields.contact'))
-                            ->relationship('contact', 'last_name', fn (Builder $query, Get $get, Component $livewire, ?Deal $record): Builder => self::constrainContacts($query, self::accountIdFor($get, $livewire), $record))
+                            ->relationship('contact', 'last_name', fn (Builder $query, Get $get, Component $livewire, ?Deal $record): Builder => self::constrainContacts($query, self::accountIdFor($get, $livewire), $record, ProjectBadge::projectIdFor($record, $livewire)))
+                            ->rule(fn (?Deal $record, Component $livewire): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record, $livewire): void {
+                                if (! self::contactBelongsToProject($value, ProjectBadge::projectIdFor($record, $livewire))) {
+                                    $fail(__('deals.validation.contact_project'));
+                                }
+                            })
+                            ->validationMessages([
+                                'in' => fn (mixed $state, ?Deal $record, Component $livewire): ?string => self::crossProjectContactMessage($state, ProjectBadge::projectIdFor($record, $livewire)),
+                            ])
                             ->getOptionLabelFromRecordUsing(fn (Model $record): string => (string) $record->getAttribute('full_name'))
                             ->searchable(['first_name', 'last_name'])
                             ->preload()
@@ -437,22 +464,31 @@ final class DealForm
     }
 
     /**
-     * The contacts the actor may see (D-4), narrowed to the chosen account
-     * when there is one; the deal's current contact always stays valid, even
-     * when it is outside that scope or soft-deleted.
+     * The contacts the actor may see (D-4) in the deal's project (D-30),
+     * narrowed to the chosen account when there is one; the deal's current
+     * contact always stays valid, even when it is outside that scope or
+     * soft-deleted.
      *
      * @template TModel of Model
      *
      * @param  Builder<TModel>  $query
      * @return Builder<TModel>
      */
-    private static function constrainContacts(Builder $query, ?int $accountId, ?Deal $record): Builder
+    private static function constrainContacts(Builder $query, ?int $accountId, ?Deal $record, int $projectId): Builder
     {
+        $actor = auth()->user();
+
+        $visible = $actor instanceof User
+            ? app(RecordVisibilityResolver::class)->visible($actor, Contact::query())
+            : Contact::query()->whereRaw('1 = 0');
+
         return $query
             ->withoutGlobalScope(SoftDeletingScope::class)
-            ->where(function (Builder $query) use ($accountId, $record): void {
-                $query->where(function (Builder $offered) use ($accountId): void {
-                    $offered->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'));
+            ->where(function (Builder $query) use ($visible, $accountId, $record, $projectId): void {
+                $query->where(function (Builder $offered) use ($visible, $accountId, $projectId): void {
+                    $offered
+                        ->whereIn('contacts.id', $visible->select('contacts.id'))
+                        ->where('contacts.project_id', $projectId);
 
                     if ($accountId !== null) {
                         $offered->where('contacts.account_id', $accountId);
@@ -463,5 +499,41 @@ final class DealForm
                     $query->orWhere('contacts.id', $record->contact_id);
                 }
             });
+    }
+
+    /**
+     * Whether a submitted contact id names a contact of the project (D-30),
+     * trashed contacts included so a kept link survives an unrelated edit.
+     * A blank value links nothing and passes; a non-numeric one never names
+     * a contact.
+     */
+    private static function contactBelongsToProject(mixed $contactId, int $projectId): bool
+    {
+        if ($contactId === null || $contactId === '') {
+            return true;
+        }
+
+        if (! is_numeric($contactId)) {
+            return false;
+        }
+
+        return Contact::withTrashed()->whereKey((int) $contactId)->inProject($projectId)->exists();
+    }
+
+    /**
+     * The message the contact picker shows when the submitted id names a
+     * contact of another project (D-30), null otherwise — the same
+     * replacement of Filament's first "selected value is invalid" message
+     * that AccountForm::crossProjectAccountMessage() makes for accounts.
+     */
+    private static function crossProjectContactMessage(mixed $contactId, int $projectId): ?string
+    {
+        if (! is_numeric($contactId)) {
+            return null;
+        }
+
+        $project = Contact::withTrashed()->whereKey((int) $contactId)->toBase()->value('project_id');
+
+        return $project !== null && (int) $project !== $projectId ? __('deals.validation.contact_project') : null;
     }
 }

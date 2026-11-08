@@ -17,6 +17,7 @@ use App\Models\Pipeline;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use App\Services\Statistics\DashboardFilters;
 use Carbon\Exceptions\InvalidFormatException;
 use Closure;
@@ -33,12 +34,19 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The home page of the Sales workspace (plan section 3.9, decision D-23):
- * the sales KPI strip, the charts and the stale-deals list, every one fed
- * by a statistics service inside the viewer's visibility scope (D-4) and
- * gated by its own canView(). Until D-23 this was the single panel's
- * landing page, which also carried the two task lists; they now open the
- * Tasks workspace (TasksDashboard).
+ * The home page of the Sales workspace (plan section 3.9, decisions D-23,
+ * D-30): the sales KPI strip, the charts and the stale-deals list, every
+ * one fed by a statistics service inside the viewer's visibility scope
+ * (D-4) and gated by its own canView(). Until D-23 this was the single
+ * panel's landing page, which also carried the two task lists; they now
+ * open the Tasks workspace (TasksDashboard).
+ *
+ * Since D-30 the page is the current project's page: the lead and deal
+ * widgets read the viewer's current project only (DashboardFilters::
+ * constrainProject), the activity chart counts every project, and the
+ * subheading names the project so the figures are never read against the
+ * wrong customer base. The project is not a filter here — it is switched
+ * from the top bar, like the workspace.
  *
  * The filters form (period, owner, team, pipeline) is live: every change
  * validates the period, is kept in the session, and reaches the widgets
@@ -84,6 +92,16 @@ final class SalesDashboard extends BaseDashboard
     public function getTitle(): string
     {
         return __('dashboard.title');
+    }
+
+    /**
+     * The project the figures belong to (D-30), under the title: «المشروع
+     * الحالي: إيقان». The colon is the same joiner the history's filter
+     * indicators use; the two words come from the switcher's vocabulary.
+     */
+    public function getSubheading(): string
+    {
+        return __('projects.switcher.current').': '.app(CurrentProject::class)->for($this->viewer())->display_name;
     }
 
     public function filtersForm(Schema $schema): Schema

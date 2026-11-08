@@ -25,12 +25,15 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Import history (module 18, decisions D-4, D-13, D-29). A user sees their
- * own runs; holders of `imports.view` see other users' runs of the entities
- * they reach at all level (ImportPolicy). The rows are written by Filament's
- * ImportAction, marked check-only by the ImportStarted listener and stamped
- * by ImportUndoService when a run is undone (D-29) — the one write the
- * resource offers, from the run page — and pruned by retention.
+ * Import history (module 18, decisions D-4, D-13, D-29, D-30). A user sees
+ * their own runs; holders of `imports.view` see other users' runs of the
+ * entities they reach at all level (ImportPolicy). The rows are written by
+ * Filament's ImportAction, marked check-only and with the run's project by
+ * the ImportStarted listener (StampImportRunOptions) and stamped by
+ * ImportUndoService when a run is undone (D-29) — the one write the resource
+ * offers, from the run page — and pruned by retention. The history is not
+ * narrowed to the current project: a run's project is a fact about the run,
+ * shown as a badge, and a reviewer reads every run they may read.
  */
 final class ImportResource extends Resource
 {
@@ -96,12 +99,13 @@ final class ImportResource extends Resource
      * the viewer reviews (ImportPolicy::reviews: `imports.view` plus all-level
      * reach), so neither the list nor the view page opens a run the viewer
      * could not read. The reviewable importers are resolved in PHP from the
-     * known classes, not per row.
+     * known classes, not per row. The launcher and the project (D-30) ride on
+     * the list's query, one query each for the page.
      */
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
-        $query = parent::getEloquentQuery()->with('user');
+        $query = parent::getEloquentQuery()->with(['user', 'project']);
 
         if (! $user instanceof User) {
             return $query->whereRaw('1 = 0');

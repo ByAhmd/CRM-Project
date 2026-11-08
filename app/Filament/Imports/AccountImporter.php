@@ -42,6 +42,11 @@ use Illuminate\Validation\Rule;
  * A check-only run (D-29) validates every row exactly as above — lookups,
  * duplicates, policy verbs — and writes nothing: the trait skips the save and
  * the owner change, and afterSave() stands down (tags, custom-field values).
+ *
+ * The run writes into the project the modal named (D-30): a new account is
+ * stamped with it, a duplicate is looked for inside it only, and the parent
+ * account must belong to it, so a same-named account of another project is
+ * neither a duplicate nor a parent here.
  */
 final class AccountImporter extends Importer
 {
@@ -202,7 +207,7 @@ final class AccountImporter extends Importer
      */
     public static function getOptionsFormComponents(): array
     {
-        return [self::duplicateStrategySelect(), self::dryRunCheckbox()];
+        return [self::projectSelect(), self::duplicateStrategySelect(), self::dryRunCheckbox()];
     }
 
     public function resolveRecord(): Model
@@ -269,7 +274,7 @@ final class AccountImporter extends Importer
 
     /**
      * The named parent account, inside the importer's visible scope (D-4)
-     * and never the account itself.
+     * and the run's project (D-30), and never the account itself.
      */
     private function resolveParent(?string $name, Account $record): ?Account
     {
@@ -280,7 +285,7 @@ final class AccountImporter extends Importer
             return null;
         }
 
-        $parent = $this->visible(Account::query())
+        $parent = $this->inChosenProject($this->visible(Account::query()))
             ->where('accounts.name', $name)
             ->when($record->exists, fn (Builder $query): Builder => $query->whereKeyNot($record->getKey()))
             ->orderBy('id')
@@ -294,9 +299,10 @@ final class AccountImporter extends Importer
     }
 
     /**
-     * An existing account inside the importer's visible scope (D-4) with the
-     * same name or normalised email; accounts outside that scope are
-     * invisible to the importer, so the row creates a new account.
+     * An existing account inside the importer's visible scope (D-4) and the
+     * run's project (D-30) with the same name or normalised email; accounts
+     * outside that scope or in another project are invisible to the
+     * importer, so the row creates a new account.
      */
     private function findDuplicate(): ?Account
     {
@@ -307,7 +313,7 @@ final class AccountImporter extends Importer
             return null;
         }
 
-        return $this->visible(Account::query())
+        return $this->inChosenProject($this->visible(Account::query()))
             ->where(function (Builder $query) use ($name, $email): void {
                 $query->whereRaw('1 = 0');
 

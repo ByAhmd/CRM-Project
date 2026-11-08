@@ -33,6 +33,7 @@ return [
     ],
 
     'fields' => [
+        'project' => 'Project',
         'name' => 'Name',
         'first_name' => 'First name',
         'last_name' => 'Last name',

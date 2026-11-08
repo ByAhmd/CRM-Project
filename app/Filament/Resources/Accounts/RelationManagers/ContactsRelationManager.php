@@ -65,6 +65,9 @@ final class ContactsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('last_name')
+            // The readable contacts (D-4) of every project: the account's people
+            // sit in its own project already, so the account opened from a link
+            // while another project is current still lists them (D-30).
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'))
                 ->with('owner'))

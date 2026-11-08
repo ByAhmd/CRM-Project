@@ -20,6 +20,7 @@ use App\Models\DealCloseReason;
 use App\Models\Import;
 use App\Models\LeadStatus;
 use App\Models\PipelineStage;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskChecklistItem;
 use App\Models\TaskCoAssignee;
@@ -27,6 +28,7 @@ use App\Models\TaskUpdate;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Support\Filament\WorkspacePanelRegistry;
 use Carbon\CarbonInterface;
@@ -36,6 +38,7 @@ use Database\Seeders\IndustrySeeder;
 use Database\Seeders\LeadSourceSeeder;
 use Database\Seeders\LeadStatusSeeder;
 use Database\Seeders\PipelineSeeder;
+use Database\Seeders\ProjectSeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\SettingsSeeder;
 use Filament\Actions\Imports\Models\FailedImportRow;
@@ -71,10 +74,11 @@ trait CreatesCrmFixtures
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
-    /** The production lookup defaults (statuses, sources, pipeline, …). */
+    /** The production lookup defaults (statuses, sources, pipeline, the default project, …). */
     protected function seedLookups(): void
     {
         $this->seed([
+            ProjectSeeder::class,
             LeadSourceSeeder::class,
             LeadStatusSeeder::class,
             IndustrySeeder::class,
@@ -82,6 +86,29 @@ trait CreatesCrmFixtures
             ActivityTypeSeeder::class,
             DealCloseReasonSeeder::class,
         ]);
+    }
+
+    /** The default project every record starts in (D-30); the release's migration created it. */
+    protected function defaultProject(): Project
+    {
+        return app(CurrentProject::class)->default();
+    }
+
+    /**
+     * Another active project — «إيقان» unless named — for the isolation
+     * tests (D-30).
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function makeProject(string $nameEn = 'Iqan', string $nameAr = 'إيقان', array $attributes = []): Project
+    {
+        return Project::factory()->create(['name_en' => $nameEn, 'name_ar' => $nameAr, ...$attributes]);
+    }
+
+    /** Makes the project the user's current one, as the switcher does (D-30). */
+    protected function useProject(User $user, Project $project): void
+    {
+        app(CurrentProject::class)->switch($user, $project);
     }
 
     /**

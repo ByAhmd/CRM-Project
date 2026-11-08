@@ -7,14 +7,17 @@ namespace App\Models;
 use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CustomFieldEntity;
+use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
+use App\Observers\ProjectConsistencyObserver;
 use Database\Factories\ContactFactory;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -34,10 +37,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
 #[Fillable([
     'account_id', 'lead_id', 'first_name', 'last_name', 'job_title', 'department', 'email', 'phone', 'mobile',
     'preferred_locale', 'linkedin_url', 'address_line', 'city', 'region', 'country', 'postal_code',
-    'is_primary', 'owner_id', 'description', 'created_by',
+    'is_primary', 'owner_id', 'description', 'created_by', 'project_id',
 ])]
+#[ObservedBy(ProjectConsistencyObserver::class)]
 final class Contact extends Model implements HasLocalePreference, OwnedRecord
 {
+    use BelongsToProject;
     use HasAttachments;
     use HasCustomFields;
 

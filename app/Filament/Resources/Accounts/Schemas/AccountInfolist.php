@@ -8,6 +8,7 @@ use App\Enums\CustomFieldEntity;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\LtrText;
+use App\Filament\Support\ProjectBadge;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use Filament\Infolists\Components\TextEntry;
@@ -26,6 +27,9 @@ final class AccountInfolist
                 Section::make(__('accounts.sections.details'))
                     ->schema([
                         Grid::make(3)->schema([
+                            // The account's project first (D-30): a page opened from a
+                            // link says which customer base it belongs to.
+                            ProjectBadge::entry(__('accounts.fields.project')),
                             TextEntry::make('type')->label(__('accounts.fields.type'))->badge(),
                             TextEntry::make('industry.display_name')->label(__('accounts.fields.industry'))->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('size')->label(__('accounts.fields.size'))->placeholder(__('common.placeholders.empty')),

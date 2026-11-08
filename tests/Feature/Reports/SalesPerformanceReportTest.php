@@ -166,12 +166,14 @@ final class SalesPerformanceReportTest extends TestCase
 
         // Won in the period, lost in the period, open now: each a sargable condition on its own index, never an OR
         // over them and never a period that only a CASE expression sees (which aggregates every deal ever created).
+        // The project clause (D-30) comes first in every one, before the report's own conditions.
         $this->assertCount(3, $queries, implode("\n", $queries));
-        $this->assertMatchesRegularExpression('/where `deals`\.`status` = \? and `deals`\.`won_at` between \? and \?/', $queries[0]);
-        $this->assertMatchesRegularExpression('/where `deals`\.`status` = \? and `deals`\.`lost_at` between \? and \?/', $queries[1]);
-        $this->assertMatchesRegularExpression('/where `deals`\.`status` = \?/', $queries[2]);
+        $this->assertMatchesRegularExpression('/`deals`\.`status` = \? and `deals`\.`won_at` between \? and \?/', $queries[0]);
+        $this->assertMatchesRegularExpression('/`deals`\.`status` = \? and `deals`\.`lost_at` between \? and \?/', $queries[1]);
+        $this->assertMatchesRegularExpression('/`deals`\.`status` = \?/', $queries[2]);
 
         foreach ($queries as $sql) {
+            $this->assertMatchesRegularExpression('/where `deals`\.`project_id` = \?/', $sql);
             $this->assertStringNotContainsString(' or ', strtolower($sql), $sql);
             $this->assertStringNotContainsString('case when', strtolower($sql), $sql);
         }

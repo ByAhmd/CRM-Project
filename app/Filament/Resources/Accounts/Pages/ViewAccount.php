@@ -28,10 +28,11 @@ final class ViewAccount extends ViewRecord
 
     /**
      * Every custom field entry of the page reads the record's values, so the
-     * relation is loaded once with the record instead of once per entry (D-9).
+     * relation is loaded once with the record instead of once per entry (D-9);
+     * the project feeds the badge (D-30).
      */
     protected function resolveRecord(int|string $key): Model
     {
-        return CustomFieldActions::loadValues(parent::resolveRecord($key));
+        return CustomFieldActions::loadValues(parent::resolveRecord($key)->loadMissing('project'));
     }
 }

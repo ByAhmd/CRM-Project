@@ -185,4 +185,24 @@ final class Activity extends Model implements OwnedRecord
 
         return $query->where($query->qualifyColumn($column), $subject->getKey());
     }
+
+    /**
+     * The activities of one project (decision D-30). An activity has no
+     * project of its own: it follows the lead, contact, account or deal it
+     * was logged against — trashed records included, so an entry on a
+     * since-deleted record keeps counting where it was logged. The recorder
+     * requires at least one linked record, so every activity answers.
+     *
+     * @param  Builder<Activity>  $query
+     * @return Builder<Activity>
+     */
+    protected function scopeInProject(Builder $query, Project|int $project): Builder
+    {
+        return $query->where(static function (Builder $nested) use ($query, $project): void {
+            $nested->whereIn($query->qualifyColumn('lead_id'), Lead::withTrashed()->inProject($project)->select('leads.id'))
+                ->orWhereIn($query->qualifyColumn('contact_id'), Contact::withTrashed()->inProject($project)->select('contacts.id'))
+                ->orWhereIn($query->qualifyColumn('account_id'), Account::withTrashed()->inProject($project)->select('accounts.id'))
+                ->orWhereIn($query->qualifyColumn('deal_id'), Deal::withTrashed()->inProject($project)->select('deals.id'));
+        });
+    }
 }

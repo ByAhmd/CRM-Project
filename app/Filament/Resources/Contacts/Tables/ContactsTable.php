@@ -115,10 +115,11 @@ final class ContactsTable
             ])
             ->defaultSort('last_name')
             ->filters([
-                // Only the accounts the viewer may read are offered (D-4).
+                // Only the accounts the viewer may read are offered (D-4), and
+                // of the current project (D-30), like the list they narrow.
                 SelectFilter::make('account')
                     ->label(__('contacts.filters.account'))
-                    ->relationship('account', 'name', fn (Builder $query): Builder => $query->whereIn('accounts.id', AccountResource::getEloquentQuery()->select('accounts.id')))
+                    ->relationship('account', 'name', fn (Builder $query): Builder => $query->whereIn('accounts.id', AccountResource::constrainToCurrentProject(AccountResource::getEloquentQuery())->select('accounts.id')))
                     ->searchable()
                     ->preload(),
 

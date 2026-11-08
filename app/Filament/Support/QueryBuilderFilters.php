@@ -204,9 +204,10 @@ final class QueryBuilderFilters
     }
 
     /**
-     * The account picker offers only the accounts the actor may read (D-4):
-     * the rule narrows a list that is already scoped, but the option names
-     * themselves must not reveal accounts outside the actor's reach.
+     * The account picker offers only the accounts the actor may read (D-4)
+     * in the current project (D-30): the rule narrows a list that is already
+     * scoped both ways, but the option names themselves must not reveal
+     * accounts outside the actor's reach or of another project.
      */
     private static function account(): RelationshipConstraint
     {
@@ -221,7 +222,7 @@ final class QueryBuilderFilters
                     ->preload()
                     ->modifyRelationshipQueryUsing(fn (Builder $query): Builder => $query->whereIn(
                         $query->qualifyColumn('id'),
-                        AccountResource::getEloquentQuery()->select('accounts.id'),
+                        AccountResource::constrainToCurrentProject(AccountResource::getEloquentQuery())->select('accounts.id'),
                     )),
             );
     }

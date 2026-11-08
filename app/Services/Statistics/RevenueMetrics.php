@@ -12,11 +12,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 /**
- * The closed-deal numbers of the dashboard (decisions D-4, D-8).
+ * The closed-deal numbers of the dashboard (decisions D-4, D-8, D-30).
  *
- * Every query starts from the viewer's visibility scope and is narrowed by
- * the filters (owner, team, pipeline). "In the period" means won_at /
- * lost_at between the filter bounds.
+ * Every query starts from the viewer's visibility scope, inside the viewer's
+ * current project (D-30: the dashboard is that project's page), and is
+ * narrowed by the filters (owner, team, pipeline). "In the period" means
+ * won_at / lost_at between the filter bounds.
  *
  * Monthly buckets: the won deals of the window are selected as rows (a
  * year of wins is a small set) and folded into months in PHP after
@@ -134,12 +135,13 @@ final class RevenueMetrics
     }
 
     /**
-     * The viewer's visible deals, narrowed by the filters (D-4).
+     * The viewer's visible deals of their current project (D-4, D-30),
+     * narrowed by the filters.
      *
      * @return Builder<Deal>
      */
     private function scoped(User $viewer, DashboardFilters $filters): Builder
     {
-        return $filters->constrainPipeline($filters->constrainOwner($this->visibility->visible($viewer, Deal::query())));
+        return $filters->constrainProject($viewer, $filters->constrainPipeline($filters->constrainOwner($this->visibility->visible($viewer, Deal::query()))));
     }
 }

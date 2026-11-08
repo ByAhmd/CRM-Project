@@ -7,10 +7,12 @@ namespace App\Filament\Imports\Concerns;
 use App\Contracts\OwnedRecord;
 use App\Exceptions\Access\UnassignableUserException;
 use App\Filament\Support\ImportExportActions;
+use App\Models\Project;
 use App\Models\Tag;
 use App\Models\User;
 use App\Services\Access\RecordAssignmentService;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use BackedEnum;
 use Filament\Actions\Imports\Exceptions\RowImportFailedException;
 use Filament\Actions\Imports\Models\Import;
@@ -39,6 +41,18 @@ use Illuminate\Support\Str;
  * importing user may see (RecordVisibilityResolver::visible). Records outside
  * that scope are invisible to the importer, so they are neither updated nor
  * reported as duplicates.
+ *
+ * Project (D-30): the modal's required «المشروع» select names the project
+ * the run writes into (projectSelect(), the first option of every importer,
+ * defaulting to the user's current project). Every record the run creates
+ * is stamped with it (saveRecord()), and every lookup of existing records —
+ * duplicates, accounts, parents, contacts — is narrowed to it on top of the
+ * visibility scope (inChosenProject()), so the same e-mail in another
+ * project is not a duplicate and a same-named account of another project is
+ * not found: that is the isolation the owner asked for. An updated duplicate
+ * keeps its project. The chosen project is read from the options
+ * (chosenProject()), never from the signed-in user, so the queued rows write
+ * where the modal said whatever the worker's context.
  *
  * Authorisation (D-3, D-4): Filament's Importer performs no per-record
  * authorisation, so the policy verbs are applied here, exactly as the panel
@@ -69,6 +83,9 @@ trait ResolvesImportLookups
     /** The modal option of a check-only run (D-29), named on ImportExportActions so classes without the trait can read it. */
     public const DRY_RUN_OPTION = ImportExportActions::DRY_RUN_OPTION;
 
+    /** The modal option naming the run's project (D-30), named on ImportExportActions beside the check-only flag. */
+    public const PROJECT_OPTION = ImportExportActions::PROJECT_OPTION;
+
     /**
      * Tag ids resolved while filling the current row, synced after the save;
      * null while the row carries no tags cell (an unmapped or blank tags
@@ -77,6 +94,12 @@ trait ResolvesImportLookups
      * @var list<int>|null
      */
     protected ?array $pendingTagIds = null;
+
+    /**
+     * The project the run writes into, resolved once per importer instance
+     * (chosenProject()); the options never change within a run.
+     */
+    protected ?Project $chosenProject = null;
 
     /**
      * The new owner an existing record's owner cell names, handed to
@@ -121,7 +144,9 @@ trait ResolvesImportLookups
      * check above has run and the row counts as valid, but nothing is written
      * — the importers' afterSave hooks (tags, custom fields) stand down too.
      * A record the run creates is stamped with the run (`import_id`) so the
-     * run can be undone; an updated duplicate is never marked.
+     * run can be undone, and with the run's project (`project_id`, D-30) so
+     * it lands where the modal said rather than where the model guard would
+     * put it; an updated duplicate is never marked and keeps its project.
      */
     public function saveRecord(): void
     {
@@ -133,6 +158,7 @@ trait ResolvesImportLookups
 
         if ($record !== null && ! $record->exists) {
             $record->setAttribute('import_id', $this->import->getKey());
+            $record->setAttribute('project_id', $this->chosenProject()->getKey());
         }
 
         parent::saveRecord();
@@ -144,6 +170,89 @@ trait ResolvesImportLookups
     protected function isDryRun(): bool
     {
         return (bool) ($this->options[self::DRY_RUN_OPTION] ?? false);
+    }
+
+    /**
+     * The project option every importer offers first (D-30): the active
+     * projects in switcher order, the user's current project selected. An
+     * inactive project is never offered (D-30), and Filament's own option
+     * rule refuses a value outside the list, so a stale or forged id cannot
+     * start a run through the modal.
+     */
+    public static function projectSelect(): Select
+    {
+        return Select::make(self::PROJECT_OPTION)
+            ->label(__('imports.fields.project'))
+            ->helperText(__('imports.helpers.project'))
+            ->options(static fn (): array => Project::query()->active()->get()
+                ->mapWithKeys(static fn (Project $project): array => [(int) $project->getKey() => $project->display_name])
+                ->all())
+            ->default(static function (): ?int {
+                $user = auth()->user();
+
+                return $user instanceof User ? (int) app(CurrentProject::class)->for($user)->getKey() : null;
+            })
+            ->required()
+            ->searchable()
+            ->native(false);
+    }
+
+    /**
+     * The project the run writes into (D-30), from the options: the project
+     * the modal named, or — when the options carry none, which only the
+     * direct ImportCsv path without the modal can produce — the importing
+     * user's current project, the same answer the BelongsToProject guard
+     * gives a record created without one. Memoised per importer instance.
+     *
+     * An option naming an unknown or inactive project fails the row with
+     * «هذا المشروع غير نشط»; since the options are the same for every row of
+     * the run, every row of such a run fails with that reason and the history
+     * records the refused project (StampImportRunOptions). That is accepted:
+     * the modal never offers an inactive project, so only a stale or forged
+     * payload gets here, and a run that writes nothing and says why beats one
+     * that silently writes into another project.
+     */
+    protected function chosenProject(): Project
+    {
+        if ($this->chosenProject instanceof Project) {
+            return $this->chosenProject;
+        }
+
+        $option = $this->options[self::PROJECT_OPTION] ?? null;
+
+        if (! filled($option)) {
+            return $this->chosenProject = app(CurrentProject::class)->for($this->importingUser());
+        }
+
+        // The select sends the key as an int or a digit string; anything else is not a project.
+        $id = match (true) {
+            is_int($option) => $option,
+            is_string($option) && ctype_digit($option) => (int) $option,
+            default => null,
+        };
+
+        $project = $id === null ? null : Project::query()->whereKey($id)->first();
+
+        if (! $project instanceof Project || ! $project->is_active) {
+            throw new RowImportFailedException(__('projects.validation.inactive'));
+        }
+
+        return $this->chosenProject = $project;
+    }
+
+    /**
+     * The query narrowed to the run's project (D-30), on top of the
+     * visibility scope: `$this->inChosenProject($this->visible(...))`. The
+     * query's model must carry `project_id` (Models\Concerns\BelongsToProject).
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    protected function inChosenProject(Builder $query): Builder
+    {
+        return $query->where($query->qualifyColumn('project_id'), $this->chosenProject()->getKey());
     }
 
     /** The check-only option every importer offers (D-29), off by default. */

@@ -106,9 +106,12 @@ final class ActivityForm
                     ->columns(['default' => 1, 'lg' => 2]),
 
                 ...$withSubjects ? [
+                    // A Sales page: the search offers the current project's
+                    // records (D-30); a link already set keeps validating
+                    // whatever project it points into.
                     Section::make(__('activities.sections.related'))
                         ->description(__('activities.helpers.related'))
-                        ->schema(SubjectPickers::components())
+                        ->schema(SubjectPickers::components(searchCurrentProjectOnly: true))
                         ->columns(['default' => 1, 'lg' => 2]),
                 ] : [],
 

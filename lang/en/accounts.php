@@ -22,6 +22,7 @@ return [
     ],
 
     'fields' => [
+        'project' => 'Project',
         'name' => 'Company name',
         'type' => 'Type',
         'industry' => 'Industry',

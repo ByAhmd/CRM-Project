@@ -157,10 +157,10 @@ final class ContactImporterTest extends TestCase
     {
         $components = ContactImporter::getOptionsFormComponents();
 
-        // The duplicate strategy first, then the check-only option (D-29; ImportDryRunTest covers it).
-        $this->assertCount(2, $components);
-        $this->assertInstanceOf(Select::class, $components[0]);
-        $this->assertSame('duplicate_strategy', $components[0]->getName());
+        // The project select first (D-30; ImportProjectTest covers it), then the duplicate strategy, then the check-only option (D-29).
+        $this->assertCount(3, $components);
+        $this->assertInstanceOf(Select::class, $components[1]);
+        $this->assertSame('duplicate_strategy', $components[1]->getName());
 
         foreach (ContactImporter::getColumns() as $column) {
             $this->assertSame(__('imports.columns.contact.'.$column->getName()), $column->getLabel());

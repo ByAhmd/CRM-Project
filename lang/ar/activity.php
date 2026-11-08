@@ -152,6 +152,7 @@ return [
     ],
 
     'subject_types' => [
+        'Project' => 'مشروع',
         'User' => 'مستخدم',
         'Role' => 'دور',
         'Team' => 'فريق',

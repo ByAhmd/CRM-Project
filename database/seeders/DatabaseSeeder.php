@@ -20,6 +20,7 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             RolesAndPermissionsSeeder::class,
             SettingsSeeder::class,
+            ProjectSeeder::class,
             LeadSourceSeeder::class,
             LeadStatusSeeder::class,
             IndustrySeeder::class,

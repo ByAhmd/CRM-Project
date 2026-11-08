@@ -73,12 +73,14 @@ return [
         'owner' => 'المسؤول',
         'team' => 'الفريق',
         'pipeline' => 'مسار المبيعات',
+        'project' => 'المشروع',
         'group_by' => 'تجميع حسب',
         'run' => 'تشغيل التقرير',
         'reset' => 'إعادة الضبط',
         'all_owners' => 'الجميع ضمن نطاقي',
         'all_teams' => 'كل الفرق',
         'all_pipelines' => 'كل مسارات المبيعات',
+        'all_projects' => 'كل المشاريع',
         'options' => [
             'group_by' => [
                 'status' => 'الحالة',

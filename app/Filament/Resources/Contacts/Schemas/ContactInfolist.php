@@ -9,6 +9,7 @@ use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\LtrText;
+use App\Filament\Support\ProjectBadge;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -30,6 +31,9 @@ final class ContactInfolist
                 Section::make(__('contacts.sections.details'))
                     ->schema([
                         Grid::make(3)->schema([
+                            // The contact's project first (D-30): a page opened from a
+                            // link says which customer base it belongs to.
+                            ProjectBadge::entry(__('contacts.fields.project')),
                             TextEntry::make('account.name')
                                 ->label(__('contacts.fields.account'))
                                 ->url(fn (Contact $record): ?string => $record->account instanceof Account ? AccountResource::getUrl('view', ['record' => $record->account]) : null)

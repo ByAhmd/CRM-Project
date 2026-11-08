@@ -73,12 +73,14 @@ return [
         'owner' => 'Owner',
         'team' => 'Team',
         'pipeline' => 'Pipeline',
+        'project' => 'Project',
         'group_by' => 'Group by',
         'run' => 'Run report',
         'reset' => 'Reset',
         'all_owners' => 'Everyone in my scope',
         'all_teams' => 'All teams',
         'all_pipelines' => 'All pipelines',
+        'all_projects' => 'All projects',
         'options' => [
             'group_by' => [
                 'status' => 'Status',

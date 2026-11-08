@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Enums\AccountType;
 use App\Enums\CompanySize;
 use App\Models\Account;
+use App\Models\Project;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,6 +18,9 @@ final class AccountFactory extends Factory
     public function definition(): array
     {
         return [
+            // The default project unless the test says otherwise (D-30); the migration created it.
+            'project_id' => fn (): int => (int) (Project::query()->where('is_default', true)->value('id')
+                ?? Project::factory()->default()->create()->getKey()),
             'name' => fake()->company(),
             'type' => AccountType::Prospect,
             'size' => fake()->randomElement(CompanySize::cases()),

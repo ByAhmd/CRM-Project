@@ -26,6 +26,7 @@ return [
     'columns' => [
         'lead' => [
             'id' => 'ID',
+            'project' => 'Project',
             'first_name' => 'First name',
             'last_name' => 'Last name',
             'company_name' => 'Company',
@@ -52,6 +53,7 @@ return [
         ],
         'contact' => [
             'id' => 'ID',
+            'project' => 'Project',
             'first_name' => 'First name',
             'last_name' => 'Last name',
             'account' => 'Company',
@@ -76,6 +78,7 @@ return [
         ],
         'account' => [
             'id' => 'ID',
+            'project' => 'Project',
             'name' => 'Company name',
             'type' => 'Type',
             'industry' => 'Industry',
@@ -98,6 +101,7 @@ return [
         ],
         'deal' => [
             'id' => 'ID',
+            'project' => 'Project',
             'title' => 'Title',
             'account' => 'Account',
             'contact' => 'Primary contact',

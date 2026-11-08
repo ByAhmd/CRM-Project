@@ -18,6 +18,7 @@ return [
     ],
 
     'fields' => [
+        'project' => 'Project',
         'name' => 'Name',
         'first_name' => 'First name',
         'last_name' => 'Last name',
@@ -51,6 +52,7 @@ return [
     ],
 
     'validation' => [
+        'account_project' => 'The account belongs to another project; a contact and its account are always in the same project.',
         'account_out_of_reach' => 'That company does not exist or is outside the records you can access.',
     ],
 

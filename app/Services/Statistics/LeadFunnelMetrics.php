@@ -13,14 +13,15 @@ use App\Services\Access\RecordVisibilityResolver;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * The lead funnel numbers of the dashboard (decisions D-4, D-7).
+ * The lead funnel numbers of the dashboard (decisions D-4, D-7, D-30).
  *
- * Every query starts from the viewer's visibility scope and is narrowed by
- * the filters (owner, team); nothing here widens what the viewer may list.
- * "In the period" means the lead was created, qualified or converted
- * between the filter bounds; leadsByStatus() is the open funnel as it
- * stands today, whatever the period. Grouping is done in SQL, with every
- * selected column in GROUP BY (ONLY_FULL_GROUP_BY).
+ * Every query starts from the viewer's visibility scope, inside the viewer's
+ * current project (D-30: the dashboard is that project's page), and is
+ * narrowed by the filters (owner, team); nothing here widens what the viewer
+ * may list. "In the period" means the lead was created, qualified or
+ * converted between the filter bounds; leadsByStatus() is the open funnel
+ * as it stands today, whatever the period. Grouping is done in SQL, with
+ * every selected column in GROUP BY (ONLY_FULL_GROUP_BY).
  */
 final class LeadFunnelMetrics
 {
@@ -166,12 +167,13 @@ final class LeadFunnelMetrics
     }
 
     /**
-     * The viewer's visible leads, narrowed by the owner and team filters (D-4).
+     * The viewer's visible leads of their current project (D-4, D-30),
+     * narrowed by the owner and team filters.
      *
      * @return Builder<Lead>
      */
     private function scoped(User $viewer, DashboardFilters $filters): Builder
     {
-        return $filters->constrainOwner($this->visibility->visible($viewer, Lead::query()));
+        return $filters->constrainProject($viewer, $filters->constrainOwner($this->visibility->visible($viewer, Lead::query())));
     }
 }

@@ -16,10 +16,11 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
  * The open deals per stage of the selected pipeline (plan section 3.9),
  * as two bars per stage — the amount and the weighted amount (D-8) — with
  * the stage names in the current locale, inside the viewer's scope (D-4)
- * and narrowed by the owner, team and pipeline filters. The default
- * pipeline is charted when none was chosen, and the heading then names it
- * — the KPI strip above spans every pipeline, so the bars are not meant to
- * add up to it. Empty when no open deal is in reach.
+ * and their current project (D-30) and narrowed by the owner, team and
+ * pipeline filters. The default pipeline is charted when none was chosen,
+ * and the heading then names it — the KPI strip above spans every pipeline,
+ * so the bars are not meant to add up to it. Empty when no open deal is in
+ * reach.
  */
 final class PipelineByStageChart extends ChartWidget
 {

@@ -25,6 +25,7 @@ use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use App\Support\Filament\PanelUrl;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -42,6 +43,13 @@ use Illuminate\Database\Eloquent\Model;
  * (owner / team / all) OR when it is linked to a lead, contact, account or
  * deal the actor may read, each resolved through that resource's own
  * query so the four scopes are never re-implemented here.
+ *
+ * The project (D-30): the Sales list shows the activities of the current
+ * project — those logged against its records — for every visibility level
+ * alike, through the table only. getEloquentQuery() stays the readable set of
+ * every project, so an activity opens from any link (the timeline of a record
+ * page, a bookmark) whatever project is current, and the Tasks workspace
+ * calendar, which reads it, follows no project.
  *
  * @extends resource<Activity>
  */
@@ -91,18 +99,41 @@ final class ActivityResource extends Resource
         return ActivityInfolist::configure($schema);
     }
 
+    /** The Sales list shows the current project only (D-30); the scope sits on the table, never on getEloquentQuery(). */
     public static function table(Table $table): Table
     {
-        return ActivitiesTable::configure($table);
+        return ActivitiesTable::configure($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => self::constrainToCurrentProject($query));
     }
 
     /**
+     * The readable activities of every project: the route binding, the
+     * calendar and the timeline links build on this query (D-30).
+     *
      * @return Builder<Activity>
      */
     public static function getEloquentQuery(): Builder
     {
         return self::constrainToReadable(parent::getEloquentQuery())
             ->with(['type', 'lead', 'contact', 'account', 'deal', 'owner']);
+    }
+
+    /**
+     * The activities logged against the records of the project the user is
+     * working in (Activity::inProject(), D-30); empty without a user.
+     *
+     * @param  Builder<Activity>  $query
+     * @return Builder<Activity>
+     */
+    private static function constrainToCurrentProject(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->inProject(app(CurrentProject::class)->for($user));
     }
 
     public static function getPages(): array

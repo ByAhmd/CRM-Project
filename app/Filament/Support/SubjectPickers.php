@@ -13,6 +13,7 @@ use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\Lead;
 use App\Models\User;
+use App\Services\Projects\CurrentProject;
 use App\Support\RecordLabel;
 use Closure;
 use Filament\Forms\Components\Hidden;
@@ -27,11 +28,19 @@ use Illuminate\Database\Eloquent\Model;
  * lead, a contact, an account or a deal (activities now; tasks and notes
  * later).
  *
- * Each Select searches the matching Resource's own query, so only records
- * the actor may read are offered — and a submitted id is re-checked against
- * that query on the server, so a crafted request cannot link to a record
- * outside the actor's reach. The guard field carries the schema-level rule
- * that at least one record is chosen; it is never part of the saved data.
+ * Each Select searches the matching Resource's own query — its readable set
+ * (D-4), never the current project — so only records the actor may read are
+ * offered, and a submitted id is re-checked against that query on the
+ * server, so a crafted request cannot link to a record outside the actor's
+ * reach. The guard field carries the schema-level rule that at least one
+ * record is chosen; it is never part of the saved data.
+ *
+ * The project (D-30): the Tasks workspace's pickers are not project-scoped,
+ * and a stored link to a record of another project keeps its label and keeps
+ * validating on edit, so the labels, the rules and the resolvers below never
+ * narrow by project. A Sales form may ask the SEARCH alone to offer the
+ * current project's records ($searchCurrentProjectOnly), which is what the
+ * activity page does; nothing else changes.
  */
 final class SubjectPickers
 {
@@ -40,18 +49,20 @@ final class SubjectPickers
 
     /**
      * With $required the guard field demands at least one record (activities,
-     * notes); tasks pass false because a task may be about nothing.
+     * notes); tasks pass false because a task may be about nothing. With
+     * $searchCurrentProjectOnly the search results are confined to the
+     * project the actor is working in (the Sales activity page, D-30).
      *
      * @return list<Component>
      */
-    public static function components(bool $required = true): array
+    public static function components(bool $required = true, bool $searchCurrentProjectOnly = false): array
     {
         return [
             Select::make('lead_id')
                 ->label(__('activities.fields.lead'))
                 ->searchable()
                 ->getSearchResultsUsing(fn (string $search): array => self::labels(
-                    LeadResource::getEloquentQuery()->where(function (Builder $query) use ($search): void {
+                    self::searched(LeadResource::getEloquentQuery(), $searchCurrentProjectOnly)->where(function (Builder $query) use ($search): void {
                         $query->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere('company_name', 'like', "%{$search}%");
@@ -67,7 +78,7 @@ final class SubjectPickers
                 ->label(__('activities.fields.contact'))
                 ->searchable()
                 ->getSearchResultsUsing(fn (string $search): array => self::labels(
-                    ContactResource::getEloquentQuery()->where(function (Builder $query) use ($search): void {
+                    self::searched(ContactResource::getEloquentQuery(), $searchCurrentProjectOnly)->where(function (Builder $query) use ($search): void {
                         $query->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%");
@@ -83,7 +94,7 @@ final class SubjectPickers
                 ->label(__('activities.fields.account'))
                 ->searchable()
                 ->getSearchResultsUsing(fn (string $search): array => self::labels(
-                    AccountResource::getEloquentQuery()->where('name', 'like', "%{$search}%")->orderBy('name')->limit(50)->get(),
+                    self::searched(AccountResource::getEloquentQuery(), $searchCurrentProjectOnly)->where('name', 'like', "%{$search}%")->orderBy('name')->limit(50)->get(),
                 ))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => self::label(AccountResource::getEloquentQuery(), $value))
                 ->rules([self::readableRule(fn (): Builder => AccountResource::getEloquentQuery())])
@@ -95,7 +106,7 @@ final class SubjectPickers
                 ->label(__('activities.fields.deal'))
                 ->searchable()
                 ->getSearchResultsUsing(fn (string $search): array => self::labels(
-                    DealResource::getEloquentQuery()->where('title', 'like', "%{$search}%")->orderBy('title')->limit(50)->get(),
+                    self::searched(DealResource::getEloquentQuery(), $searchCurrentProjectOnly)->where('title', 'like', "%{$search}%")->orderBy('title')->limit(50)->get(),
                 ))
                 ->getOptionLabelUsing(fn (mixed $value): ?string => self::label(DealResource::getEloquentQuery(), $value))
                 ->rules([self::readableRule(fn (): Builder => DealResource::getEloquentQuery())])
@@ -184,6 +195,28 @@ final class SubjectPickers
         $record = self::find(DealResource::getEloquentQuery(), $id);
 
         return $record instanceof Deal ? $record : null;
+    }
+
+    /**
+     * The query a picker searches: the readable set, confined to the actor's
+     * current project when the form asked for it (D-30). Only the search
+     * narrows — the label, the rule and the resolvers keep the whole readable
+     * set, so a prefilled or stored link of another project keeps working.
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    private static function searched(Builder $query, bool $currentProjectOnly): Builder
+    {
+        $user = auth()->user();
+
+        if (! $currentProjectOnly || ! $user instanceof User) {
+            return $query;
+        }
+
+        return app(CurrentProject::class)->scope($user, $query);
     }
 
     /**

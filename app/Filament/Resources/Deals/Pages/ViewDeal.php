@@ -24,10 +24,11 @@ final class ViewDeal extends ViewRecord
     /**
      * Every relation the infolist and the header actions read: the line items
      * with their products and the stage history with its stages and authors
-     * would otherwise cost queries per line and per log (plan section 8).
+     * would otherwise cost queries per line and per log (plan section 8); the
+     * project feeds the badge (D-30).
      */
     private const array RELATIONS = [
-        'stage', 'pipeline', 'owner', 'account', 'contact', 'source', 'lead', 'closeReason', 'creator', 'tags',
+        'project', 'stage', 'pipeline', 'owner', 'account', 'contact', 'source', 'lead', 'closeReason', 'creator', 'tags',
         'products.product',
         'stageLogs.fromStage', 'stageLogs.toStage', 'stageLogs.changer',
     ];

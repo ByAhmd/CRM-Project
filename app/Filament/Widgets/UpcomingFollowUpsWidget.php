@@ -26,6 +26,10 @@ use Illuminate\Database\Eloquent\Builder;
  * the same organisation-day boundary it is printed in (isDueToday()), so
  * the highlight and the date never name different days.
  *
+ * Not project-scoped (D-30): tasks follow their records rather than living
+ * in a project, and the list counts them whole whichever project the
+ * viewer is working in.
+ *
  * Filament passes `pageFilters` to every widget of a page that carries a
  * filters form (Page::getWidgetsSchemaComponents()), so the trait that
  * declares that property is required here even though this list ignores

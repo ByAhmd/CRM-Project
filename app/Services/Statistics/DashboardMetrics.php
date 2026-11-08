@@ -7,11 +7,11 @@ namespace App\Services\Statistics;
 use App\Models\User;
 
 /**
- * The sales KPI strip of the dashboard (decisions D-4, D-7, D-8): one call
- * that gathers the lead funnel, the open pipeline and the closed deals for
- * the viewer and the filters, so the widget presents and never computes.
+ * The sales KPI strip of the dashboard (decisions D-4, D-7, D-8, D-30): one
+ * call that gathers the lead funnel, the open pipeline and the closed deals
+ * for the viewer and the filters, so the widget presents and never computes.
  * Every figure comes from the dedicated metrics service and therefore from
- * the viewer's visibility scope.
+ * the viewer's visibility scope inside their current project.
  */
 final class DashboardMetrics
 {

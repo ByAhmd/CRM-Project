@@ -16,7 +16,7 @@ Contents: 1 Users · 2 Roles, permissions and teams · 3 Audit ledger · 4 Delet
 6 Attachments and disk growth · 7 Queue and failed jobs · 8 Scheduler · 9 Currency and timezone · 10 Lookups,
 custom fields and email templates · 11 Notification preferences · 12 Demo data · 13 Command reference ·
 14 Common preflight failures · 15 Backups · 16 Weekly summary · 17 Routine tasks · 18 Task mentions, checklists and the task
-report · 19 Employee dashboard · 20 The Tasks workspace day to day, the Inbox and the phone app.
+report · 19 Employee dashboard · 20 The Tasks workspace day to day, the Inbox and the phone app · 21 Projects.
 
 ---
 
@@ -155,6 +155,9 @@ and why. Keeping two active super admins avoids the situation.
   notice reports the result. Who: the run's owner, or an `imports.view` reviewer of the entity, holding the entity's
   `delete` key. A run is undone once, while it is still in the history (90 days); records remember their run
   (`import_id`) until it is pruned.
+- **Project (D-30):** the modal's «المشروع» select — required, defaulting to the project the user is working in —
+  decides which project the rows are created in; duplicates, accounts, parents and contacts are matched inside that
+  project only, and the history row shows the project of each run (section 21).
 - **Pruning:** `model:prune` runs daily. Import runs are kept 90 days (`Import::RETENTION_DAYS`), export runs and their
   files 30 days (`Export::RETENTION_DAYS`); failed import rows leave with their import.
 
@@ -596,3 +599,37 @@ screen. There is no service worker: nothing is cached on the device, nothing wor
 - The installed app's name under the icon is «العملاء» (*CRM* in English); the manifest is always in Arabic, the
   default language, because a phone fetches it without the user's session.
 - After a release that changes the icons, an installed app may keep the old icon until it is removed and added again.
+
+## 21. Projects (D-30)
+
+- **What a project is.** A project («المشروع») is one partition of the customer base — a brand or business line with
+  its own leads, contacts, accounts and deals. Every one of those records belongs to exactly one project from the
+  moment it is created and never moves. Activities, notes, tasks and attachments follow their record; lookups,
+  pipelines, tags, custom fields and products are shared by every project.
+- **The default project.** The release that introduced projects created «المشروع الرئيسي» / *Main project* and
+  assigned every existing record to it. Rename it to the main brand under *Administration → Settings → Projects*
+  (`settings.manage`) and add the others («إيقان», …). There is always exactly one default project: it is where a
+  new user starts and where console work lands; it can be neither deactivated nor deleted — make another project the
+  default first.
+- **Working in a project.** The Sales top bar carries a project switcher next to the workspace switcher; the choice is
+  remembered per user across devices. Every Sales list (the activities list included), the deal board, the sales
+  dashboard, global search and every export shows the current project only. The *Projects* page in the Sales sidebar shows a card per active project
+  with its counts (within the viewer's visibility) and the value of its open deals; *Enter* makes it current. A
+  record opens from any link whatever the current project and shows its project badge, so a notification or a
+  bookmark never dead-ends — a record "missing" from a list is usually in another project: check the switcher first.
+- **Isolation rules.** A new record is created in the current project (shown as a badge on the form, never a
+  choice). A contact's account, a deal's account and contacts (the primary one and the roles) and an account's parent
+  must be in the same project: the selects offer only those and an integrity guard refuses anything else, as it
+  refuses moving a record to another project. Duplicate detection and merging work inside one project — the same
+  e-mail in two projects is two records by design. Lead conversion carries the lead's project onto what it creates.
+  The Tasks workspace's record pickers are not scoped by project; the Sales activity page's pickers search the
+  current project.
+- **Imports.** The import modal's «المشروع» select (required, defaulting to the current project) decides where the
+  rows go; duplicates, accounts, parents and contacts are looked up inside that project only, and the history shows
+  the project of each run. Undo and check-only runs are unchanged (section 5).
+- **Reports and dashboard.** The commercial reports carry a *Project* filter (default the current project;
+  «كل المشاريع» for the whole organisation); the task and activity reports are not partitioned. The sales dashboard
+  counts the current project.
+- **Deactivating.** An inactive project leaves the switcher, the projects page and the import select; its records
+  stay, open from their links and still count in «كل المشاريع» reports. A project that holds records cannot be
+  deleted (RESTRICT keys and the policy); deactivate it instead.

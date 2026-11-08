@@ -8,23 +8,26 @@ use App\Enums\ActivityKind;
 use App\Models\Activity;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 /**
- * The activity numbers of the dashboard (decisions D-4, A-10).
+ * The activity numbers of the dashboard (decisions D-4, D-30, A-10).
  *
- * Every query starts from the viewer's visibility scope and is narrowed by
- * the filters (owner, team). countsByKind() follows the period; perDay()
- * is a fixed trailing window of organisation days (D-8) for the small bar
- * chart. Daily buckets are folded in PHP: the activities of the window are
- * selected as rows and each occurred_at is converted from the application
- * timezone — what every stored timestamp is in — to the organisation
- * timezone before it is counted, so the days agree with countsByKind()
- * whatever timezone an administrator picks in General Settings. No SQL
- * DATE() (it would name the day in the application timezone) and no
- * CONVERT_TZ() (it needs the MySQL timezone tables, which shared hosting,
- * D-1, does not guarantee).
+ * Every query starts from the viewer's visibility scope inside the project
+ * the viewer is working in — an activity has no project of its own and
+ * follows the record it was logged against (Activity::inProject()) — and is
+ * narrowed by the filters (owner, team). countsByKind() follows the period;
+ * perDay() is a fixed trailing window of organisation days (D-8) for the
+ * small bar chart. Daily buckets are folded in PHP: the activities of the
+ * window are selected as rows and each occurred_at is converted from the
+ * application timezone — what every stored timestamp is in — to the
+ * organisation timezone before it is counted, so the days agree with
+ * countsByKind() whatever timezone an administrator picks in General
+ * Settings. No SQL DATE() (it would name the day in the application
+ * timezone) and no CONVERT_TZ() (it needs the MySQL timezone tables, which
+ * shared hosting, D-1, does not guarantee).
  */
 final class ActivityMetrics
 {
@@ -32,6 +35,7 @@ final class ActivityMetrics
 
     public function __construct(
         private readonly RecordVisibilityResolver $visibility,
+        private readonly CurrentProject $currentProject,
     ) {}
 
     /**
@@ -106,12 +110,17 @@ final class ActivityMetrics
     }
 
     /**
-     * The viewer's visible activities, narrowed by the owner and team filters (D-4).
+     * The viewer's visible activities on the records of their current project
+     * (D-30), narrowed by the owner and team filters (D-4). The project is
+     * read at query time from the viewer, as DashboardFilters::constrainProject()
+     * does for leads and deals, so a switch is honoured on the next render.
      *
      * @return Builder<Activity>
      */
     private function scoped(User $viewer, DashboardFilters $filters): Builder
     {
-        return $filters->constrainOwner($this->visibility->visible($viewer, Activity::query()));
+        return $filters->constrainOwner(
+            $this->visibility->visible($viewer, Activity::query())->inProject($this->currentProject->for($viewer)),
+        );
     }
 }

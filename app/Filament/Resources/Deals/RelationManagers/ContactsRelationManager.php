@@ -25,9 +25,10 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * The people involved in a deal and their role (decision D-6). The panel
- * lists and offers only contacts the actor may see (D-4), narrowed to the
- * deal's account when it has one. Every change requires `update` on the
- * deal, so a closed deal's contacts are frozen with it.
+ * lists and offers only contacts the actor may see (D-4) in the deal's own
+ * project (D-30), narrowed to the deal's account when it has one. Every
+ * change requires `update` on the deal, so a closed deal's contacts are
+ * frozen with it.
  */
 final class ContactsRelationManager extends RelationManager
 {
@@ -57,7 +58,7 @@ final class ContactsRelationManager extends RelationManager
             // Only the attached contacts the viewer may read (D-4): seeing the
             // deal does not reveal every person involved in it.
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
-                ->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id')))
+                ->whereIn('contacts.id', $this->readableContactsOfTheDeal()->select('contacts.id')))
             ->columns([
                 TextColumn::make('full_name')
                     ->label(__('contacts.fields.name'))
@@ -132,8 +133,8 @@ final class ContactsRelationManager extends RelationManager
     }
 
     /**
-     * The contacts the actor may see (D-4), narrowed to the deal's account
-     * when it has one (D-6).
+     * The contacts the actor may see (D-4) in the deal's project (D-30),
+     * narrowed to the deal's account when it has one (D-6).
      *
      * @template TModel of Model
      *
@@ -144,12 +145,32 @@ final class ContactsRelationManager extends RelationManager
     {
         $deal = $this->getOwnerRecord();
 
-        $query->whereIn('contacts.id', ContactResource::getEloquentQuery()->select('contacts.id'));
+        $query->whereIn('contacts.id', $this->readableContactsOfTheDeal()->select('contacts.id'));
 
         if ($deal instanceof Deal && $deal->account_id !== null) {
             $query->where('contacts.account_id', $deal->account_id);
         }
 
         return $query;
+    }
+
+    /**
+     * The readable contacts of the deal's own project — the only ones this
+     * panel lists or attaches, whatever project the actor is working in: a
+     * deal opened from a link while another project is current still shows
+     * its people, and is never offered the current project's (a deal and its
+     * contacts belong to one project, D-30; the pivot is guarded too, by
+     * ProjectConsistencyObserver). Empty when the owner is not a deal.
+     *
+     * @return Builder<Model> ContactResource's query, typed by Filament on the base model.
+     */
+    private function readableContactsOfTheDeal(): Builder
+    {
+        $deal = $this->getOwnerRecord();
+        $query = ContactResource::getEloquentQuery();
+
+        return $deal instanceof Deal
+            ? $query->where('contacts.project_id', (int) $deal->project_id)
+            : $query->whereRaw('1 = 0');
     }
 }

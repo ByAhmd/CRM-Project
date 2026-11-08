@@ -53,6 +53,14 @@ final class ImportExportActions
     public const DRY_RUN_OPTION = 'dry_run';
 
     /**
+     * The modal option naming the project a run writes into (D-30), carried in
+     * the run's options like the duplicate strategy and the check-only flag;
+     * named here for the same reason — the listener that stamps it on the
+     * history row has no trait to read it from.
+     */
+    public const PROJECT_OPTION = 'project_id';
+
+    /**
      * Imports that may be started per minute per client IP address per list page (Filament's action rate limit is
      * keyed on the component, the mounted action and request()->ip(), not on the user); Filament refuses the rest
      * with its throttle notice. Behind an untrusted proxy every user shares it (CRM_TRUSTED_PROXIES).

@@ -26,6 +26,7 @@ return [
     'columns' => [
         'lead' => [
             'id' => 'المعرّف',
+            'project' => 'المشروع',
             'first_name' => 'الاسم الأول',
             'last_name' => 'اسم العائلة',
             'company_name' => 'الشركة',
@@ -52,6 +53,7 @@ return [
         ],
         'contact' => [
             'id' => 'المعرّف',
+            'project' => 'المشروع',
             'first_name' => 'الاسم الأول',
             'last_name' => 'اسم العائلة',
             'account' => 'الشركة',
@@ -76,6 +78,7 @@ return [
         ],
         'account' => [
             'id' => 'المعرّف',
+            'project' => 'المشروع',
             'name' => 'اسم الشركة',
             'type' => 'النوع',
             'industry' => 'القطاع',
@@ -98,6 +101,7 @@ return [
         ],
         'deal' => [
             'id' => 'المعرّف',
+            'project' => 'المشروع',
             'title' => 'عنوان الصفقة',
             'account' => 'الحساب',
             'contact' => 'جهة الاتصال الرئيسية',

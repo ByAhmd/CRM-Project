@@ -15,8 +15,9 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
 /**
  * The open lead funnel as a doughnut (plan section 3.9): one segment per
  * open status, painted with the status's own badge colour resolved from
- * the panel palette, counted inside the viewer's scope (D-4) and narrowed
- * by the owner and team filters. Empty when no open lead is in reach.
+ * the panel palette, counted inside the viewer's scope (D-4) and their
+ * current project (D-30) and narrowed by the owner and team filters. Empty
+ * when no open lead is in reach.
  */
 final class LeadsByStatusChart extends ChartWidget
 {

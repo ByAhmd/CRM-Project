@@ -14,6 +14,7 @@ use App\Policies\ExportPolicy;
 use App\Policies\ImportPolicy;
 use App\Services\CustomFields\CustomFieldRegistry;
 use App\Services\Leads\LeadScoringService;
+use App\Services\Projects\CurrentProject;
 use App\Services\Settings\SettingsRepository;
 use App\Support\Landing\LandingPageChrome;
 use BezhanSalleh\LanguageSwitch\LanguageSwitch;
@@ -51,6 +52,13 @@ final class AppServiceProvider extends ServiceProvider
         // between requests and jobs, and registerCustomFieldRegistryFlush()
         // drops it the moment a definition changes, so nothing reads stale.
         $this->app->scoped(CustomFieldRegistry::class);
+
+        // One current-project answer per request or queued job (D-30): every
+        // list, widget and select of the Sales workspace asks for the user's
+        // project, and the answer is computed once and reused; switching
+        // updates the memo as it writes, and scoped instances are dropped
+        // between requests and jobs, so nothing reads stale.
+        $this->app->scoped(CurrentProject::class);
     }
 
     public function boot(): void
@@ -60,10 +68,11 @@ final class AppServiceProvider extends ServiceProvider
         $this->configureImportExportAuthorisation();
         $this->registerCustomFieldRegistryFlush();
         // Listeners in app/Listeners are auto-discovered (PersistUserLocale,
-        // ActivateInvitedUser, StampCheckOnlyImport — the D-29 check-only flag
-        // on Filament's ImportStarted event — …); registering them here as
-        // well ran every handler twice per event. Only a subscriber, which
-        // discovery does not see, is registered by hand below.
+        // ActivateInvitedUser, StampImportRunOptions — the D-29 check-only flag
+        // and the D-30 project on Filament's ImportStarted event — …);
+        // registering them here as well ran every handler twice per event.
+        // Only a subscriber, which discovery does not see, is registered by
+        // hand below.
         $this->registerAuditing();
         $this->configureLanguageSwitch();
         $this->configureFilamentDefaults();

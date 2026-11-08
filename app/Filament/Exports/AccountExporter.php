@@ -20,10 +20,10 @@ use Illuminate\Database\Eloquent\Model;
  * CSV / XLSX export of accounts (module 18, decision D-13).
  *
  * Exports the rows of the table query it is launched from — already inside
- * the actor's visible scope — with the industry and enums rendered as labels
- * in the actor's locale, the parent and owner by name, tags joined, dates
- * as Y-m-d H:i. All text cells are protected against spreadsheet formula
- * injection.
+ * the actor's visible scope and the current project — with the project by
+ * name (D-30), the industry and enums rendered as labels in the actor's
+ * locale, the parent and owner by name, tags joined, dates as Y-m-d H:i.
+ * All text cells are protected against spreadsheet formula injection.
  */
 final class AccountExporter extends Exporter
 {
@@ -38,6 +38,7 @@ final class AccountExporter extends Exporter
     {
         return [
             ExportColumn::make('id')->label(__('exports.columns.account.id')),
+            ExportColumn::make('project.display_name')->label(__('exports.columns.account.project'))->preventFormulaInjection(),
             ExportColumn::make('name')->label(__('exports.columns.account.name'))->preventFormulaInjection(),
             ExportColumn::make('type')
                 ->label(__('exports.columns.account.type'))
@@ -94,7 +95,8 @@ final class AccountExporter extends Exporter
 
     /**
      * Every custom column reads the record's values, so the relation is
-     * loaded with the chunk instead of once per cell (D-9).
+     * loaded with the chunk instead of once per cell (D-9); the project
+     * column reads the project the same way (D-30).
      *
      * @template TModel of Model
      *
@@ -103,7 +105,7 @@ final class AccountExporter extends Exporter
      */
     public static function modifyQuery(Builder $query): Builder
     {
-        return CustomFieldsSchema::eagerLoad($query);
+        return CustomFieldsSchema::eagerLoad($query)->with('project');
     }
 
     public static function getCompletedNotificationBody(Export $export): string

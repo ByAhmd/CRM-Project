@@ -6,6 +6,7 @@ namespace App\Filament\Resources\Leads;
 
 use App\Enums\NavigationGroup;
 use App\Filament\Concerns\BuildsUrlsInOwningPanel;
+use App\Filament\Concerns\ScopesQueriesToCurrentProject;
 use App\Filament\Concerns\ScopesQueriesToVisibleRecords;
 use App\Filament\Resources\Leads\Pages\CreateLead;
 use App\Filament\Resources\Leads\Pages\EditLead;
@@ -34,6 +35,7 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 final class LeadResource extends Resource
 {
     use BuildsUrlsInOwningPanel;
+    use ScopesQueriesToCurrentProject;
     use ScopesQueriesToVisibleRecords;
 
     protected static ?string $model = Lead::class;
@@ -79,16 +81,25 @@ final class LeadResource extends Resource
         return LeadInfolist::configure($schema);
     }
 
+    /** The Sales list shows the current project only (D-30); the scope sits on the table, never on getEloquentQuery(). */
     public static function table(Table $table): Table
     {
-        return LeadsTable::configure($table);
+        return LeadsTable::configure($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => self::constrainToCurrentProject($query));
     }
 
+    /**
+     * The readable leads (D-4) of every project: the route binding, the
+     * relation managers, the task and activity readers and the subject pickers
+     * all build on this query, so a record opens from any link whatever the
+     * current project (D-30, ScopesQueriesToCurrentProject).
+     */
     public static function getEloquentQuery(): Builder
     {
         return self::constrainToVisible(parent::getEloquentQuery())->with(['status', 'source', 'owner', 'tags']);
     }
 
+    /** The soft-deleted records included, for the restore pages. */
     public static function getRecordRouteBindingEloquentQuery(): Builder
     {
         return parent::getRecordRouteBindingEloquentQuery()
@@ -132,7 +143,7 @@ final class LeadResource extends Resource
 
     public static function getGlobalSearchEloquentQuery(): Builder
     {
-        return self::constrainToVisible(parent::getGlobalSearchEloquentQuery())->with(['status', 'owner']);
+        return self::constrainToCurrentProject(self::constrainToVisible(parent::getGlobalSearchEloquentQuery()))->with(['status', 'owner']);
     }
 
     /**

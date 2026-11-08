@@ -15,9 +15,11 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 /**
- * One import run: the summary, the counts and the first failed rows with
- * the reason each was refused (the CSV of every failed row is the page's
- * download action).
+ * One import run: the summary (the file, the entity, the project the run
+ * wrote into — D-30, as the project's own coloured badge, a dash for a run
+ * from before projects — the type, the launcher and the status), the counts
+ * and the first failed rows with the reason each was refused (the CSV of
+ * every failed row is the page's download action).
  */
 final class ImportInfolist
 {
@@ -38,6 +40,12 @@ final class ImportInfolist
                                 ->formatStateUsing(fn (string $state): string => ImportResource::entityLabel($state))
                                 ->badge()
                                 ->color('gray'),
+                            TextEntry::make('project')
+                                ->label(__('imports.fields.project'))
+                                ->state(fn (Import $record): ?string => $record->project?->display_name)
+                                ->badge()
+                                ->color(fn (Import $record): string => $record->project?->color->value ?? 'gray')
+                                ->placeholder(__('common.placeholders.empty')),
                             TextEntry::make('mode')
                                 ->label(__('imports.fields.mode'))
                                 ->state(fn (Import $record): string => ImportResource::mode($record))

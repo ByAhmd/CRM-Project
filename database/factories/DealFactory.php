@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\Deal;
 use App\Models\Pipeline;
 use App\Models\PipelineStage;
+use App\Models\Project;
 use App\Services\Settings\PipelineService;
 use App\Services\Settings\SettingsRepository;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -25,8 +26,13 @@ final class DealFactory extends Factory
     public function definition(): array
     {
         return [
+            // The default project unless the test says otherwise (D-30); the
+            // account made for the deal is created in the same project, so a
+            // test that names another project gets a consistent pair.
+            'project_id' => fn (): int => (int) (Project::query()->where('is_default', true)->value('id')
+                ?? Project::factory()->default()->create()->getKey()),
             'title' => fake()->company().' – '.fake()->word(),
-            'account_id' => Account::factory(),
+            'account_id' => fn (array $attributes): int => (int) Account::factory()->create(['project_id' => $attributes['project_id']])->getKey(),
             'pipeline_id' => fn (): int => $this->defaultPipelineId(),
             'stage_id' => fn (array $attributes): int => (int) PipelineStage::query()
                 ->where('pipeline_id', $attributes['pipeline_id'])

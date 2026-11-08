@@ -69,6 +69,10 @@ final class EditAccount extends EditRecord
         // against the saved record by afterSave() (D-9).
         unset($data[CustomFieldsSchema::STATE_PATH]);
 
+        // The project is set at creation and never edited (D-30): the form
+        // shows it as a badge only, and a crafted payload is dropped here.
+        unset($data['project_id']);
+
         $record = $this->getRecord();
         assert($record instanceof Account);
         $actor = auth()->user();

@@ -19,7 +19,8 @@ use Illuminate\Support\Number;
 /**
  * The sales KPI strip (plan section 3.9): the lead funnel of the period,
  * the open pipeline and the deals closed in the period, from
- * DashboardMetrics inside the viewer's scope (D-4). The lead stats show
+ * DashboardMetrics inside the viewer's scope (D-4) and their current
+ * project (D-30: the dashboard is that project's page). The lead stats show
  * to a viewer who may list leads, the deal stats to one who may list
  * deals; the widget shows when either holds. Money is in the organisation
  * currency (D-8).

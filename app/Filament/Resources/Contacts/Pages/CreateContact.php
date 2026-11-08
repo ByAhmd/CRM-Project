@@ -9,6 +9,7 @@ use App\Filament\Support\CustomFieldsSchema;
 use App\Models\Contact;
 use App\Models\User;
 use App\Services\Contacts\ContactService;
+use App\Services\Projects\CurrentProject;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -35,8 +36,16 @@ final class CreateContact extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['created_by'] = auth()->id();
-        $data['owner_id'] = $data['owner_id'] ?? auth()->id();
+        $actor = auth()->user();
+        assert($actor instanceof User);
+
+        $data['created_by'] = $actor->getKey();
+        $data['owner_id'] = $data['owner_id'] ?? $actor->getKey();
+
+        // The contact is born in the project the user is working in (D-30):
+        // the form shows it as a badge and never offers a choice, so the page
+        // stamps it instead of reading it from the payload.
+        $data['project_id'] = app(CurrentProject::class)->for($actor)->getKey();
 
         $custom = $data[CustomFieldsSchema::STATE_PATH] ?? null;
         $this->customFieldState = is_array($custom) ? $custom : [];

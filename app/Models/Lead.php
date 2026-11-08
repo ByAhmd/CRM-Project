@@ -8,6 +8,7 @@ use App\Contracts\OwnedRecord;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CustomFieldEntity;
 use App\Enums\LeadPriority;
+use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\GuardsWorkflowFields;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasCustomFields;
@@ -15,6 +16,7 @@ use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
 use App\Observers\LeadObserver;
+use App\Observers\ProjectConsistencyObserver;
 use Database\Factories\LeadFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -44,10 +46,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
     'first_name', 'last_name', 'company_name', 'job_title', 'email', 'phone', 'website',
     'address_line', 'city', 'region', 'country', 'postal_code',
     'lead_source_id', 'lead_status_id', 'owner_id', 'priority', 'score_override', 'description', 'created_by',
+    'project_id',
 ])]
-#[ObservedBy(LeadObserver::class)]
+#[ObservedBy([LeadObserver::class, ProjectConsistencyObserver::class])]
 final class Lead extends Model implements OwnedRecord
 {
+    use BelongsToProject;
     use GuardsWorkflowFields;
     use HasAttachments;
     use HasCustomFields;

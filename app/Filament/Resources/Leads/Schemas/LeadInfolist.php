@@ -12,6 +12,7 @@ use App\Filament\Support\AddressSchema;
 use App\Filament\Support\CustomFieldsSchema;
 use App\Filament\Support\LeadScoreMeter;
 use App\Filament\Support\LtrText;
+use App\Filament\Support\ProjectBadge;
 use App\Livewire\RecordTimeline;
 use App\Models\Account;
 use App\Models\Contact;
@@ -35,6 +36,9 @@ final class LeadInfolist
                 Section::make(__('leads.sections.classification'))
                     ->schema([
                         Grid::make(4)->schema([
+                            // The lead's project first (D-30): a page opened from a
+                            // link says which customer base it belongs to.
+                            ProjectBadge::entry(__('leads.fields.project')),
                             TextEntry::make('status.display_name')
                                 ->label(__('leads.fields.status'))
                                 ->badge()

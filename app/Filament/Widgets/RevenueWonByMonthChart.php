@@ -15,8 +15,9 @@ use Illuminate\Support\Carbon;
 /**
  * The amount won per month over the last twelve months (plan section
  * 3.9), as a line in the panel's success colour, month labels in the
- * current locale, inside the viewer's scope (D-4) and narrowed by the
- * owner, team and pipeline filters. Empty when nothing was won.
+ * current locale, inside the viewer's scope (D-4) and their current
+ * project (D-30) and narrowed by the owner, team and pipeline filters.
+ * Empty when nothing was won.
  */
 final class RevenueWonByMonthChart extends ChartWidget
 {

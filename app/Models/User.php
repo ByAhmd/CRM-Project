@@ -46,6 +46,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property ?string $app_authentication_secret
  * @property ?array<int, string> $app_authentication_recovery_codes
  * @property bool $has_email_authentication
+ * @property-read ?Project $currentProject
  */
 #[Fillable(['name', 'email', 'phone', 'locale', 'timezone', 'password', 'status', 'team_id'])]
 #[Hidden(['password', 'remember_token', 'app_authentication_secret', 'app_authentication_recovery_codes'])]
@@ -108,6 +109,18 @@ final class User extends Authenticatable implements FilamentUser, HasAppAuthenti
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * The project the user chose to work in (D-30); read through
+     * Services\Projects\CurrentProject, which falls back to the default
+     * project when none was chosen or the chosen one was deactivated.
+     *
+     * @return BelongsTo<Project, $this>
+     */
+    public function currentProject(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'current_project_id');
     }
 
     /**

@@ -14,6 +14,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
+use Livewire\Component as LivewireComponent;
 
 /**
  * Live "possible duplicate" hint on create/edit forms (decision A-11). Warns,
@@ -23,12 +24,17 @@ use Illuminate\Support\HtmlString;
  * a match outside it is only acknowledged with a generic sentence that carries
  * no identifying data, so typing an email or phone never reveals whose record
  * it is (D-4). Without a signed-in user nothing is shown.
+ *
+ * The lookup runs in the project the form is about (D-30: the current project
+ * on create, the record's project on edit, the owner record's project inside
+ * a relation manager — ProjectBadge resolves it): the same e-mail in another
+ * project is not a duplicate and is never mentioned.
  */
 final class DuplicateWarning
 {
     public static function forAccount(): Placeholder
     {
-        $warning = static function (Get $get, ?Model $record): ?string {
+        $warning = static function (Get $get, ?Model $record, ?LivewireComponent $livewire): ?string {
             $viewer = self::viewer();
 
             if ($viewer === null) {
@@ -40,12 +46,13 @@ final class DuplicateWarning
             $email = (string) $get('email');
             $phone = (string) $get('phone');
             $excludeId = self::key($record);
+            $projectId = ProjectBadge::projectIdFor($record, $livewire);
 
-            $names = $finder->accounts($name, $email, $phone, $excludeId, $viewer)
+            $names = $finder->accounts($name, $email, $phone, $excludeId, $viewer, $projectId)
                 ->map(fn (Account $account): string => $account->name)
                 ->all();
 
-            return self::message($names, $finder->existsOutsideReach(DuplicateFinder::ENTITY_ACCOUNT, $viewer, $name, $email, $phone, $excludeId));
+            return self::message($names, $finder->existsOutsideReach(DuplicateFinder::ENTITY_ACCOUNT, $viewer, $name, $email, $phone, $excludeId, $projectId));
         };
 
         return self::placeholder($warning);
@@ -53,7 +60,7 @@ final class DuplicateWarning
 
     public static function forContact(): Placeholder
     {
-        $warning = static function (Get $get, ?Model $record): ?string {
+        $warning = static function (Get $get, ?Model $record, ?LivewireComponent $livewire): ?string {
             $viewer = self::viewer();
 
             if ($viewer === null) {
@@ -64,12 +71,13 @@ final class DuplicateWarning
             $email = (string) $get('email');
             $phone = (string) ($get('mobile') ?: $get('phone'));
             $excludeId = self::key($record);
+            $projectId = ProjectBadge::projectIdFor($record, $livewire);
 
-            $names = $finder->contacts($email, $phone, $excludeId, $viewer)
+            $names = $finder->contacts($email, $phone, $excludeId, $viewer, $projectId)
                 ->map(fn (Contact $contact): string => $contact->full_name)
                 ->all();
 
-            return self::message($names, $finder->existsOutsideReach(DuplicateFinder::ENTITY_CONTACT, $viewer, null, $email, $phone, $excludeId));
+            return self::message($names, $finder->existsOutsideReach(DuplicateFinder::ENTITY_CONTACT, $viewer, null, $email, $phone, $excludeId, $projectId));
         };
 
         return self::placeholder($warning);
@@ -81,7 +89,7 @@ final class DuplicateWarning
      */
     public static function forLead(): Placeholder
     {
-        $warning = static function (Get $get, ?Model $record): ?string {
+        $warning = static function (Get $get, ?Model $record, ?LivewireComponent $livewire): ?string {
             $viewer = self::viewer();
 
             if ($viewer === null) {
@@ -92,16 +100,17 @@ final class DuplicateWarning
             $email = (string) $get('email');
             $phone = (string) $get('phone');
             $excludeId = self::key($record);
+            $projectId = ProjectBadge::projectIdFor($record, $livewire);
 
-            $leads = $finder->leads($email, $phone, $excludeId, $viewer)
+            $leads = $finder->leads($email, $phone, $excludeId, $viewer, $projectId)
                 ->map(fn (Lead $lead): string => __('merge.warnings.lead', ['name' => $lead->full_name]))
                 ->all();
-            $contacts = $finder->contacts($email, $phone, null, $viewer)
+            $contacts = $finder->contacts($email, $phone, null, $viewer, $projectId)
                 ->map(fn (Contact $contact): string => __('merge.warnings.contact', ['name' => $contact->full_name]))
                 ->all();
 
-            $hidden = $finder->existsOutsideReach(DuplicateFinder::ENTITY_LEAD, $viewer, null, $email, $phone, $excludeId)
-                || $finder->existsOutsideReach(DuplicateFinder::ENTITY_CONTACT, $viewer, null, $email, $phone);
+            $hidden = $finder->existsOutsideReach(DuplicateFinder::ENTITY_LEAD, $viewer, null, $email, $phone, $excludeId, $projectId)
+                || $finder->existsOutsideReach(DuplicateFinder::ENTITY_CONTACT, $viewer, null, $email, $phone, null, $projectId);
 
             return self::message([...$leads, ...$contacts], $hidden);
         };
@@ -110,15 +119,15 @@ final class DuplicateWarning
     }
 
     /**
-     * @param  callable(Get, ?Model): ?string  $warning
+     * @param  callable(Get, ?Model, ?LivewireComponent): ?string  $warning
      */
     private static function placeholder(callable $warning): Placeholder
     {
         return Placeholder::make('duplicate_warning')
             ->label(__('merge.fields.duplicate_warning'))
             ->hiddenLabel()
-            ->content(fn (Get $get, ?Model $record): Htmlable => self::render((string) $warning($get, $record)))
-            ->visible(fn (Get $get, ?Model $record): bool => $warning($get, $record) !== null);
+            ->content(fn (Get $get, ?Model $record, ?LivewireComponent $livewire): Htmlable => self::render((string) $warning($get, $record, $livewire)))
+            ->visible(fn (Get $get, ?Model $record, ?LivewireComponent $livewire): bool => $warning($get, $record, $livewire) !== null);
     }
 
     /**

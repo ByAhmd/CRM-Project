@@ -9,13 +9,16 @@ use App\Enums\AccountType;
 use App\Enums\ActivityLogEvent;
 use App\Enums\CompanySize;
 use App\Enums\CustomFieldEntity;
+use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasCustomFields;
 use App\Models\Concerns\HasNormalizedContactColumns;
 use App\Models\Concerns\HasOwner;
 use App\Models\Concerns\HasTags;
+use App\Observers\ProjectConsistencyObserver;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,10 +38,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
 #[Fillable([
     'name', 'type', 'industry_id', 'size', 'website', 'email', 'phone',
     'address_line', 'city', 'region', 'country', 'postal_code',
-    'owner_id', 'parent_account_id', 'customer_since', 'description', 'created_by',
+    'owner_id', 'parent_account_id', 'customer_since', 'description', 'created_by', 'project_id',
 ])]
+#[ObservedBy(ProjectConsistencyObserver::class)]
 final class Account extends Model implements OwnedRecord
 {
+    use BelongsToProject;
     use HasAttachments;
     use HasCustomFields;
 

@@ -8,10 +8,16 @@ use App\Enums\NavigationGroup;
 use App\Enums\Permission;
 use App\Filament\Concerns\BuildsPageUrlsInOwningPanel;
 use App\Filament\Exports\Reports\ReportRowExporter;
+use App\Models\Account;
+use App\Models\Contact;
+use App\Models\Deal;
+use App\Models\Lead;
 use App\Models\Pipeline;
+use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Access\RecordVisibilityResolver;
+use App\Services\Projects\CurrentProject;
 use App\Services\Settings\SettingsRepository;
 use App\Services\Statistics\Reports\ReportFilters;
 use App\Services\Statistics\Reports\ReportRow;
@@ -39,11 +45,19 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * only abstract page of the panel, documented here as CLAUDE.md asks.
  *
  * A report page presents: it gates on `reports.view`, shows the filter
- * form (period, owner, team, pipeline, grouping — each report says which
- * apply), asks its statistics service for the rows and the chart inside
- * the viewer's scope, and formats the figures for the locale. Every rule
- * lives in the service and in ReportFilters::resolve(), which is where the
- * submitted filters are clamped: the page never touches a query.
+ * form (period, project, owner, team, pipeline, grouping — each report says
+ * which apply), asks its statistics service for the rows and the chart
+ * inside the viewer's scope, and formats the figures for the locale. Every
+ * rule lives in the service and in ReportFilters::resolve(), which is where
+ * the submitted filters are clamped: the page never touches a query.
+ *
+ * The project filter (D-30) is offered on the commercial reports only —
+ * those whose main entity lives in a project: leads, contacts, accounts,
+ * deals (usesProject(), read from the page's permission group). It starts on
+ * the viewer's current project, offers the active projects and «كل
+ * المشاريع», and is applied and reset like every other filter. The task and
+ * activity reports have no such field: their records follow their own
+ * subjects, and ReportFilters::scope() ignores the project for them.
  *
  * The filters the report is rendered from live in the locked $applied
  * state — only run() and resetFilters() may change it, after the form validated —
@@ -160,6 +174,23 @@ abstract class BaseReportPage extends Page
     }
 
     /**
+     * Whether the report's main entity lives in a project (D-30), so the
+     * project filter applies: the lead, contact, account and deal reports.
+     * Read from the permission group — the one thing a report page says
+     * about its entity — so a report over tasks or activities, whose records
+     * follow their subjects, offers no project field.
+     */
+    protected static function usesProject(): bool
+    {
+        return in_array(static::permissionGroup(), [
+            Lead::permissionGroup(),
+            Contact::permissionGroup(),
+            Account::permissionGroup(),
+            Deal::permissionGroup(),
+        ], true);
+    }
+
+    /**
      * Whether the report is *defined over one pipeline* — the pipeline
      * report and the forecast are, and they pre-select the default
      * pipeline. Offering the filter is not the same thing: sales
@@ -238,7 +269,7 @@ abstract class BaseReportPage extends Page
         $this->applied = $this->form->getState();
     }
 
-    /** Back to the defaults: the current month, the whole scope, the default pipeline. */
+    /** Back to the defaults: the current month, the whole scope, the current project, the default pipeline. */
     public function resetFilters(): void
     {
         abort_unless(static::canAccess(), 403);
@@ -423,6 +454,20 @@ abstract class BaseReportPage extends Page
                 }]);
         }
 
+        if (static::usesProject()) {
+            // Every project first, then the active projects in switcher order
+            // (D-30); the current project is pre-selected by the defaults. An
+            // array union, not a spread: a spread renumbers the integer ids.
+            $fields[] = Select::make('project_id')
+                ->label(__('reports.filters.project'))
+                ->options(static fn (): array => [ReportFilters::ALL_PROJECTS => __('reports.filters.all_projects')]
+                    + Project::query()->active()->get()
+                        ->mapWithKeys(static fn (Project $project): array => [(int) $project->getKey() => $project->display_name])
+                        ->all())
+                ->required()
+                ->native(false);
+        }
+
         $fields[] = Select::make('owner_id')
             ->label(__('reports.filters.owner'))
             ->placeholder(__('reports.filters.all_owners'))
@@ -482,6 +527,8 @@ abstract class BaseReportPage extends Page
             'team_id' => null,
             'pipeline_id' => static::pipelineIsRequired() ? self::defaultPipelineId() : null,
             'group_by' => static::defaultGroupBy(),
+            // The viewer's current project (D-30), only on a report that has the field.
+            ...(static::usesProject() ? ['project_id' => (int) app(CurrentProject::class)->for($this->actor())->getKey()] : []),
         ];
     }
 

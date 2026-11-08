@@ -20,9 +20,10 @@ use Illuminate\Database\Eloquent\Model;
  * CSV / XLSX export of leads (module 18, decision D-13).
  *
  * Exports the rows of the table query it is launched from — already inside
- * the actor's visible scope — with lookups and enums rendered as labels in
- * the actor's locale, the owner by name, tags joined, dates as Y-m-d H:i.
- * All text cells are protected against spreadsheet formula injection.
+ * the actor's visible scope and the current project — with the project by
+ * name (D-30), lookups and enums rendered as labels in the actor's locale,
+ * the owner by name, tags joined, dates as Y-m-d H:i. All text cells are
+ * protected against spreadsheet formula injection.
  */
 final class LeadExporter extends Exporter
 {
@@ -37,6 +38,7 @@ final class LeadExporter extends Exporter
     {
         return [
             ExportColumn::make('id')->label(__('exports.columns.lead.id')),
+            ExportColumn::make('project.display_name')->label(__('exports.columns.lead.project'))->preventFormulaInjection(),
             ExportColumn::make('first_name')->label(__('exports.columns.lead.first_name'))->preventFormulaInjection(),
             ExportColumn::make('last_name')->label(__('exports.columns.lead.last_name'))->preventFormulaInjection(),
             ExportColumn::make('company_name')->label(__('exports.columns.lead.company_name'))->preventFormulaInjection(),
@@ -98,7 +100,8 @@ final class LeadExporter extends Exporter
 
     /**
      * Every custom column reads the record's values, so the relation is
-     * loaded with the chunk instead of once per cell (D-9).
+     * loaded with the chunk instead of once per cell (D-9); the project
+     * column reads the project the same way (D-30).
      *
      * @template TModel of Model
      *
@@ -107,7 +110,7 @@ final class LeadExporter extends Exporter
      */
     public static function modifyQuery(Builder $query): Builder
     {
-        return CustomFieldsSchema::eagerLoad($query);
+        return CustomFieldsSchema::eagerLoad($query)->with('project');
     }
 
     public static function getCompletedNotificationBody(Export $export): string

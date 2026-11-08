@@ -22,6 +22,12 @@ use Filament\Widgets\Concerns\InteractsWithPageFilters;
  * fixed window, so the chart answers the same question as the rest of the
  * page for the same filters; ActivityMetrics::perDay() stays available
  * for a trailing-window view. Empty when nothing was logged.
+ *
+ * The current project only (D-30), like every figure on the page: an
+ * activity has no project of its own and follows the record it was logged
+ * against, so the chart counts those on the current project's leads,
+ * contacts, accounts and deals (ActivityMetrics, Activity::inProject()) and
+ * changes with the switcher as the lead and deal widgets beside it do.
  */
 final class ActivityCountsWidget extends ChartWidget
 {

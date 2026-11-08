@@ -15,10 +15,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * The open pipeline numbers of the dashboard (decisions D-4, D-8).
+ * The open pipeline numbers of the dashboard (decisions D-4, D-8, D-30).
  *
- * Every query starts from the viewer's visibility scope and is narrowed by
- * the filters (owner, team, pipeline). The weighted figures apply the
+ * Every query starts from the viewer's visibility scope, inside the viewer's
+ * current project (D-30: the dashboard is that project's page), and is
+ * narrowed by the filters (owner, team, pipeline). The weighted figures apply the
  * effective probability the Deal model defines — the per-deal override,
  * else the stage probability, clamped to 0..100 — computed in SQL through a
  * join to pipeline_stages so the sum never loads the deals. Grouping is
@@ -149,7 +150,8 @@ final class PipelineMetrics
     }
 
     /**
-     * The viewer's visible open deals, narrowed by the filters (D-4).
+     * The viewer's visible open deals of their current project (D-4, D-30),
+     * narrowed by the filters.
      *
      * @return Builder<Deal>
      */
@@ -158,7 +160,7 @@ final class PipelineMetrics
         $query = $this->visibility->visible($viewer, Deal::query())
             ->where('deals.status', DealStatus::Open->value);
 
-        return $filters->constrainPipeline($filters->constrainOwner($query));
+        return $filters->constrainProject($viewer, $filters->constrainPipeline($filters->constrainOwner($query)));
     }
 
     /** The default active pipeline, else the first active one. */
